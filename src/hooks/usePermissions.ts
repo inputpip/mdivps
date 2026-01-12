@@ -16,6 +16,9 @@ export const PERMISSIONS = {
   // Financial
   FINANCIAL: 'financial',
 
+  // Production
+  PRODUCTION: 'production',
+
   // Reports
   REPORTS: 'reports',
 
@@ -46,29 +49,29 @@ const mapGranularToSimplified = (granularPerms: Record<string, boolean>): Record
 
     // Deliveries - need POS driver access OR delivery view
     deliveries: granularPerms.pos_driver_access === true ||
-                granularPerms.delivery_view === true ||
-                granularPerms.retasi_view === true,
+      granularPerms.delivery_view === true ||
+      granularPerms.retasi_view === true,
 
     // Attendance - need attendance access or view
     attendance: granularPerms.attendance_access === true ||
-                granularPerms.attendance_view === true,
+      granularPerms.attendance_view === true,
 
     // Financial - need at least one financial permission
     financial: granularPerms.accounts_view === true ||
-               granularPerms.receivables_view === true ||
-               granularPerms.expenses_view === true ||
-               granularPerms.advances_view === true ||
-               granularPerms.financial_reports === true ||
-               granularPerms.payables_view === true ||
-               granularPerms.cash_flow_view === true,
+      granularPerms.receivables_view === true ||
+      granularPerms.expenses_view === true ||
+      granularPerms.advances_view === true ||
+      granularPerms.financial_reports === true ||
+      granularPerms.payables_view === true ||
+      granularPerms.cash_flow_view === true,
 
     // Reports - need at least one report permission
     reports: granularPerms.stock_reports === true ||
-             granularPerms.transaction_reports === true ||
-             granularPerms.attendance_reports === true ||
-             granularPerms.production_reports === true ||
-             granularPerms.material_movement_report === true ||
-             granularPerms.transaction_items_report === true,
+      granularPerms.transaction_reports === true ||
+      granularPerms.attendance_reports === true ||
+      granularPerms.production_reports === true ||
+      granularPerms.material_movement_report === true ||
+      granularPerms.transaction_items_report === true,
 
     // Settings - need settings access
     settings: granularPerms.settings_access === true,
@@ -231,7 +234,7 @@ export const usePermissions = () => {
 // Permission checker utility - no JSX in this file
 export const checkPermission = (userRole: string, permission: Permission, roles: any[]): boolean => {
   if (userRole === 'owner') return true;
-  
+
   const role = roles?.find(r => r.name === userRole);
   return role?.permissions?.[permission] === true;
 };

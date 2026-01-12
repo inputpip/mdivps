@@ -1302,7 +1302,7 @@ export function TransactionTable() {
         <div className="space-y-2">
           {isLoading ? (
             Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="bg-white border rounded-lg p-3">
+              <div key={i} className="bg-card border rounded-lg p-3">
                 <Skeleton className="h-16 w-full" />
               </div>
             ))
@@ -1317,11 +1317,11 @@ export function TransactionTable() {
               return (
                 <div
                   key={transaction.id}
-                  className="bg-white border rounded-lg shadow-sm overflow-hidden"
+                  className="bg-card border rounded-lg shadow-sm overflow-hidden"
                 >
                   {/* Main Card - Always Visible */}
                   <div
-                    className="p-3 active:bg-gray-50"
+                    className="p-3 active:bg-muted/50"
                     onClick={() => toggleExpand(transaction.id)}
                   >
                     <div className="flex items-center justify-between">
@@ -1366,12 +1366,12 @@ export function TransactionTable() {
 
                   {/* Expanded Details */}
                   {isExpanded && (
-                    <div className="border-t bg-gray-50 p-3">
+                    <div className="border-t bg-muted/30 p-3">
                       {/* Items */}
                       <div className="space-y-2 mb-3">
                         <div className="text-xs font-medium text-gray-600 mb-1">Item Pesanan:</div>
                         {transaction.items.map((item, idx) => (
-                          <div key={idx} className="bg-white rounded p-2 border border-gray-200">
+                          <div key={idx} className="bg-card rounded p-2 border border-border">
                             <div className="flex justify-between items-start">
                               <div className="flex-1 min-w-0">
                                 <div className="text-sm font-medium truncate">{item.product?.name}</div>
@@ -1419,7 +1419,7 @@ export function TransactionTable() {
                       {transaction.notes && (
                         <div className="text-xs text-gray-600">
                           <div className="font-medium mb-1">Catatan:</div>
-                          <div className="bg-yellow-50 border border-yellow-200 rounded p-2 text-gray-700">
+                          <div className="bg-amber-500/10 border border-amber-500/20 rounded p-2 text-foreground">
                             {transaction.notes}
                           </div>
                         </div>
@@ -1520,14 +1520,14 @@ export function TransactionTable() {
                         {/* Expanded Detail Row */}
                         {isExpanded && (
                           <TableRow>
-                            <TableCell colSpan={columns.length} className="bg-gray-50 p-4">
+                            <TableCell colSpan={columns.length} className="bg-muted/30 p-4">
                               <div className="grid grid-cols-2 gap-6">
                                 {/* Items */}
                                 <div>
                                   <h4 className="font-medium mb-2 text-sm">Item Pesanan:</h4>
                                   <div className="space-y-1">
                                     {transaction.items.map((item, idx) => (
-                                      <div key={idx} className="bg-white rounded p-2 border border-gray-200 text-sm">
+                                      <div key={idx} className="bg-card rounded p-2 border border-border text-sm">
                                         <div className="flex justify-between items-start">
                                           <div className="flex-1">
                                             <div className="font-medium">{item.product?.name}</div>
@@ -1576,7 +1576,7 @@ export function TransactionTable() {
                                   {transaction.notes && (
                                     <div>
                                       <h4 className="font-medium mb-2 text-sm">Catatan:</h4>
-                                      <div className="bg-yellow-50 border border-yellow-200 rounded p-2 text-sm text-gray-700">
+                                      <div className="bg-amber-500/10 border border-amber-500/20 rounded p-2 text-sm text-foreground">
                                         {transaction.notes}
                                       </div>
                                     </div>

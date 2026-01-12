@@ -36,10 +36,7 @@
 .table-row-hover {
   transition: all 0.2s ease-in-out;
   cursor: pointer;
-  background: linear-gradient(135deg, 
-    rgba(255, 255, 255, 0.9) 0%, 
-    rgba(248, 250, 252, 0.9) 100%
-  );
+  background: transparent;
 }
 
 .table-row-hover:hover {
@@ -103,19 +100,14 @@
 /* Card Hover Effects */
 .card-hover {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  background: linear-gradient(135deg, 
-    rgba(255, 255, 255, 0.95) 0%, 
-    rgba(248, 250, 252, 0.95) 100%
-  );
+  background: transparent;
 }
 
 .card-hover:hover {
   transform: translateY(-4px) scale(1.02);
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-  background: linear-gradient(135deg, 
-    rgba(255, 255, 255, 1) 0%, 
-    rgba(248, 250, 252, 1) 100%
-  );
+  background: hsl(var(--card) / 0.8);
+  backdrop-filter: blur(8px);
 }
 
 /* Menu Item Hover */

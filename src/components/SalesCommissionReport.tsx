@@ -2,7 +2,6 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -79,7 +78,7 @@ export function SalesCommissionReport() {
     yPos += 15
     doc.setFontSize(11)
     doc.setFont("helvetica", "normal")
-    
+
     const summaryData = [
       ['Total Penjualan', formatCurrency(report.totalSales)],
       ['Total Transaksi', report.totalTransactions.toString()],
@@ -155,7 +154,7 @@ export function SalesCommissionReport() {
             Lihat laporan komisi penjualan berdasarkan periode dan sales tertentu
           </CardDescription>
         </CardHeader>
-        
+
         <CardContent>
           <div className="grid gap-4 md:grid-cols-4">
             <div className="space-y-2">
@@ -234,8 +233,8 @@ export function SalesCommissionReport() {
 
             <div className="space-y-2">
               <Label>&nbsp;</Label>
-              <Button 
-                onClick={generatePDFReport} 
+              <Button
+                onClick={generatePDFReport}
                 disabled={!report}
                 className="w-full"
               >
@@ -275,37 +274,37 @@ export function SalesCommissionReport() {
         <>
           {/* Summary Cards */}
           <div className="grid gap-4 md:grid-cols-4">
-            <Card>
+            <Card className="border-l-4 border-l-emerald-500">
               <CardContent className="p-6">
                 <div className="flex items-center">
-                  <DollarSign className="h-8 w-8 text-green-600" />
+                  <DollarSign className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
                   <div className="ml-4">
-                    <p className="text-sm font-medium text-muted-foreground">Total Penjualan</p>
-                    <p className="text-2xl font-bold">{formatCurrency(report.totalSales)}</p>
+                    <p className="text-sm font-medium text-muted-foreground dark:text-slate-400">Total Penjualan</p>
+                    <p className="text-2xl font-bold text-foreground dark:text-white">{formatCurrency(report.totalSales)}</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="border-l-4 border-l-blue-500">
               <CardContent className="p-6">
                 <div className="flex items-center">
-                  <FileText className="h-8 w-8 text-blue-600" />
+                  <FileText className="h-8 w-8 text-blue-600 dark:text-blue-400" />
                   <div className="ml-4">
-                    <p className="text-sm font-medium text-muted-foreground">Total Transaksi</p>
-                    <p className="text-2xl font-bold">{report.totalTransactions}</p>
+                    <p className="text-sm font-medium text-muted-foreground dark:text-slate-400">Total Transaksi</p>
+                    <p className="text-2xl font-bold text-foreground dark:text-white">{report.totalTransactions}</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="border-l-4 border-l-purple-500">
               <CardContent className="p-6">
                 <div className="flex items-center">
-                  <TrendingUp className="h-8 w-8 text-purple-600" />
+                  <TrendingUp className="h-8 w-8 text-purple-600 dark:text-purple-400" />
                   <div className="ml-4">
-                    <p className="text-sm font-medium text-muted-foreground">Rate Komisi</p>
-                    <p className="text-2xl font-bold">
+                    <p className="text-sm font-medium text-muted-foreground dark:text-slate-400">Rate Komisi</p>
+                    <p className="text-2xl font-bold text-foreground dark:text-white">
                       {formatCommissionRate(report.commissionType, report.commissionRate)}
                     </p>
                   </div>
@@ -313,13 +312,13 @@ export function SalesCommissionReport() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="border-l-4 border-l-orange-500">
               <CardContent className="p-6">
                 <div className="flex items-center">
-                  <Users className="h-8 w-8 text-orange-600" />
+                  <Users className="h-8 w-8 text-orange-600 dark:text-orange-400" />
                   <div className="ml-4">
-                    <p className="text-sm font-medium text-muted-foreground">Total Komisi</p>
-                    <p className="text-2xl font-bold">{formatCurrency(report.commissionEarned)}</p>
+                    <p className="text-sm font-medium text-muted-foreground dark:text-slate-400">Total Komisi</p>
+                    <p className="text-2xl font-bold text-foreground dark:text-white">{formatCurrency(report.commissionEarned)}</p>
                   </div>
                 </div>
               </CardContent>
@@ -346,20 +345,20 @@ export function SalesCommissionReport() {
                     <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody>
+                <TableBody className="bg-transparent">
                   {report.transactions.map((transaction) => (
-                    <TableRow key={transaction.id}>
-                      <TableCell className="font-mono">
+                    <TableRow key={transaction.id} className="table-row-hover hover:bg-muted/50 dark:hover:bg-slate-800/50">
+                      <TableCell className="font-mono text-foreground dark:text-slate-200">
                         {transaction.transactionId}
                       </TableCell>
-                      <TableCell>{transaction.customerName}</TableCell>
-                      <TableCell>
+                      <TableCell className="text-foreground dark:text-slate-200">{transaction.customerName}</TableCell>
+                      <TableCell className="text-foreground dark:text-slate-200">
                         {format(transaction.orderDate, "dd MMM yyyy", { locale: id })}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right text-foreground dark:text-slate-200">
                         {formatCurrency(transaction.totalAmount)}
                       </TableCell>
-                      <TableCell className="text-right font-medium">
+                      <TableCell className="text-right font-medium text-foreground dark:text-white">
                         {formatCurrency(transaction.commissionAmount)}
                       </TableCell>
                       <TableCell>
@@ -373,10 +372,10 @@ export function SalesCommissionReport() {
               </Table>
 
               <Separator className="my-4" />
-              
+
               <div className="flex justify-between items-center text-lg font-semibold">
                 <span>Total Komisi:</span>
-                <span className="text-green-600">{formatCurrency(report.commissionEarned)}</span>
+                <span className="text-emerald-600 dark:text-emerald-400">{formatCurrency(report.commissionEarned)}</span>
               </div>
             </CardContent>
           </Card>

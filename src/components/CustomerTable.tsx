@@ -10,7 +10,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table"
-import { MoreHorizontal, ArrowUpDown, MapPin, Camera, Search, Users, Clock } from "lucide-react"
+import { MoreHorizontal, ArrowUpDown, MapPin, Camera, Search, Clock } from "lucide-react"
 import { format, differenceInDays } from "date-fns"
 import { id as idLocale } from "date-fns/locale"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -48,7 +48,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { showSuccess, showError } from "@/utils/toast"
-import { EditCustomerDialog } from "@/components/EditCustomerDialog"
 import { isOwner } from '@/utils/roleUtils'
 import { PhotoUploadService } from "@/services/photoUploadService"
 
@@ -57,236 +56,235 @@ export const getColumns = (
   onDeleteClick: (customer: Customer) => void,
   userRole?: string
 ): ColumnDef<Customer>[] => [
-  {
-    accessorKey: "name",
-    header: "Nama",
-  },
-  {
-    accessorKey: "phone",
-    header: "No. Telepon",
-  },
-  {
-    accessorKey: "address",
-    header: "Alamat",
-    cell: ({ row }) => {
-      const address = row.getValue("address") as string;
-
-      if (!address) return null;
-
-      return (
-        <div className="max-w-[200px] truncate" title={address}>
-          {address}
-        </div>
-      );
-    }
-  },
-  {
-    accessorKey: "classification",
-    header: "Klasifikasi",
-    cell: ({ row }) => {
-      const classification = row.getValue("classification") as string;
-      if (!classification) return <span className="text-muted-foreground text-xs">-</span>;
-
-      const isKios = classification === 'Kios/Toko';
-      return (
-        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-          isKios
-            ? 'bg-blue-100 text-blue-700'
-            : 'bg-green-100 text-green-700'
-        }`}>
-          {classification}
-        </span>
-      );
-    }
-  },
-  {
-    accessorKey: "orderCount",
-    header: ({ column }) => {
-      return (
-        <Button
-          variant="ghost"
-          onClick={(e) => {
-            e.stopPropagation(); // Mencegah klik baris
-            column.toggleSorting(column.getIsSorted() === "asc");
-          }}
-        >
-          Orderan
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      )
+    {
+      accessorKey: "name",
+      header: "Nama",
     },
-    cell: ({ row }) => <div className="text-center">{row.getValue("orderCount")}</div>
-  },
-  {
-    accessorKey: "lastOrderDate",
-    header: ({ column }) => {
-      return (
-        <Button
-          variant="ghost"
-          onClick={(e) => {
-            e.stopPropagation();
-            column.toggleSorting(column.getIsSorted() === "asc");
-          }}
-        >
-          Order Terakhir
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      )
+    {
+      accessorKey: "phone",
+      header: "No. Telepon",
     },
-    cell: ({ row }) => {
-      const lastOrderDate = row.getValue("lastOrderDate") as Date | null;
-      if (!lastOrderDate) {
-        return <span className="text-muted-foreground text-xs">Belum pernah</span>;
-      }
+    {
+      accessorKey: "address",
+      header: "Alamat",
+      cell: ({ row }) => {
+        const address = row.getValue("address") as string;
 
-      const daysSinceLastOrder = differenceInDays(new Date(), lastOrderDate);
-      const formattedDate = format(lastOrderDate, "d MMM yyyy", { locale: idLocale });
+        if (!address) return null;
 
-      // Color coding based on days since last order
-      let colorClass = "text-green-600"; // < 30 days
-      if (daysSinceLastOrder > 90) {
-        colorClass = "text-red-600";
-      } else if (daysSinceLastOrder > 60) {
-        colorClass = "text-orange-600";
-      } else if (daysSinceLastOrder > 30) {
-        colorClass = "text-yellow-600";
-      }
-
-      return (
-        <div className="text-xs">
-          <div>{formattedDate}</div>
-          <div className={`${colorClass} font-medium`}>
-            {daysSinceLastOrder === 0 ? "Hari ini" : `${daysSinceLastOrder} hari lalu`}
-          </div>
-        </div>
-      );
-    },
-    sortingFn: (rowA, rowB, columnId) => {
-      const dateA = rowA.getValue(columnId) as Date | null;
-      const dateB = rowB.getValue(columnId) as Date | null;
-      if (!dateA && !dateB) return 0;
-      if (!dateA) return 1;
-      if (!dateB) return -1;
-      return dateA.getTime() - dateB.getTime();
-    }
-  },
-  {
-    id: "location",
-    header: "Lokasi GPS",
-    cell: ({ row }) => {
-      const customer = row.original;
-      if (!customer.latitude || !customer.longitude) {
         return (
-          <div className="text-xs text-muted-foreground">
-            Tidak ada koordinat
+          <div className="max-w-[200px] truncate" title={address}>
+            {address}
           </div>
         );
       }
-      
-      return (
-        <div className="space-y-1">
-          <div className="text-xs text-muted-foreground">
-            {customer.latitude.toFixed(6)}, {customer.longitude.toFixed(6)}
-          </div>
+    },
+    {
+      accessorKey: "classification",
+      header: "Klasifikasi",
+      cell: ({ row }) => {
+        const classification = row.getValue("classification") as string;
+        if (!classification) return <span className="text-muted-foreground text-xs">-</span>;
+
+        const isKios = classification === 'Kios/Toko';
+        return (
+          <span className={`px-2 py-1 rounded-full text-xs font-medium ${isKios
+            ? 'bg-blue-500/10 text-blue-500'
+            : 'bg-green-500/10 text-green-500'
+            }`}>
+            {classification}
+          </span>
+        );
+      }
+    },
+    {
+      accessorKey: "orderCount",
+      header: ({ column }) => {
+        return (
           <Button
-            variant="outline"
-            size="sm"
+            variant="ghost"
             onClick={(e) => {
-              e.stopPropagation();
-              window.open(`https://www.google.com/maps/dir//${customer.latitude},${customer.longitude}`, '_blank');
+              e.stopPropagation(); // Mencegah klik baris
+              column.toggleSorting(column.getIsSorted() === "asc");
             }}
-            className="h-6 text-xs btn-glossy"
           >
-            <MapPin className="h-3 w-3 mr-1" />
-            Buka Maps
+            Orderan
+            <ArrowUpDown className="ml-2 h-4 w-4" />
           </Button>
-        </div>
-      );
-    }
-  },
-  {
-    id: "photo",
-    header: "Foto",
-    cell: ({ row }) => {
-      const customer = row.original;
-      if (!customer.store_photo_url) return (
-        <div className="w-12 h-12 bg-gray-100 rounded-md flex items-center justify-center">
-          <Camera className="h-4 w-4 text-gray-400" />
-        </div>
-      );
-      
-      return (
-        <div className="flex items-center gap-2">
-          <img
-            src={PhotoUploadService.getPhotoUrl(customer.store_photo_url, 'Customers_Images')}
-            alt={`Foto toko ${customer.name}`}
-            className="w-12 h-12 object-cover rounded-md cursor-pointer hover:opacity-80 transition-opacity"
+        )
+      },
+      cell: ({ row }) => <div className="text-center">{row.getValue("orderCount")}</div>
+    },
+    {
+      accessorKey: "lastOrderDate",
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
             onClick={(e) => {
               e.stopPropagation();
-              window.open(PhotoUploadService.getPhotoUrl(customer.store_photo_url!, 'Customers_Images'), '_blank');
+              column.toggleSorting(column.getIsSorted() === "asc");
             }}
-            onError={(e) => {
-              const target = e.target as HTMLImageElement;
-              target.style.display = 'none';
-              const parent = target.parentElement;
-              if (parent) {
-                parent.innerHTML = `
-                  <div class="w-12 h-12 bg-gray-100 rounded-md flex items-center justify-center">
-                    <svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          >
+            Order Terakhir
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        )
+      },
+      cell: ({ row }) => {
+        const lastOrderDate = row.getValue("lastOrderDate") as Date | null;
+        if (!lastOrderDate) {
+          return <span className="text-muted-foreground text-xs">Belum pernah</span>;
+        }
+
+        const daysSinceLastOrder = differenceInDays(new Date(), lastOrderDate);
+        const formattedDate = format(lastOrderDate, "d MMM yyyy", { locale: idLocale });
+
+        // Color coding based on days since last order
+        let colorClass = "text-emerald-500"; // < 30 days
+        if (daysSinceLastOrder > 90) {
+          colorClass = "text-destructive";
+        } else if (daysSinceLastOrder > 60) {
+          colorClass = "text-orange-500";
+        } else if (daysSinceLastOrder > 30) {
+          colorClass = "text-amber-500";
+        }
+
+        return (
+          <div className="text-xs">
+            <div>{formattedDate}</div>
+            <div className={`${colorClass} font-medium`}>
+              {daysSinceLastOrder === 0 ? "Hari ini" : `${daysSinceLastOrder} hari lalu`}
+            </div>
+          </div>
+        );
+      },
+      sortingFn: (rowA, rowB, columnId) => {
+        const dateA = rowA.getValue(columnId) as Date | null;
+        const dateB = rowB.getValue(columnId) as Date | null;
+        if (!dateA && !dateB) return 0;
+        if (!dateA) return 1;
+        if (!dateB) return -1;
+        return dateA.getTime() - dateB.getTime();
+      }
+    },
+    {
+      id: "location",
+      header: "Lokasi GPS",
+      cell: ({ row }) => {
+        const customer = row.original;
+        if (!customer.latitude || !customer.longitude) {
+          return (
+            <div className="text-xs text-muted-foreground">
+              Tidak ada koordinat
+            </div>
+          );
+        }
+
+        return (
+          <div className="space-y-1">
+            <div className="text-xs text-muted-foreground">
+              {customer.latitude.toFixed(6)}, {customer.longitude.toFixed(6)}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                window.open(`https://www.google.com/maps/dir//${customer.latitude},${customer.longitude}`, '_blank');
+              }}
+              className="h-6 text-xs btn-glossy"
+            >
+              <MapPin className="h-3 w-3 mr-1" />
+              Buka Maps
+            </Button>
+          </div>
+        );
+      }
+    },
+    {
+      id: "photo",
+      header: "Foto",
+      cell: ({ row }) => {
+        const customer = row.original;
+        if (!customer.store_photo_url) return (
+          <div className="w-12 h-12 bg-muted rounded-md flex items-center justify-center">
+            <Camera className="h-4 w-4 text-muted-foreground" />
+          </div>
+        );
+
+        return (
+          <div className="flex items-center gap-2">
+            <img
+              src={PhotoUploadService.getPhotoUrl(customer.store_photo_url, 'Customers_Images')}
+              alt={`Foto toko ${customer.name}`}
+              className="w-12 h-12 object-cover rounded-md cursor-pointer hover:opacity-80 transition-opacity"
+              onClick={(e) => {
+                e.stopPropagation();
+                window.open(PhotoUploadService.getPhotoUrl(customer.store_photo_url!, 'Customers_Images'), '_blank');
+              }}
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                target.style.display = 'none';
+                const parent = target.parentElement;
+                if (parent) {
+                  parent.innerHTML = `
+                  <div class="w-12 h-12 bg-muted rounded-md flex items-center justify-center">
+                    <svg class="h-4 w-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
                   </div>
                 `;
-              }
-            }}
-          />
-        </div>
-      );
-    }
-  },
-  {
-    id: "actions",
-    cell: ({ row }) => {
-      const customer = row.original;
-      return (
-        <div className="text-right">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button 
-                aria-haspopup="true" 
-                size="icon" 
-                variant="ghost"
-                onClick={(e) => e.stopPropagation()} // Mencegah klik baris
-                className="hover-glow"
-              >
-                <MoreHorizontal className="h-4 w-4" />
-                <span className="sr-only">Toggle menu</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent 
-              align="end"
-              onClick={(e) => e.stopPropagation()} // Mencegah klik baris
-            >
-              <DropdownMenuLabel>Aksi</DropdownMenuLabel>
-              <DropdownMenuItem onClick={() => onEditClick(customer)} className="dropdown-item-hover">
-                Edit
-              </DropdownMenuItem>
-              {userRole?.toLowerCase() === 'owner' && (
-                <DropdownMenuItem 
-                  className="text-red-500 hover:!text-red-500 hover:!bg-red-100 dropdown-item-hover"
-                  onClick={() => onDeleteClick(customer)}
-                >
-                  Hapus
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      )
+                }
+              }}
+            />
+          </div>
+        );
+      }
     },
-  },
-]
+    {
+      id: "actions",
+      cell: ({ row }) => {
+        const customer = row.original;
+        return (
+          <div className="text-right">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  aria-haspopup="true"
+                  size="icon"
+                  variant="ghost"
+                  onClick={(e) => e.stopPropagation()} // Mencegah klik baris
+                  className="hover-glow"
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                  <span className="sr-only">Toggle menu</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                onClick={(e) => e.stopPropagation()} // Mencegah klik baris
+              >
+                <DropdownMenuLabel>Aksi</DropdownMenuLabel>
+                <DropdownMenuItem onClick={() => onEditClick(customer)} className="dropdown-item-hover">
+                  Edit
+                </DropdownMenuItem>
+                {userRole?.toLowerCase() === 'owner' && (
+                  <DropdownMenuItem
+                    className="text-red-500 hover:!text-red-500 hover:!bg-red-100 dropdown-item-hover"
+                    onClick={() => onDeleteClick(customer)}
+                  >
+                    Hapus
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )
+      },
+    },
+  ]
 
 interface CustomerTableProps {
   onEditCustomer?: (customer: Customer) => void
@@ -442,7 +440,7 @@ export function CustomerTable({ onEditCustomer }: CustomerTableProps) {
                 ))
               ) : table.getRowModel().rows?.length ? (
                 table.getRowModel().rows.map((row) => (
-                  <TableRow 
+                  <TableRow
                     key={row.id}
                     onClick={() => navigate(`/customers/${row.original.id}`)}
                     className="cursor-pointer table-row-hover"
@@ -519,9 +517,9 @@ export function CustomerTable({ onEditCustomer }: CustomerTableProps) {
             return (
               <div key={row.id} className="glass-card p-4 hover:shadow-lg transition-all duration-200">
                 <div className="flex justify-between items-start mb-3">
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-lg text-gray-900">{customer.name}</h3>
-                    <p className="text-sm text-gray-600">{customer.phone}</p>
+                  <div className="flex-1 text-card-foreground">
+                    <h3 className="font-semibold text-lg">{customer.name}</h3>
+                    <p className="text-sm text-muted-foreground">{customer.phone}</p>
                   </div>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -535,7 +533,7 @@ export function CustomerTable({ onEditCustomer }: CustomerTableProps) {
                         Edit
                       </DropdownMenuItem>
                       {isOwner(user?.role) && (
-                        <DropdownMenuItem 
+                        <DropdownMenuItem
                           className="text-red-500 hover:!text-red-500 hover:!bg-red-100"
                           onClick={() => handleDeleteClick(customer)}
                         >
@@ -548,40 +546,39 @@ export function CustomerTable({ onEditCustomer }: CustomerTableProps) {
 
                 {customer.address && (
                   <div className="mb-3">
-                    <p className="text-sm text-gray-600 line-clamp-2">{customer.address}</p>
+                    <p className="text-sm text-muted-foreground line-clamp-2">{customer.address}</p>
                   </div>
                 )}
 
                 <div className="flex flex-wrap gap-3 mb-3">
                   {customer.classification && (
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      customer.classification === 'Kios/Toko'
-                        ? 'bg-blue-100 text-blue-700'
-                        : 'bg-green-100 text-green-700'
-                    }`}>
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${customer.classification === 'Kios/Toko'
+                      ? 'bg-blue-500/10 text-blue-500'
+                      : 'bg-green-500/10 text-green-500'
+                      }`}>
                       {customer.classification}
                     </span>
                   )}
-                  <div className="flex items-center gap-1 bg-blue-50 px-2 py-1 rounded-md">
-                    <span className="text-xs font-medium text-blue-700">Orders:</span>
-                    <span className="text-xs font-bold text-blue-800">{customer.orderCount || 0}</span>
+                  <div className="flex items-center gap-1 bg-blue-500/10 px-2 py-1 rounded-md">
+                    <span className="text-xs font-medium text-blue-500">Orders:</span>
+                    <span className="text-xs font-bold text-blue-600">{customer.orderCount || 0}</span>
                   </div>
 
                   {/* Last Order Date Badge */}
                   {customer.lastOrderDate ? (
                     (() => {
                       const daysSince = differenceInDays(new Date(), new Date(customer.lastOrderDate));
-                      let bgColor = "bg-green-50";
-                      let textColor = "text-green-700";
+                      let bgColor = "bg-green-500/10";
+                      let textColor = "text-green-500";
                       if (daysSince > 90) {
-                        bgColor = "bg-red-50";
-                        textColor = "text-red-700";
+                        bgColor = "bg-destructive/10";
+                        textColor = "text-destructive";
                       } else if (daysSince > 60) {
-                        bgColor = "bg-orange-50";
-                        textColor = "text-orange-700";
+                        bgColor = "bg-orange-500/10";
+                        textColor = "text-orange-500";
                       } else if (daysSince > 30) {
-                        bgColor = "bg-yellow-50";
-                        textColor = "text-yellow-700";
+                        bgColor = "bg-amber-500/10";
+                        textColor = "text-amber-500";
                       }
                       return (
                         <div className={`flex items-center gap-1 ${bgColor} px-2 py-1 rounded-md`}>
@@ -593,21 +590,21 @@ export function CustomerTable({ onEditCustomer }: CustomerTableProps) {
                       );
                     })()
                   ) : (
-                    <div className="flex items-center gap-1 bg-gray-50 px-2 py-1 rounded-md">
-                      <Clock className="h-3 w-3 text-gray-400" />
-                      <span className="text-xs font-medium text-gray-500">Belum order</span>
+                    <div className="flex items-center gap-1 bg-muted px-2 py-1 rounded-md">
+                      <Clock className="h-3 w-3 text-muted-foreground" />
+                      <span className="text-xs font-medium text-muted-foreground">Belum order</span>
                     </div>
                   )}
 
                   {customer.jumlah_galon_titip && customer.jumlah_galon_titip > 0 && (
-                    <div className="flex items-center gap-1 bg-orange-50 px-2 py-1 rounded-md">
-                      <span className="text-xs font-medium text-orange-700">Galon Titip:</span>
-                      <span className="text-xs font-bold text-orange-800">{customer.jumlah_galon_titip}</span>
+                    <div className="flex items-center gap-1 bg-orange-500/10 px-2 py-1 rounded-md">
+                      <span className="text-xs font-medium text-orange-500">Galon Titip:</span>
+                      <span className="text-xs font-bold text-orange-600">{customer.jumlah_galon_titip}</span>
                     </div>
                   )}
                 </div>
 
-                <div className="flex gap-2 pt-2 border-t border-gray-100">
+                <div className="flex gap-2 pt-2 border-t border-border">
                   {customer.latitude && customer.longitude ? (
                     <Button
                       variant="outline"
@@ -623,7 +620,7 @@ export function CustomerTable({ onEditCustomer }: CustomerTableProps) {
                       Tidak ada koordinat
                     </div>
                   )}
-                  
+
                   {customer.store_photo_url && (
                     <Button
                       variant="outline"
@@ -679,7 +676,7 @@ export function CustomerTable({ onEditCustomer }: CustomerTableProps) {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Batal</AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogAction
               onClick={handleConfirmDelete}
               className="bg-red-600 hover:bg-red-700"
             >

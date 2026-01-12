@@ -78,11 +78,6 @@ const formatCurrency = (amount: number) => {
   }).format(amount);
 };
 
-const formatCurrencyNumber = (amount: number) => {
-  return new Intl.NumberFormat('id-ID', {
-    minimumFractionDigits: 0,
-  }).format(amount);
-};
 
 const getStatusBadge = (status: string, isVoided: boolean) => {
   if (isVoided) {
@@ -103,21 +98,21 @@ const getReferenceTypeBadge = (type?: string) => {
     case 'manual':
       return <Badge variant="outline">Manual</Badge>;
     case 'adjustment':
-      return <Badge variant="outline" className="bg-yellow-50">Penyesuaian</Badge>;
+      return <Badge variant="outline" className="bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-500/20">Penyesuaian</Badge>;
     case 'closing':
-      return <Badge variant="outline" className="bg-purple-50">Penutup</Badge>;
+      return <Badge variant="outline" className="bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-500/20">Penutup</Badge>;
     case 'opening':
-      return <Badge variant="outline" className="bg-blue-50">Pembukaan</Badge>;
+      return <Badge variant="outline" className="bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20">Pembukaan</Badge>;
     case 'transaction':
-      return <Badge variant="outline" className="bg-green-50">Transaksi</Badge>;
+      return <Badge variant="outline" className="bg-green-500/10 text-green-600 dark:text-green-400 hover:bg-green-500/20">Transaksi</Badge>;
     case 'expense':
-      return <Badge variant="outline" className="bg-red-50">Pengeluaran</Badge>;
+      return <Badge variant="outline" className="bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20">Pengeluaran</Badge>;
     case 'payroll':
-      return <Badge variant="outline" className="bg-orange-50">Gaji</Badge>;
+      return <Badge variant="outline" className="bg-orange-500/10 text-orange-600 dark:text-orange-400 hover:bg-orange-500/20">Gaji</Badge>;
     case 'receivable':
-      return <Badge variant="outline" className="bg-cyan-50">Piutang</Badge>;
+      return <Badge variant="outline" className="bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-500/20">Piutang</Badge>;
     case 'payable':
-      return <Badge variant="outline" className="bg-pink-50">Hutang</Badge>;
+      return <Badge variant="outline" className="bg-pink-500/10 text-pink-600 dark:text-pink-400 hover:bg-pink-500/20">Hutang</Badge>;
     default:
       return null;
   }
@@ -190,13 +185,6 @@ export function JournalEntryTable({
       }
       return newSet;
     });
-  };
-
-  const handlePost = () => {
-    if (selectedEntry && onPost) {
-      onPost(selectedEntry.id);
-      setSelectedEntry(null);
-    }
   };
 
   const handleVoid = () => {
@@ -402,7 +390,7 @@ export function JournalEntryTable({
               {filteredEntries.map((entry) => (
                 <React.Fragment key={entry.id}>
                   <TableRow
-                    className={entry.isVoided ? 'bg-red-50/50' : ''}
+                    className={entry.isVoided ? 'bg-destructive/10 dark:bg-destructive/20' : ''}
                   >
                     <TableCell>
                       <Button

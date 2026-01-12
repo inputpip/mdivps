@@ -43,32 +43,32 @@ export default function CommissionReportPage() {
     date.setDate(date.getDate() - 7) // Last 7 days
     return date.toISOString().slice(0, 10)
   })
-  
+
   const [endDate, setEndDate] = useState(() => {
     return new Date().toISOString().slice(0, 10)
   })
-  
+
   const [selectedUser, setSelectedUser] = useState<string>("all")
 
   // Use optimized commission entries with date filters
   const start = new Date(startDate + "T00:00:00")
   const end = new Date(endDate + "T23:59:59.999")
-  
-  const { 
-    data: entries = [], 
-    isLoading, 
-    error 
+
+  const {
+    data: entries = [],
+    isLoading,
+    error
   } = useOptimizedCommissionEntries(start, end)
 
 
   // Filter by user if selected
   const filteredEntries = useMemo(() => {
     let filtered = entries
-    
+
     if (selectedUser !== "all") {
       filtered = filtered.filter(entry => entry.userId === selectedUser)
     }
-    
+
     return filtered.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
   }, [entries, selectedUser])
 
@@ -76,7 +76,7 @@ export default function CommissionReportPage() {
   const totals = useMemo(() => {
     const total = filteredEntries.reduce((sum, entry) => sum + entry.amount, 0)
     const quantity = filteredEntries.reduce((sum, entry) => sum + entry.quantity, 0)
-    
+
     // Group by role
     const byRole = filteredEntries.reduce((acc, entry) => {
       if (!acc[entry.role]) {
@@ -87,7 +87,7 @@ export default function CommissionReportPage() {
       acc[entry.role].count += 1
       return acc
     }, {} as Record<string, { amount: number; quantity: number; count: number }>)
-    
+
     // Group by user
     const byUser = filteredEntries.reduce((acc, entry) => {
       if (!acc[entry.userId]) {
@@ -105,7 +105,7 @@ export default function CommissionReportPage() {
       acc[entry.userId].count += 1
       return acc
     }, {} as Record<string, { userName: string; role: string; amount: number; quantity: number; count: number }>)
-    
+
     return { total, quantity, byRole, byUser }
   }, [filteredEntries])
 
@@ -122,16 +122,16 @@ export default function CommissionReportPage() {
         }))
         .sort((a, b) => a.name.localeCompare(b.name))
     }
-    
+
     // Fallback: get from entries if users not available
     const userIds = Array.from(new Set(entries.map(entry => entry.userId)))
     return userIds
       .map(userId => {
         const entry = entries.find(e => e.userId === userId)
-        return { 
-          id: userId, 
-          name: entry?.userName || userId, 
-          role: entry?.role 
+        return {
+          id: userId,
+          name: entry?.userName || userId,
+          role: entry?.role
         }
       })
       .sort((a, b) => a.name.localeCompare(b.name))
@@ -185,24 +185,24 @@ export default function CommissionReportPage() {
 
   const exportToPDF = () => {
     const doc = new jsPDF('landscape', 'pt', 'a4')
-    
+
     // Set font for Indonesian text support
     doc.setFont('helvetica')
-    
+
     // Title
     doc.setFontSize(18)
     doc.text('Laporan Komisi Karyawan', 40, 40)
-    
+
     // Filter information
     doc.setFontSize(10)
     const filterInfo = `Periode: ${format(start, 'dd MMM yyyy', { locale: id })} - ${format(end, 'dd MMM yyyy', { locale: id })}`
-    const userInfo = selectedUser === 'all' 
-      ? 'Semua Karyawan' 
+    const userInfo = selectedUser === 'all'
+      ? 'Semua Karyawan'
       : `Karyawan: ${uniqueUsers.find(u => u.id === selectedUser)?.name || 'Unknown'}`
-    
+
     doc.text(filterInfo, 40, 65)
     doc.text(userInfo, 40, 80)
-    
+
     // Summary box
     doc.setFontSize(12)
     doc.text('RINGKASAN', 40, 110)
@@ -211,7 +211,7 @@ export default function CommissionReportPage() {
     doc.text(`Total Qty: ${totals.quantity.toLocaleString("id-ID")}`, 40, 145)
     doc.text(`Total Entri: ${filteredEntries.length}`, 40, 160)
     doc.text(`Karyawan: ${Object.keys(totals.byUser).length}`, 40, 175)
-    
+
     // Summary by role
     let yPos = 195
     doc.text('Ringkasan per Peran:', 40, yPos)
@@ -219,7 +219,7 @@ export default function CommissionReportPage() {
       yPos += 15
       doc.text(`• ${role.toUpperCase()}: ${new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(data.amount)} (${data.quantity} qty, ${data.count} entri)`, 50, yPos)
     })
-    
+
     // Table data
     const tableData = filteredEntries.map(entry => {
       const employee = users?.find(u => u.id === entry.userId)
@@ -235,7 +235,7 @@ export default function CommissionReportPage() {
         entry.status === 'paid' ? 'Dibayar' : entry.status === 'pending' ? 'Pending' : 'Batal'
       ]
     })
-    
+
     // Add table
     autoTable(doc, {
       head: [['Tanggal', 'Peran', 'Karyawan', 'Produk', 'Qty', 'Rate (Rp)', 'Jumlah (Rp)', 'Ref', 'Status']],
@@ -266,7 +266,7 @@ export default function CommissionReportPage() {
       },
       margin: { left: 40, right: 40 },
     })
-    
+
     // Footer
     const pageCount = (doc as any).internal.getNumberOfPages()
     for (let i = 1; i <= pageCount; i++) {
@@ -278,7 +278,7 @@ export default function CommissionReportPage() {
         doc.internal.pageSize.height - 20
       )
     }
-    
+
     // Save the PDF
     const fileName = `laporan-komisi-detail-${format(start, 'yyyy-MM-dd')}-${format(end, 'yyyy-MM-dd')}.pdf`
     doc.save(fileName)
@@ -425,7 +425,7 @@ export default function CommissionReportPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 lg:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
-        
+
         {/* Header */}
         <Card className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
           <CardHeader className="py-6 px-6">
@@ -579,7 +579,7 @@ export default function CommissionReportPage() {
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {Object.entries(totals.byRole).map(([role, data]) => (
-                <div key={role} className="bg-gray-50 p-4 rounded-lg">
+                <div key={role} className="bg-muted/50 p-4 rounded-lg">
                   <div className="flex items-center justify-between mb-2">
                     <Badge variant="outline" className="uppercase">
                       {role}
@@ -630,25 +630,25 @@ export default function CommissionReportPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="border rounded-lg bg-white overflow-auto">
+            <div className="border rounded-lg bg-card overflow-auto">
               <table className="w-full text-sm">
-                <thead className="bg-slate-50">
+                <thead className="bg-muted/50">
                   <tr>
-                    <th className="text-left px-4 py-3 font-semibold">Tanggal</th>
-                    <th className="text-left px-4 py-3 font-semibold">Peran</th>
-                    <th className="text-left px-4 py-3 font-semibold">Karyawan</th>
-                    <th className="text-left px-4 py-3 font-semibold">Produk</th>
-                    <th className="text-left px-4 py-3 font-semibold">Qty</th>
-                    <th className="text-left px-4 py-3 font-semibold">Rate</th>
-                    <th className="text-left px-4 py-3 font-semibold">Jumlah</th>
-                    <th className="text-left px-4 py-3 font-semibold">Ref</th>
-                    <th className="text-left px-4 py-3 font-semibold">Status</th>
-                    <th className="text-left px-4 py-3 font-semibold">Aksi</th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Tanggal</th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Peran</th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Karyawan</th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Produk</th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Qty</th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Rate</th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Jumlah</th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Ref</th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Status</th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Aksi</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredEntries.map((entry) => (
-                    <tr key={entry.id} className="border-t hover:bg-gray-50">
+                    <tr key={entry.id} className="border-t hover:bg-muted/50 transition-colors">
                       <td className="px-4 py-3">
                         {format(entry.createdAt, "dd MMM yyyy HH:mm", { locale: id })}
                       </td>
@@ -690,7 +690,7 @@ export default function CommissionReportPage() {
                       </td>
                       <td className="px-4 py-3 font-mono text-xs">{entry.ref}</td>
                       <td className="px-4 py-3">
-                        <Badge 
+                        <Badge
                           variant={entry.status === 'paid' ? 'default' : entry.status === 'pending' ? 'secondary' : 'destructive'}
                         >
                           {entry.status === 'paid' ? 'Dibayar' : entry.status === 'pending' ? 'Pending' : 'Batal'}
@@ -703,7 +703,7 @@ export default function CommissionReportPage() {
                             size="sm"
                             onClick={() => handleDeleteCommission(entry.id)}
                             disabled={deleteLoading === entry.id}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
                           >
                             {deleteLoading === entry.id ? (
                               <Loader2 className="h-4 w-4 animate-spin" />

@@ -292,7 +292,7 @@ export function Sidebar({ isCollapsed, setCollapsed }: SidebarProps) {
     <div
       className={cn(
         "border-r bg-amber-50/60 dark:bg-slate-900/90 backdrop-blur-sm transition-all duration-200 ease-in-out dark:border-slate-700",
-        isHoverExpanded && isCollapsed && "absolute left-0 top-0 z-50 h-full shadow-lg bg-amber-50/90 dark:bg-slate-900/95"
+        isHoverExpanded && isCollapsed && "absolute left-0 top-0 z-[100] h-full shadow-2xl bg-white dark:bg-slate-950 border-r-indigo-500/50"
       )}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
@@ -406,8 +406,8 @@ export function Sidebar({ isCollapsed, setCollapsed }: SidebarProps) {
                           key={item.href}
                           to={item.href}
                           className={cn(
-                            "flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:bg-muted/50 whitespace-nowrap",
-                            isActive && cn(colors.activeBg, "text-white shadow-md hover:opacity-90")
+                            "flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:bg-white/10 hover:text-indigo-600 dark:hover:text-indigo-400 whitespace-nowrap",
+                            isActive && cn(colors.activeBg, "text-white shadow-md hover:brightness-110")
                           )}
                         >
                           <item.icon className="h-4 w-4" />
@@ -436,8 +436,8 @@ export function Sidebar({ isCollapsed, setCollapsed }: SidebarProps) {
               </Button>
             </div>
           </div>
-        </div>
-      </TooltipProvider>
-    </div>
+        </div >
+      </TooltipProvider >
+    </div >
   );
 }
