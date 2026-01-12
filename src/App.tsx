@@ -18,6 +18,7 @@ import { useCacheManager, useBackgroundRefresh } from "@/hooks/useCacheManager";
 import { Card, CardContent } from "@/components/ui/card";
 import { Building2, MapPin, Check } from "lucide-react";
 import { PinValidationDialog } from "@/components/PinValidationDialog";
+import { RouteRefreshHandler } from "@/components/RouteRefreshHandler";
 
 // Lazy load all pages
 const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
@@ -254,6 +255,9 @@ function WebApp() {
               v7_startTransition: true,
               v7_relativeSplatPath: true
             }}>
+              {/* Auto refresh data on navigation */}
+              <RouteRefreshHandler />
+
               {/* PIN Validation Dialog for Owner */}
               <PinValidationDialog />
               <Suspense fallback={<PageLoader />}>
@@ -279,6 +283,7 @@ function WebApp() {
                       <Route path="/my-commission" element={<MobileCommissionPage />} />
                       <Route path="/quotations" element={<QuotationsPage />} />
                       <Route path="/quotations/new" element={<QuotationsPage />} />
+                      <Route path="/journal" element={<JournalPage />} />
 
                       <Route path="*" element={<NotFound />} />
                     </Route>

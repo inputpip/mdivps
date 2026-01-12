@@ -70,11 +70,12 @@ BEGIN
       AND ti.quantity > 0
   LOOP
     SELECT * INTO v_consume_result
-    FROM consume_inventory_fifo(
+    FROM consume_stock_fifo_v2(
       v_item.product_id,
-      p_branch_id,
       v_item.quantity,
-      v_transaction.ref
+      v_transaction.ref,
+      'sale',
+      p_branch_id
     );
     IF NOT v_consume_result.success THEN
       RETURN QUERY SELECT FALSE, 0::NUMERIC, NULL::UUID,
@@ -266,15 +267,14 @@ BEGIN
         RETURN;
       END IF;
 
-      -- Call consume_material_fifo
-      -- Note: using 6th arg default NULL
+      -- Call consume_material_fifo_v2
       SELECT * INTO v_consume_result
-      FROM consume_material_fifo(
+      FROM consume_material_fifo_v2(
         v_bom_item.material_id,
-        p_branch_id,
         v_required_qty,
         v_ref,
-        'production'
+        'production',
+        p_branch_id
       );
 
       IF NOT v_consume_result.success THEN
@@ -498,13 +498,12 @@ BEGIN
   -- This will deduct stock from batches and log to material_stock_movements
 
   SELECT * INTO v_consume_result
-  FROM consume_material_fifo(
+  FROM consume_material_fifo_v2(
     p_material_id,
-    p_branch_id,
     p_quantity,
     v_ref,
     'spoilage',
-    format('Bahan rusak: %s', COALESCE(p_note, 'Tidak ada catatan'))  -- 6th arg: Custom note
+    p_branch_id
   );
 
   IF NOT v_consume_result.success THEN
@@ -659,40 +658,54 @@ BEGIN
   END IF;
 
   -- 2. Handle Stock Rollback (FIFO)
-  FOR v_consumption IN 
-    SELECT * FROM inventory_batch_consumptions 
-    WHERE reference_id = v_record.ref AND reference_type IN ('production', 'production_error')
-  LOOP
-    UPDATE inventory_batches 
-    SET remaining_quantity = remaining_quantity + v_consumption.quantity_consumed,
-        updated_at = NOW()
-    WHERE id = v_consumption.batch_id;
-  END LOOP;
-
-  DELETE FROM inventory_batch_consumptions 
-  WHERE reference_id = v_record.ref AND reference_type IN ('production', 'production_error');
-
-  -- 3. Rollback Legacy Stock (materials.stock)
+  -- Rollback Materials (Ingredients)
   IF v_record.consume_bom THEN
     FOR v_movement IN 
       SELECT material_id, quantity FROM material_stock_movements 
       WHERE reference_id = v_record.id::TEXT AND reference_type = 'production' AND type = 'OUT'
     LOOP
-      UPDATE materials 
-      SET stock = stock + v_movement.quantity, 
-          updated_at = NOW()
-      WHERE id = v_movement.material_id;
+      PERFORM public.restore_material_fifo_v2(
+        v_movement.material_id, 
+        v_movement.quantity, 
+        0, -- cost handled by batch
+        v_record.id::TEXT, 
+        'void_production',
+        p_branch_id
+      );
     END LOOP;
   ELSIF v_record.quantity < 0 AND v_record.product_id IS NULL THEN
+    -- This was a spoilage/error record
     FOR v_movement IN 
       SELECT material_id, quantity FROM material_stock_movements 
       WHERE reference_id = v_record.id::TEXT AND reference_type = 'production' AND type = 'OUT'
     LOOP
-      UPDATE materials 
-      SET stock = stock + v_movement.quantity, 
-          updated_at = NOW()
-      WHERE id = v_movement.material_id;
+      PERFORM public.restore_material_fifo_v2(
+        v_movement.material_id, 
+        v_movement.quantity, 
+        0, -- cost handled by batch
+        v_record.id::TEXT, 
+        'void_production_error',
+        p_branch_id
+      );
     END LOOP;
+  END IF;
+
+  -- 3. Delete Produced Product Batch (Hasil Produksi)
+  -- Instead of just deleting, we should check if the stock is still there
+  -- For production, we usually delete the batch if it's still full, 
+  -- but since produced items might have been sold, the safest path for void_production 
+  -- is often to consume it back if sold, or simply delete the remaining.
+  -- Current logic: Hard delete produced batch.
+  IF v_record.quantity > 0 AND v_record.product_id IS NOT NULL THEN
+    DELETE FROM inventory_batches 
+    WHERE product_id = v_record.product_id 
+      AND (production_id = v_record.id OR notes = 'Produksi ' || v_record.ref);
+    
+    -- Update product stock (legacy column but kept for products in v2)
+    UPDATE products 
+    SET current_stock = GREATEST(0, current_stock - v_record.quantity), 
+        updated_at = NOW()
+    WHERE id = v_record.product_id;
   END IF;
 
   -- 4. Delete Material Stock Movements
@@ -700,7 +713,6 @@ BEGIN
   WHERE reference_id = v_record.id::TEXT AND reference_type = 'production';
 
   -- 5. Void Related Journals
-  -- [FIXED] Search for both 'production' and 'adjustment' for compatibility
   FOR v_journal_id IN 
     SELECT id FROM journal_entries 
     WHERE reference_id = v_record.id::TEXT 
@@ -715,14 +727,7 @@ BEGIN
     WHERE id = v_journal_id;
   END LOOP;
 
-  -- 6. Delete Inventory Batch for Product (Hasil Produksi)
-  IF v_record.quantity > 0 AND v_record.product_id IS NOT NULL THEN
-    DELETE FROM inventory_batches 
-    WHERE product_id = v_record.product_id 
-      AND (production_id = v_record.id OR notes = 'Produksi ' || v_record.ref);
-  END IF;
-
-  -- 7. Finally Delete Production Record
+  -- 6. Finally Delete Production Record
   DELETE FROM production_records WHERE id = p_production_id;
 
   RETURN QUERY SELECT TRUE, NULL::TEXT;

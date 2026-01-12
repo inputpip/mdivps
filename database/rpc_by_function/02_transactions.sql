@@ -820,13 +820,12 @@ BEGIN
     -- Process based on type
     IF v_material_id IS NOT NULL AND v_quantity > 0 THEN
       -- MATERIAL: Consume material stock immediately (no delivery needed)
-      SELECT * INTO v_fifo_result FROM consume_material_fifo(
+      SELECT * INTO v_fifo_result FROM consume_material_fifo_v2(
         v_material_id,
-        p_branch_id,
         v_quantity,
         v_transaction_id,
         'sale',
-        'Material sold directly'
+        p_branch_id
       );
 
       IF NOT v_fifo_result.success THEN
@@ -864,12 +863,13 @@ BEGIN
     ELSIF v_product_id IS NOT NULL AND v_quantity > 0 THEN
       -- PRODUCT: Calculate HPP using FIFO
       IF v_is_office_sale THEN
-        -- Office Sale: Consume inventory immediately (v3 supports negative stock)
-        SELECT * INTO v_fifo_result FROM consume_inventory_fifo(
+        -- Office Sale: Consume inventory immediately
+        SELECT * INTO v_fifo_result FROM consume_stock_fifo_v2(
           v_product_id,
-          p_branch_id,
           v_quantity,
-          v_transaction_id
+          v_transaction_id,
+          'sale',
+          p_branch_id
         );
 
         IF NOT v_fifo_result.success THEN
@@ -1185,35 +1185,7 @@ $function$
 ;
 
 
--- =====================================================
--- Function: deduct_materials_for_transaction
--- =====================================================
-CREATE OR REPLACE FUNCTION public.deduct_materials_for_transaction(p_transaction_id text)
- RETURNS void
- LANGUAGE plpgsql
-AS $function$
-DECLARE
-  item_record jsonb;
-  material_record jsonb;
-  material_id_uuid uuid;
-  quantity_to_deduct numeric;
-BEGIN
-  FOR item_record IN (SELECT jsonb_array_elements(items) FROM public.transactions WHERE id = p_transaction_id)
-  LOOP
-    IF item_record -> 'product' ->> 'materials' IS NOT NULL THEN
-      FOR material_record IN (SELECT jsonb_array_elements(item_record -> 'product' -> 'materials'))
-      LOOP
-        material_id_uuid := (material_record ->> 'materialId')::uuid;
-        quantity_to_deduct := (material_record ->> 'quantity')::numeric * (item_record ->> 'quantity')::numeric;
-        UPDATE public.materials
-        SET stock = stock - quantity_to_deduct
-        WHERE id = material_id_uuid;
-      END LOOP;
-    END IF;
-  END LOOP;
-END;
-$function$
-;
+-- Legacy material deduction functions removed to prevent double stock reduction.
 
 
 -- =====================================================
@@ -1505,103 +1477,91 @@ BEGIN
 
   -- ==================== RESTORE INVENTORY ====================
 
-  -- IF Office Sale (immediate consume) OR already delivered (consume via delivery)
-  IF v_transaction.is_office_sale OR v_transaction.delivery_status = 'Delivered' THEN
+  -- IF Office Sale (immediate consume) OR has any deliveries
+  -- Note: We check LOWER() to be case-insensitive
+  IF v_transaction.is_office_sale OR LOWER(COALESCE(v_transaction.delivery_status, '')) = 'delivered' OR EXISTS(SELECT 1 FROM deliveries WHERE transaction_id = p_transaction_id) THEN
     -- Parse items from JSONB
     FOR v_item IN 
       SELECT 
-        (elem->>'productId')::UUID as product_id,
-        (elem->>'quantity')::NUMERIC as quantity
+        (elem->>'productId')::TEXT as product_id_str,
+        (elem->>'quantity')::NUMERIC as quantity,
+        (elem->>'productType')::TEXT as product_type
       FROM jsonb_array_elements(v_transaction.items) as elem
-      WHERE (elem->>'productId') IS NOT NULL
+      WHERE (elem->>'productId') IS NOT NULL OR (elem->>'materialId') IS NOT NULL
     LOOP
-      v_restore_qty := v_item.quantity;
-
-      -- Restore to batches in LIFO order (newest first)
-      FOR v_batch IN
-        SELECT id, remaining_quantity, initial_quantity
-        FROM inventory_batches
-        WHERE product_id = v_item.product_id
-          AND branch_id = p_branch_id
-          AND remaining_quantity < initial_quantity
-        ORDER BY batch_date DESC, created_at DESC
-        FOR UPDATE
-      LOOP
-        EXIT WHEN v_restore_qty <= 0;
-
-        DECLARE
-          v_can_restore NUMERIC;
-        BEGIN
-          v_can_restore := LEAST(v_restore_qty, v_batch.initial_quantity - v_batch.remaining_quantity);
-
-          UPDATE inventory_batches
-          SET
-            remaining_quantity = remaining_quantity + v_can_restore,
-            updated_at = NOW()
-          WHERE id = v_batch.id;
-
-          v_restore_qty := v_restore_qty - v_can_restore;
-        END;
-      END LOOP;
-
-      -- If still have qty to restore, create new batch
-      IF v_restore_qty > 0 THEN
-        INSERT INTO inventory_batches (
-          product_id,
-          branch_id,
-          initial_quantity,
-          remaining_quantity,
-          unit_cost,
-          batch_date,
-          notes
-        ) VALUES (
-          v_item.product_id,
-          p_branch_id,
-          v_restore_qty,
-          v_restore_qty,
-          0,
-          NOW(),
-          format('Restored from void: %s', v_transaction.id)
+      -- Handle Products
+      IF v_item.product_type IS NULL OR v_item.product_type = 'product' THEN
+        -- Use the smart restorer (v2)
+        PERFORM public.restore_stock_fifo_v2(
+          v_item.product_id_str::UUID,
+          v_item.quantity,
+          p_transaction_id,
+          'transaction',
+          p_branch_id
         );
-      END IF;
+        v_items_restored := v_items_restored + 1;
       
-      v_items_restored := v_items_restored + 1;
+      -- Handle Materials
+      ELSIF v_item.product_type = 'material' THEN
+        -- Use the smart restorer (v2)
+        PERFORM public.restore_material_fifo_v2(
+          v_item.product_id_str::UUID,
+          v_item.quantity,
+          0, -- cost handled by batch logic
+          p_transaction_id,
+          'void_transaction',
+          p_branch_id
+        );
+        v_items_restored := v_items_restored + 1;
+      END IF;
     END LOOP;
   END IF;
 
   -- ==================== VOID JOURNALS ====================
 
+  -- Void ALL related journals: Transaction, Receivable, Payment, and Adjustments
   UPDATE journal_entries
   SET
     is_voided = TRUE,
     voided_at = NOW(),
-    voided_reason = p_reason,
+    voided_reason = 'Transaction voided (' || p_transaction_id || '): ' || p_reason,
     status = 'voided',
     updated_at = NOW()
-  WHERE reference_type = 'transaction'
-    AND reference_id = p_transaction_id
+  WHERE (
+      (reference_type IN ('transaction', 'receivable', 'payment', 'adjustment') AND reference_id = p_transaction_id)
+      OR 
+      (description ILIKE '%' || p_transaction_id || '%')
+    )
     AND branch_id = p_branch_id
     AND is_voided = FALSE;
 
   GET DIAGNOSTICS v_journals_voided = ROW_COUNT;
 
-  -- Void related delivery journals
+  -- Void ALL related delivery journals
+  -- Extra safety: look for anywhere the transaction_id or delivery IDs are mentioned
+  -- We do this BEFORE deleting the delivery records to ensure the subquery works
   UPDATE journal_entries
   SET
     is_voided = TRUE,
     voided_at = NOW(),
-    voided_reason = 'Transaction voided: ' || p_reason,
+    voided_reason = 'Parent Transaction voided (' || p_transaction_id || '): ' || p_reason,
     status = 'voided',
     updated_at = NOW()
-  WHERE reference_type = 'delivery'
-    AND reference_id IN (SELECT id::TEXT FROM deliveries WHERE transaction_id = p_transaction_id)
+  WHERE (
+      (reference_type = 'delivery' AND reference_id IN (SELECT id::TEXT FROM deliveries WHERE transaction_id = p_transaction_id))
+      OR
+      (reference_type = 'delivery' AND description ILIKE '%' || p_transaction_id || '%')
+      OR
+      (reference_type = 'migration_delivery' AND reference_id IN (SELECT id::TEXT FROM deliveries WHERE transaction_id = p_transaction_id))
+    )
     AND branch_id = p_branch_id
     AND is_voided = FALSE;
 
   -- ==================== DELETE COMMISSIONS ====================
 
   DELETE FROM commission_entries
-  WHERE transaction_id = p_transaction_id AND branch_id = p_branch_id;
+  WHERE (transaction_id = p_transaction_id OR delivery_id IN (SELECT id::TEXT FROM deliveries WHERE transaction_id = p_transaction_id))
+    AND branch_id = p_branch_id;
 
   GET DIAGNOSTICS v_commissions_deleted = ROW_COUNT;
 
@@ -1618,7 +1578,8 @@ BEGIN
   -- ==================== DELETE STOCK MOVEMENTS ====================
 
   DELETE FROM product_stock_movements
-  WHERE reference_id = p_transaction_id AND reference_type IN ('transaction', 'delivery', 'fifo_consume');
+  WHERE (reference_id = p_transaction_id OR reference_id IN (SELECT id::TEXT FROM deliveries WHERE transaction_id = p_transaction_id))
+    AND reference_type IN ('transaction', 'delivery', 'fifo_consume');
 
   -- ==================== CANCEL RECEIVABLES ====================
   
@@ -1628,7 +1589,6 @@ BEGIN
 
   -- ==================== DELETE TRANSACTION ====================
 
-  -- Hard delete the transaction (not soft delete)
   DELETE FROM transactions
   WHERE id = p_transaction_id AND branch_id = p_branch_id;
 
@@ -1641,12 +1601,9 @@ BEGIN
     v_commissions_deleted,
     v_deliveries_deleted,
     NULL::TEXT;
-
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, 0, 0, 0, 0, SQLERRM::TEXT;
 END;
 
 $function$
 ;
-
-

@@ -1,7 +1,7 @@
 "use client"
 import * as React from "react"
 import { Button } from "@/components/ui/button"
-import { FileDown, Printer } from "lucide-react"
+import { FileDown } from "lucide-react"
 import { PurchaseOrder, PurchaseOrderItem } from "@/types/purchaseOrder"
 import { format } from "date-fns"
 import { id } from "date-fns/locale/id"
@@ -12,10 +12,9 @@ import { supabase } from "@/integrations/supabase/client"
 
 interface PurchaseOrderPDFProps {
   purchaseOrder: PurchaseOrder
-  children?: React.ReactNode
 }
 
-export function PurchaseOrderPDF({ purchaseOrder, children }: PurchaseOrderPDFProps) {
+export function PurchaseOrderPDF({ purchaseOrder }: PurchaseOrderPDFProps) {
   const { settings } = useCompanySettings()
   const { currentBranch } = useBranch()
   const printRef = React.useRef<HTMLDivElement>(null)
@@ -24,87 +23,7 @@ export function PurchaseOrderPDF({ purchaseOrder, children }: PurchaseOrderPDFPr
   const [isGeneratingPdf, setIsGeneratingPdf] = React.useState(false)
   const [hasLoadedItems, setHasLoadedItems] = React.useState(false)
 
-  // Fetch PO items from database - LAZY LOAD (only when print button is clicked)
-  const fetchPoItems = React.useCallback(async () => {
-    if (hasLoadedItems) return // Don't fetch if already loaded
 
-    setIsLoadingItems(true)
-    try {
-      const { data, error } = await supabase
-        .from('purchase_order_items')
-        .select(`
-          id,
-          material_id,
-          quantity,
-          unit_price,
-          quantity_received,
-          notes,
-          materials:material_id (
-            name,
-            unit
-          )
-        `)
-        .eq('purchase_order_id', purchaseOrder.id)
-
-      if (error) {
-        console.error('Error fetching PO items:', error)
-        // If table doesn't exist or permission error, fallback to legacy
-        if (purchaseOrder.materialId) {
-          setPoItems([{
-            materialId: purchaseOrder.materialId,
-            materialName: purchaseOrder.materialName,
-            unit: purchaseOrder.unit,
-            quantity: purchaseOrder.quantity || 0,
-            unitPrice: purchaseOrder.unitPrice || 0,
-          }])
-        }
-        setIsLoadingItems(false)
-        setHasLoadedItems(true)
-        return
-      }
-
-      if (data && data.length > 0) {
-        // Map database items to PurchaseOrderItem type
-        const items: PurchaseOrderItem[] = data.map((item: any) => ({
-          id: item.id,
-          materialId: item.material_id,
-          materialName: item.materials?.name,
-          unit: item.materials?.unit,
-          quantity: item.quantity,
-          unitPrice: item.unit_price,
-          quantityReceived: item.quantity_received,
-          notes: item.notes,
-        }))
-        setPoItems(items)
-      } else {
-        // Fallback to legacy single-item PO
-        if (purchaseOrder.materialId) {
-          setPoItems([{
-            materialId: purchaseOrder.materialId,
-            materialName: purchaseOrder.materialName,
-            unit: purchaseOrder.unit,
-            quantity: purchaseOrder.quantity || 0,
-            unitPrice: purchaseOrder.unitPrice || 0,
-          }])
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching PO items:', error)
-      // Fallback to legacy data
-      if (purchaseOrder.materialId) {
-        setPoItems([{
-          materialId: purchaseOrder.materialId,
-          materialName: purchaseOrder.materialName,
-          unit: purchaseOrder.unit,
-          quantity: purchaseOrder.quantity || 0,
-          unitPrice: purchaseOrder.unitPrice || 0,
-        }])
-      }
-    } finally {
-      setIsLoadingItems(false)
-      setHasLoadedItems(true)
-    }
-  }, [hasLoadedItems, purchaseOrder.id, purchaseOrder.materialId, purchaseOrder.materialName, purchaseOrder.unit, purchaseOrder.quantity, purchaseOrder.unitPrice])
 
   const handlePrintPDF = async () => {
     if (!printRef.current) {
@@ -244,9 +163,9 @@ export function PurchaseOrderPDF({ purchaseOrder, children }: PurchaseOrderPDFPr
           <div className="flex justify-between items-start mb-8">
             <div>
               {settings?.logo && (
-                <img 
-                  src={settings.logo} 
-                  alt="Company Logo" 
+                <img
+                  src={settings.logo}
+                  alt="Company Logo"
                   className="h-16 w-auto mb-4"
                 />
               )}
@@ -283,7 +202,7 @@ export function PurchaseOrderPDF({ purchaseOrder, children }: PurchaseOrderPDFPr
             <div>
               <h3 className="font-semibold text-gray-900 mb-2">Detail Request:</h3>
               <div className="space-y-1">
-                <p className="text-sm">Pemohon: {purchaseOrder.requestedBy}</p>
+                {/* Pemohon removed as requested */}
                 {purchaseOrder.expectedDeliveryDate && (
                   <p className="text-sm">
                     Target Kirim: {format(purchaseOrder.expectedDeliveryDate, "dd MMMM yyyy", { locale: id })}
@@ -406,7 +325,7 @@ export function PurchaseOrderPDF({ purchaseOrder, children }: PurchaseOrderPDFPr
             <div className="text-center">
               <p className="font-semibold mb-16">Diajukan oleh:</p>
               <div className="border-t border-gray-400">
-                <p className="mt-2 text-sm">{purchaseOrder.requestedBy}</p>
+                <p className="mt-2 text-sm">_______________</p>
                 <p className="text-xs text-gray-600">Staff</p>
               </div>
             </div>

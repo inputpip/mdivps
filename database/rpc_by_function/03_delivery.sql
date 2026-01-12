@@ -341,9 +341,9 @@ BEGIN
   FOR v_item IN SELECT * FROM jsonb_to_recordset(p_items) AS x(product_id UUID, quantity NUMERIC) LOOP
     SELECT name INTO v_product_name FROM products WHERE id = v_item.product_id;
 
-    FOR v_consumed IN SELECT * FROM consume_inventory_fifo_v3(p_branch_id, v_item.product_id, v_item.quantity) LOOP
+    FOR v_consumed IN SELECT * FROM consume_stock_fifo_v2(v_item.product_id, v_item.quantity, format('DEL-%s', v_delivery_number), 'delivery', p_branch_id) LOOP
       IF NOT v_consumed.success THEN RAISE EXCEPTION 'Gagal consume inventory: %', v_consumed.error_message; END IF;
-      v_total_hpp_real := v_total_hpp_real + COALESCE(v_consumed.total_cost, 0);
+      v_total_hpp_real := v_total_hpp_real + COALESCE(v_consumed.total_hpp, 0);
     END LOOP;
 
     INSERT INTO delivery_items (delivery_id, product_id, quantity, created_at) VALUES (v_delivery_id, v_item.product_id, v_item.quantity, NOW());
@@ -354,7 +354,7 @@ BEGIN
     v_journal_number := 'JE-DEL-' || TO_CHAR(NOW(), 'YYYYMMDD') || '-' || LPAD(FLOOR(RANDOM()*10000)::TEXT, 4, '0');
 
     INSERT INTO journal_entries (id, entry_number, entry_date, description, reference_type, reference_id, status, total_debit, total_credit, branch_id, created_by, created_at, is_voided)
-    VALUES (v_journal_id, v_journal_number, p_delivery_date, format('HPP Pengiriman #%s - %s', v_delivery_number, COALESCE(v_transaction.customer_name, v_transaction.ref)), 'delivery', v_delivery_id::TEXT, 'posted', v_total_hpp_real, v_total_hpp_real, p_branch_id, p_created_by, NOW(), FALSE);
+    VALUES (v_journal_id, v_journal_number, p_delivery_date, format('HPP Pengiriman #%s [Order %s] - %s', v_delivery_number, p_transaction_id, COALESCE(v_transaction.customer_name, v_transaction.ref)), 'delivery', v_delivery_id::TEXT, 'posted', v_total_hpp_real, v_total_hpp_real, p_branch_id, p_created_by, NOW(), FALSE);
 
     INSERT INTO journal_entry_lines (journal_entry_id, line_number, account_id, account_code, account_name, description, debit_amount, credit_amount)
     SELECT v_journal_id, 1, a.id, a.code, a.name, 'Realisasi Pengiriman', v_total_hpp_real, 0 FROM accounts a WHERE a.id = v_acc_tertahan;
@@ -478,9 +478,9 @@ BEGIN
            -- Check logic: Office sale consumes at transaction time.
            IF NOT v_transaction.is_office_sale THEN
                IF v_material_id IS NOT NULL THEN
-                 -- This is a material - use consume_material_fifo
-                 SELECT * INTO v_consume_result FROM consume_material_fifo(
-                   v_material_id, p_branch_id, v_qty, COALESCE(v_transaction.ref, 'TR-UNKNOWN'), 'delivery'
+                 -- This is a material - use consume_material_fifo_v2
+                 SELECT * INTO v_consume_result FROM consume_material_fifo_v2(
+                   v_material_id, v_qty, COALESCE(v_transaction.ref, 'TR-UNKNOWN'), 'delivery', p_branch_id
                  );
                  
                  IF NOT v_consume_result.success THEN
@@ -489,16 +489,16 @@ BEGIN
                  
                  v_total_hpp_real := v_total_hpp_real + COALESCE(v_consume_result.total_cost, 0);
                ELSIF v_product_id IS NOT NULL THEN
-                 -- This is a regular product - use consume_inventory_fifo
-                 SELECT * INTO v_consume_result FROM consume_inventory_fifo(
-                   v_product_id, p_branch_id, v_qty, COALESCE(v_transaction.ref, 'TR-UNKNOWN')
+                 -- This is a regular product - use consume_stock_fifo_v2
+                 SELECT * INTO v_consume_result FROM consume_stock_fifo_v2(
+                   v_product_id, v_qty, COALESCE(v_transaction.ref, 'TR-UNKNOWN'), 'delivery', p_branch_id
                  );
                  
                  IF NOT v_consume_result.success THEN
                     RAISE EXCEPTION 'Gagal potong stok produk: %', v_consume_result.error_message;
                  END IF;
                  
-                 v_total_hpp_real := v_total_hpp_real + v_consume_result.total_hpp;
+                 v_total_hpp_real := v_total_hpp_real + COALESCE(v_consume_result.total_hpp, 0);
                END IF;
            END IF;
         END IF;
@@ -556,7 +556,7 @@ BEGIN
                 INSERT INTO journal_entries (
                   entry_number, entry_date, description, reference_type, reference_id, branch_id, status, total_debit, total_credit
                 ) VALUES (
-                  v_entry_number, p_delivery_date, format('Pengiriman %s', v_transaction.ref), 'transaction', v_delivery_id::TEXT, p_branch_id, 'posted', v_total_hpp_real, v_total_hpp_real
+                  v_entry_number, p_delivery_date, format('Pengiriman %s [Order %s]', COALESCE(v_transaction.ref, ''), p_transaction_id), 'transaction', v_delivery_id::TEXT, p_branch_id, 'posted', v_total_hpp_real, v_total_hpp_real
                 )
                 RETURNING id INTO v_journal_id;
                 
@@ -1292,7 +1292,7 @@ BEGIN
           INSERT INTO journal_entries (
             entry_number, entry_date, description, reference_type, reference_id, branch_id, status, total_debit, total_credit
           ) VALUES (
-            v_entry_number, NOW(), format('HPP Pengiriman %s (update)', v_transaction.ref), 'adjustment', p_delivery_id::TEXT, p_branch_id, 'posted', v_total_hpp, v_total_hpp
+            v_entry_number, NOW(), format('HPP Pengiriman %s [Order %s] (update)', COALESCE(v_transaction.ref, v_transaction.id), p_delivery_id), 'adjustment', p_delivery_id::TEXT, p_branch_id, 'posted', v_total_hpp, v_total_hpp
           ) RETURNING id INTO v_journal_id;
           
           EXIT; 
@@ -1536,21 +1536,39 @@ BEGIN
       di.product_id,
       di.quantity_delivered as quantity,
       di.product_name,
-      COALESCE(p.cost_price, p.base_price, 0) as unit_cost
+      di.is_bonus,
+      COALESCE(p.cost_price, p.base_price, 0) as unit_cost,
+      -- Some systems store product_type in specifications or dedicated column
+      -- Let's check products table if it exists
+      CASE WHEN (SELECT 1 FROM products p2 WHERE p2.id = di.product_id) IS NOT NULL THEN 'product' ELSE 'material' END as calculated_type
     FROM delivery_items di
-    LEFT JOIN products p ON p.id = di.product_id
+    LEFT JOIN products p ON p.id = di.product_id -- This might be null for materials
     WHERE di.delivery_id = p_delivery_id
       AND di.quantity_delivered > 0
   LOOP
-    SELECT * INTO v_restore_result
-    FROM restore_inventory_fifo(
-      v_item.product_id,
-      p_branch_id,
-      v_item.quantity,
-      v_item.unit_cost,
-      format('void_delivery_%s', p_delivery_id)
-    );
-    IF v_restore_result.success THEN
+    IF v_item.calculated_type = 'product' THEN
+      SELECT f.success INTO v_restore_result
+      FROM restore_stock_fifo_v2(
+        v_item.product_id,
+        v_item.quantity,
+        p_delivery_id::TEXT,
+        'delivery',
+        p_branch_id
+      ) f;
+    ELSE
+      -- Handle Material restore
+      SELECT f.success INTO v_restore_result
+      FROM restore_material_fifo_v2(
+        v_item.product_id, -- It's material_id here
+        v_item.quantity,
+        0, -- cost handled by batch
+        p_delivery_id::TEXT,
+        'delivery_void',
+        p_branch_id
+      ) f;
+    END IF;
+
+    IF v_restore_result THEN
       v_items_restored := v_items_restored + 1;
     END IF;
   END LOOP;

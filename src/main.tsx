@@ -20,16 +20,16 @@ const queryClient = new QueryClient({
         }
         return false;
       },
+      // Standard settings for a reactive app (Smooth Refresh)
       retryDelay: (attemptIndex) => Math.min(500 * (attemptIndex + 1), 2000),
-      // Aggressive caching - data stays fresh longer
-      staleTime: 10 * 60 * 1000, // 10 minutes
-      gcTime: 30 * 60 * 1000, // 30 minutes
-      // Disable automatic refetching to reduce calls
-      refetchOnWindowFocus: false,
-      refetchOnMount: false,
-      refetchOnReconnect: false,
+      // Set staleTime to 0 so data refetches in background immediately on mount/navigation
+      staleTime: 0,
+      gcTime: 30 * 60 * 1000,
+      // Re-enable automatic refetching for always up-to-date data
+      refetchOnWindowFocus: true,
+      refetchOnMount: true,
+      refetchOnReconnect: true,
       refetchInterval: false,
-      // Prevent error flash on initial load
       throwOnError: false,
     },
     mutations: {

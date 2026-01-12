@@ -50,6 +50,7 @@ DECLARE
   v_bahan_baku_account_id UUID;
   v_selisih_account_id UUID;
   v_entry_number TEXT;
+  v_fifo_success BOOLEAN;
 BEGIN
   -- ==================== VALIDASI ====================
 
@@ -94,41 +95,39 @@ BEGIN
   SELECT id INTO v_selisih_account_id FROM accounts
   WHERE branch_id = p_branch_id AND code = '8100' AND is_active = TRUE LIMIT 1;
 
-  -- ==================== UPDATE MATERIAL STOCK ====================
-
-  UPDATE materials
-  SET stock = v_new_stock, updated_at = NOW()
-  WHERE id = p_material_id;
-
+  -- Generate primary key for adjustment
   v_adjustment_id := gen_random_uuid();
 
-  -- ==================== CREATE/CONSUME MATERIAL BATCH ====================
+  -- LEGACY UPDATE REMOVED: Using v2 FIFO functions instead
 
+
+  -- ==================== CREATE/CONSUME MATERIAL BATCH ====================
+  -- NEW: Using v2 functions that handle batches and movements correctly
   IF p_quantity_change > 0 THEN
-    INSERT INTO material_batches (
-      material_id, branch_id, initial_quantity, remaining_quantity,
-      unit_cost, batch_date, reference_type, reference_id, notes, created_at
-    ) VALUES (
-      p_material_id, p_branch_id, p_quantity_change, p_quantity_change,
-      COALESCE(p_unit_cost, 0), CURRENT_DATE, 'adjustment', v_adjustment_id::TEXT, p_reason, NOW()
-    );
+    SELECT f.success INTO v_fifo_success
+    FROM restore_material_fifo_v2(
+      p_material_id,
+      p_quantity_change,
+      COALESCE(p_unit_cost, 0),
+      v_adjustment_id::TEXT,
+      'adjustment',
+      p_branch_id
+    ) f;
   ELSE
-    PERFORM consume_material_fifo(
-      p_material_id, p_branch_id, ABS(p_quantity_change),
-      'adjustment', 'ADJ-' || v_adjustment_id::TEXT
-    );
+    SELECT f.success INTO v_fifo_success
+    FROM consume_material_fifo_v2(
+      p_material_id,
+      ABS(p_quantity_change),
+      v_adjustment_id::TEXT,
+      'adjustment',
+      p_branch_id
+    ) f;
   END IF;
 
-  -- ==================== CREATE STOCK MOVEMENT RECORD ====================
+  IF NOT v_fifo_success THEN
+    RAISE EXCEPTION 'Gagal memproses FIFO adjustment';
+  END IF;
 
-  INSERT INTO material_stock_movements (
-    id, material_id, branch_id, type, quantity,
-    reference_type, reference_id, notes, user_id, created_at
-  ) VALUES (
-    v_adjustment_id, p_material_id, p_branch_id,
-    CASE WHEN p_quantity_change > 0 THEN 'adjustment_in' ELSE 'adjustment_out' END,
-    ABS(p_quantity_change), 'adjustment', v_adjustment_id::TEXT, p_reason, auth.uid(), NOW()
-  );
 
   -- ==================== CREATE JOURNAL ENTRY ====================
 
@@ -181,6 +180,7 @@ DECLARE
   v_persediaan_account_id UUID;
   v_selisih_account_id UUID;
   v_entry_number TEXT;
+  v_fifo_success BOOLEAN;
 BEGIN
   -- ==================== VALIDASI ====================
 
@@ -228,75 +228,38 @@ BEGIN
   SELECT id INTO v_selisih_account_id FROM accounts
   WHERE branch_id = p_branch_id AND code = '8100' AND is_active = TRUE LIMIT 1;
 
-  -- ==================== UPDATE PRODUCT STOCK ====================
-
-  UPDATE products
-  SET current_stock = v_new_stock, updated_at = NOW()
-  WHERE id = p_product_id;
-
+  -- Generate primary key for adjustment
   v_adjustment_id := gen_random_uuid();
 
-  -- ==================== CREATE INVENTORY BATCH (if adding stock) ====================
+  -- LEGACY UPDATE REMOVED: Using v2 FIFO functions instead
 
+
+  -- ==================== CREATE/CONSUME PRODUCT BATCH ====================
+  -- NEW: Using v2 functions
   IF p_quantity_change > 0 THEN
-    INSERT INTO inventory_batches (
-      product_id,
-      branch_id,
-      initial_quantity,
-      remaining_quantity,
-      unit_cost,
-      batch_date,
-      reference_type,
-      reference_id,
-      notes,
-      created_at
-    ) VALUES (
+    SELECT f.success INTO v_fifo_success
+    FROM restore_stock_fifo_v2(
       p_product_id,
-      p_branch_id,
       p_quantity_change,
-      p_quantity_change,
-      COALESCE(p_unit_cost, 0),
-      CURRENT_DATE,
-      'adjustment',
       v_adjustment_id::TEXT,
-      p_reason,
-      NOW()
-    );
+      'adjustment',
+      p_branch_id
+    ) f;
   ELSE
-    -- For reduction, consume from FIFO batches
-    PERFORM consume_inventory_fifo(
+    SELECT f.success INTO v_fifo_success
+    FROM consume_stock_fifo_v2(
       p_product_id,
-      p_branch_id,
       ABS(p_quantity_change),
-      'ADJ-' || v_adjustment_id::TEXT
-    );
+      v_adjustment_id::TEXT,
+      'adjustment',
+      p_branch_id
+    ) f;
   END IF;
 
-  -- ==================== CREATE STOCK MOVEMENT RECORD ====================
+  IF NOT v_fifo_success THEN
+    RAISE EXCEPTION 'Gagal memproses FIFO adjustment';
+  END IF;
 
-  INSERT INTO product_stock_movements (
-    id,
-    product_id,
-    branch_id,
-    type,
-    quantity,
-    reference_type,
-    reference_id,
-    notes,
-    user_id,
-    created_at
-  ) VALUES (
-    v_adjustment_id,
-    p_product_id,
-    p_branch_id,
-    CASE WHEN p_quantity_change > 0 THEN 'adjustment_in' ELSE 'adjustment_out' END,
-    ABS(p_quantity_change),
-    'adjustment',
-    v_adjustment_id::TEXT,
-    p_reason,
-    auth.uid(),
-    NOW()
-  );
 
   -- ==================== CREATE JOURNAL ENTRY (if value > 0) ====================
 

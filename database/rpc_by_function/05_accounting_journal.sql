@@ -1342,8 +1342,8 @@ AS $function$
 DECLARE
   v_journal_id UUID;
   v_entry_number TEXT;
-  v_piutang_account_id UUID;
-  v_saldo_awal_account_id UUID;
+  v_piutang_account_id TEXT;
+  v_saldo_awal_account_id TEXT;
 BEGIN
   -- VALIDASI
   IF p_branch_id IS NULL THEN
