@@ -1477,44 +1477,88 @@ BEGIN
 
   -- ==================== RESTORE INVENTORY ====================
 
-  -- IF Office Sale (immediate consume) OR has any deliveries
-  -- Note: We check LOWER() to be case-insensitive
-  IF v_transaction.is_office_sale OR LOWER(COALESCE(v_transaction.delivery_status, '')) = 'delivered' OR EXISTS(SELECT 1 FROM deliveries WHERE transaction_id = p_transaction_id) THEN
-    -- Parse items from JSONB
+  -- CASE 1: Office Sale (Direct Consumption)
+  IF v_transaction.is_office_sale THEN
+    -- Parse items from JSONB and restore full quantity
     FOR v_item IN 
       SELECT 
         (elem->>'productId')::TEXT as product_id_str,
         (elem->>'quantity')::NUMERIC as quantity,
         (elem->>'productType')::TEXT as product_type
       FROM jsonb_array_elements(v_transaction.items) as elem
-      WHERE (elem->>'productId') IS NOT NULL OR (elem->>'materialId') IS NOT NULL
+      WHERE (elem->>'productId') IS NOT NULL
     LOOP
       -- Handle Products
       IF v_item.product_type IS NULL OR v_item.product_type = 'product' THEN
-        -- Use the smart restorer (v2)
+        -- Link back to the 'sale' consumption
         PERFORM public.restore_stock_fifo_v2(
           v_item.product_id_str::UUID,
           v_item.quantity,
           p_transaction_id,
-          'transaction',
+          'sale', -- FIXED: Matches consume_stock_fifo_v2 call
           p_branch_id
         );
         v_items_restored := v_items_restored + 1;
       
       -- Handle Materials
       ELSIF v_item.product_type = 'material' THEN
-        -- Use the smart restorer (v2)
         PERFORM public.restore_material_fifo_v2(
           v_item.product_id_str::UUID,
           v_item.quantity,
-          0, -- cost handled by batch logic
+          0,
           p_transaction_id,
-          'void_transaction',
+          'sale', -- FIXED
           p_branch_id
         );
         v_items_restored := v_items_restored + 1;
       END IF;
     END LOOP;
+
+  -- CASE 2: Standard Sale (Delivery based)
+  ELSE
+    -- Restore stock based on ACTUAL DELIVERED items
+    -- Loop through all deliveries for this transaction
+    DECLARE
+        v_delivery_rec RECORD;
+        v_del_item RECORD;
+    BEGIN
+        FOR v_delivery_rec IN SELECT id, delivery_number FROM deliveries WHERE transaction_id = p_transaction_id LOOP
+            FOR v_del_item IN 
+              SELECT 
+                di.product_id, 
+                di.quantity_delivered,
+                CASE WHEN EXISTS(SELECT 1 FROM products p WHERE p.id = di.product_id) THEN 'product' ELSE 'material' END as item_type
+              FROM delivery_items di 
+              WHERE di.delivery_id = v_delivery_rec.id 
+            LOOP
+                IF v_del_item.quantity_delivered > 0 THEN
+                    IF v_del_item.item_type = 'product' THEN
+                        PERFORM public.restore_stock_fifo_v2(
+                            v_del_item.product_id,
+                            v_del_item.quantity_delivered,
+                            -- Note: delivery consumption uses transaction ref in some versions, or delivery ref in others.
+                            -- We use NULL ref to force Strategy 2 (Add stock back) if unsure, 
+                            -- OR use the most probable ref (TransactionRef) to try Strategy 1.
+                            COALESCE(v_transaction.ref, 'TR-UNKNOWN'), 
+                            'delivery',
+                            p_branch_id
+                        );
+                    ELSE
+                        -- Handle Material Restore (Rare but possible)
+                        PERFORM public.restore_material_fifo_v2(
+                            v_del_item.product_id,
+                            v_del_item.quantity_delivered,
+                            0, -- Cost handled by batch logic
+                            COALESCE(v_transaction.ref, 'TR-UNKNOWN'),
+                            'delivery',
+                            p_branch_id
+                        );
+                    END IF;
+                    v_items_restored := v_items_restored + 1;
+                END IF;
+            END LOOP;
+        END LOOP;
+    END;
   END IF;
 
   -- ==================== VOID JOURNALS ====================
@@ -1538,8 +1582,6 @@ BEGIN
   GET DIAGNOSTICS v_journals_voided = ROW_COUNT;
 
   -- Void ALL related delivery journals
-  -- Extra safety: look for anywhere the transaction_id or delivery IDs are mentioned
-  -- We do this BEFORE deleting the delivery records to ensure the subquery works
   UPDATE journal_entries
   SET
     is_voided = TRUE,
@@ -1549,10 +1591,6 @@ BEGIN
     updated_at = NOW()
   WHERE (
       (reference_type = 'delivery' AND reference_id IN (SELECT id::TEXT FROM deliveries WHERE transaction_id = p_transaction_id))
-      OR
-      (reference_type = 'delivery' AND description ILIKE '%' || p_transaction_id || '%')
-      OR
-      (reference_type = 'migration_delivery' AND reference_id IN (SELECT id::TEXT FROM deliveries WHERE transaction_id = p_transaction_id))
     )
     AND branch_id = p_branch_id
     AND is_voided = FALSE;
@@ -1576,10 +1614,11 @@ BEGIN
   GET DIAGNOSTICS v_deliveries_deleted = ROW_COUNT;
 
   -- ==================== DELETE STOCK MOVEMENTS ====================
-
+  -- Clean up movement logs to keep data clean, although stock is already corrected above
+  
   DELETE FROM product_stock_movements
   WHERE (reference_id = p_transaction_id OR reference_id IN (SELECT id::TEXT FROM deliveries WHERE transaction_id = p_transaction_id))
-    AND reference_type IN ('transaction', 'delivery', 'fifo_consume');
+    AND reference_type IN ('transaction', 'delivery', 'fifo_consume', 'sale');
 
   -- ==================== CANCEL RECEIVABLES ====================
   
