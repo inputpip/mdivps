@@ -1354,19 +1354,36 @@ BEGIN
     RETURN QUERY SELECT FALSE, NULL::UUID, 'Amount must be greater than 0'::TEXT;
     RETURN;
   END IF;
+
   -- GET ACCOUNT IDS
+  
+  -- Try 1210 (Piutang Usaha) then 1130 (Piutang Dagang)
   SELECT id INTO v_piutang_account_id FROM accounts
   WHERE branch_id = p_branch_id AND code = '1210' AND is_active = TRUE LIMIT 1;
-  SELECT id INTO v_saldo_awal_account_id FROM accounts
-  WHERE branch_id = p_branch_id AND code = '3100' AND is_active = TRUE LIMIT 1;
+
   IF v_piutang_account_id IS NULL THEN
-    RETURN QUERY SELECT FALSE, NULL::UUID, 'Akun Piutang Usaha (1210) tidak ditemukan'::TEXT;
+    SELECT id INTO v_piutang_account_id FROM accounts
+    WHERE branch_id = p_branch_id AND code = '1130' AND is_active = TRUE LIMIT 1;
+  END IF;
+
+  -- Try 3200 (Laba Ditahan) then 3100 (Modal Disetor)
+  SELECT id INTO v_saldo_awal_account_id FROM accounts
+  WHERE branch_id = p_branch_id AND code = '3200' AND is_active = TRUE LIMIT 1;
+
+  IF v_saldo_awal_account_id IS NULL THEN
+    SELECT id INTO v_saldo_awal_account_id FROM accounts
+    WHERE branch_id = p_branch_id AND code = '3100' AND is_active = TRUE LIMIT 1;
+  END IF;
+
+  IF v_piutang_account_id IS NULL THEN
+    RETURN QUERY SELECT FALSE, NULL::UUID, 'Akun Piutang Usaha (1210/1130) tidak ditemukan'::TEXT;
     RETURN;
   END IF;
   IF v_saldo_awal_account_id IS NULL THEN
-    RETURN QUERY SELECT FALSE, NULL::UUID, 'Akun Saldo Awal (3100) tidak ditemukan'::TEXT;
+    RETURN QUERY SELECT FALSE, NULL::UUID, 'Akun Saldo Awal (3200/3100) tidak ditemukan'::TEXT;
     RETURN;
   END IF;
+
   -- GENERATE ENTRY NUMBER
   SELECT 'JE-' || TO_CHAR(NOW(), 'YYYYMMDD') || '-' || LPAD(
     (COALESCE(
@@ -1376,6 +1393,7 @@ BEGIN
       1
     ))::TEXT, 4, '0')
   INTO v_entry_number;
+
   -- CREATE JOURNAL ENTRY
   INSERT INTO journal_entries (
     id, branch_id, entry_number, entry_date, description,
@@ -1385,24 +1403,29 @@ BEGIN
     COALESCE(p_description, 'Piutang Migrasi - ' || p_customer_name),
     'receivable', p_receivable_id, 'posted', FALSE, NOW(), NOW()
   ) RETURNING id INTO v_journal_id;
+
   -- Dr. Piutang Usaha
   INSERT INTO journal_entry_lines (
     journal_entry_id, account_id, account_code, account_name,
     debit_amount, credit_amount, description, line_number
   ) VALUES (
-    v_journal_id, v_piutang_account_id, '1210',
+    v_journal_id, v_piutang_account_id, 
+    (SELECT code FROM accounts WHERE id = v_piutang_account_id),
     (SELECT name FROM accounts WHERE id = v_piutang_account_id),
     p_amount, 0, 'Piutang migrasi - ' || p_customer_name, 1
   );
-  -- Cr. Saldo Awal
+
+  -- Cr. Saldo Awal / Laba Ditahan
   INSERT INTO journal_entry_lines (
     journal_entry_id, account_id, account_code, account_name,
     debit_amount, credit_amount, description, line_number
   ) VALUES (
-    v_journal_id, v_saldo_awal_account_id, '3100',
+    v_journal_id, v_saldo_awal_account_id, 
+    (SELECT code FROM accounts WHERE id = v_saldo_awal_account_id),
     (SELECT name FROM accounts WHERE id = v_saldo_awal_account_id),
     0, p_amount, 'Saldo awal piutang migrasi', 2
   );
+
   RETURN QUERY SELECT TRUE, v_journal_id, NULL::TEXT;
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, NULL::UUID, SQLERRM::TEXT;

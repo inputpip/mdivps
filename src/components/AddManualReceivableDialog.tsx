@@ -509,7 +509,7 @@ export function AddManualReceivableDialog({ onSuccess }: AddManualReceivableDial
                     <p className="font-medium">Jurnal Otomatis:</p>
                     <p className="mt-1 font-mono text-xs">
                       Dr. Piutang Usaha (1210)<br />
-                      &nbsp;&nbsp;&nbsp;Cr. Saldo Awal (3100)
+                      &nbsp;&nbsp;&nbsp;Cr. Saldo Awal/Laba Ditahan (3100/3200)
                     </p>
                     <p className="mt-2 text-xs opacity-80">
                       Tidak mempengaruhi laporan pendapatan penjualan
@@ -620,7 +620,7 @@ export function AddManualReceivableDialog({ onSuccess }: AddManualReceivableDial
                       <div className="text-sm text-blue-800 dark:text-blue-300">
                         <p>Setiap baris yang valid akan membuat jurnal:</p>
                         <p className="font-mono text-xs mt-1">
-                          Dr. Piutang Usaha (1210) | Cr. Saldo Awal (3100)
+                          Dr. Piutang Usaha (1210) | Cr. Saldo Awal/Laba Ditahan (3100/3200)
                         </p>
                       </div>
                     </div>

@@ -192,14 +192,16 @@ function getTenantConfig(): TenantConfig {
   // For localhost, auth server runs on separate port (3002)
   // For production, auth is on same server as PostgREST
   let authUrl = `${baseUrl}/auth`;
-  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-    authUrl = 'http://localhost:3002/auth';
-  }
+
+  // REMOVED: Hardcoded localhost override to allow connecting to VPS from local
+  // if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+  //   authUrl = 'http://localhost:3002/auth';
+  // }
 
   return {
     supabaseUrl: baseUrl,
     supabaseAnonKey: getAnonJWT(), // Valid JWT for anon role (local or production)
-    authUrl: authUrl,
+    authUrl: import.meta.env.VITE_AUTH_URL || authUrl,
     isPostgREST: true,
   };
 }

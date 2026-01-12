@@ -31,8 +31,12 @@ export async function consumeStockFIFO(
   productId: string,
   quantity: number,
   referenceId: string,
-  referenceType: 'transaction' | 'delivery' | 'production',
-  branchId?: string | null
+  referenceType: string,
+  branchId?: string | null,
+  reason: string = 'usage',
+  notes?: string,
+  userId?: string,
+  userName?: string
 ): Promise<FIFOConsumeResult> {
   if (quantity <= 0 || !productId) {
     return {
@@ -58,7 +62,11 @@ export async function consumeStockFIFO(
       p_product_id: productId,
       p_branch_id: branchId,
       p_quantity: quantity,
-      p_reference_id: `${referenceType}:${referenceId}`
+      p_reference_id: `${referenceType}:${referenceId}`,
+      p_reason: 'usage', // Default, caller should ideally provide this
+      p_notes: null,
+      p_user_id: null,
+      p_user_name: null
     });
 
     if (error) {
@@ -105,9 +113,13 @@ export async function restoreStockFIFO(
   productId: string,
   quantity: number,
   referenceId: string,
-  referenceType: 'transaction' | 'delivery' | 'production',
+  referenceType: string,
   branchId?: string | null,
-  unitCost: number = 0
+  unitCost: number = 0,
+  reason: string = 'restock',
+  notes?: string,
+  userId?: string,
+  userName?: string
 ): Promise<FIFORestoreResult> {
   if (quantity <= 0 || !productId) {
     return {
@@ -131,8 +143,12 @@ export async function restoreStockFIFO(
       p_product_id: productId,
       p_branch_id: branchId,
       p_quantity: quantity,
+      p_reference_id: `${referenceType}:${referenceId}`,
       p_unit_cost: unitCost,
-      p_reference_id: `${referenceType}:${referenceId}`
+      p_reason: reason,
+      p_notes: notes || null,
+      p_user_id: userId || null,
+      p_user_name: userName || null
     });
 
     if (error) {

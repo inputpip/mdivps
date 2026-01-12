@@ -62,7 +62,7 @@ const fromDb = (row: any): ProductStockMovement => ({
 export const useProductStockMovements = () => {
   const queryClient = useQueryClient();
   const { currentBranch } = useBranch();
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
 
   // Fetch all movements
   const { data: movements, isLoading } = useQuery<ProductStockMovement[]>({
@@ -116,8 +116,12 @@ export const useProductStockMovements = () => {
         productId,
         quantity,
         referenceId,
-        'transaction', // Using 'transaction' as generic type
-        currentBranch?.id
+        'transaction',
+        currentBranch?.id,
+        reason,
+        notes,
+        user?.id,
+        user?.email
       );
 
       if (!fifoResult.success) {
@@ -126,31 +130,26 @@ export const useProductStockMovements = () => {
 
       const newStock = previousStock - quantity;
 
-      // Record the movement
-      const { data: movement, error } = await supabase
-        .from('product_stock_movements')
-        .insert({
-          product_id: productId,
-          branch_id: currentBranch?.id,
-          type: 'OUT',
-          reason,
-          quantity,
-          previous_stock: previousStock,
-          new_stock: newStock,
-          reference_id: referenceId,
-          reference_type: 'stock_out',
-          notes,
-          user_id: user?.id,
-          user_name: profile?.full_name || user?.email,
-          unit_cost: fifoResult.success && fifoResult.total_hpp ? fifoResult.total_hpp / quantity : 0
-        })
-        .select('*, products(name)')
-        .single();
-
-      if (error) throw new Error(error.message);
-
       console.log(`✅ Stock OUT: ${quantity} units, HPP: ${fifoResult.total_hpp}`);
-      return fromDb(movement);
+
+      // Construct return object compatible with fromDb
+      return {
+        id: fifoResult.batches_consumed[0]?.batch_id || referenceId, // Temporary ID
+        productId,
+        productName: '', // Will be refreshed
+        branchId: currentBranch?.id,
+        type: 'OUT',
+        reason,
+        quantity,
+        previousStock,
+        newStock,
+        referenceId,
+        referenceType: 'stock_out',
+        notes,
+        userId: user?.id,
+        userName: user?.email,
+        createdAt: new Date()
+      } as ProductStockMovement;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['product_stock_movements'] });
@@ -197,7 +196,11 @@ export const useProductStockMovements = () => {
         referenceId,
         'stock_in', // Custom reference type
         currentBranch?.id,
-        unitCost
+        unitCost,
+        reason,
+        notes,
+        user?.id,
+        user?.email
       );
 
       if (!restoreResult.success) {
@@ -206,31 +209,26 @@ export const useProductStockMovements = () => {
 
       const newStock = previousStock + quantity;
 
-      // Record the movement
-      const { data: movement, error } = await supabase
-        .from('product_stock_movements')
-        .insert({
-          product_id: productId,
-          branch_id: currentBranch?.id,
-          type: 'IN',
-          reason,
-          quantity,
-          previous_stock: previousStock,
-          new_stock: newStock,
-          reference_id: referenceId,
-          reference_type: 'stock_in',
-          notes,
-          user_id: user?.id,
-          user_name: profile?.full_name || user?.email,
-          unit_cost: unitCost
-        })
-        .select('*, products(name)')
-        .single();
-
-      if (error) throw new Error(error.message);
-
       console.log(`✅ Stock IN: ${quantity} units via RPC`);
-      return fromDb(movement);
+
+      // Construct return object
+      return {
+        id: restoreResult.batch_id || referenceId,
+        productId,
+        productName: '',
+        branchId: currentBranch?.id,
+        type: 'IN',
+        reason,
+        quantity,
+        previousStock,
+        newStock,
+        referenceId,
+        referenceType: 'stock_in',
+        notes,
+        userId: user?.id,
+        userName: user?.email,
+        createdAt: new Date()
+      } as ProductStockMovement;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['product_stock_movements'] });

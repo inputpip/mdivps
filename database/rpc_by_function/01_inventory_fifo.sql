@@ -175,7 +175,16 @@ $function$
 -- =====================================================
 -- Function: consume_inventory_fifo
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.consume_inventory_fifo(p_product_id uuid, p_branch_id uuid, p_quantity numeric, p_reference_id text DEFAULT NULL::text)
+CREATE OR REPLACE FUNCTION public.consume_inventory_fifo(
+    p_product_id uuid,
+    p_branch_id uuid,
+    p_quantity numeric,
+    p_reference_id text DEFAULT NULL::text,
+    p_reason text DEFAULT 'usage'::text,
+    p_notes text DEFAULT NULL::text,
+    p_user_id uuid DEFAULT NULL::uuid,
+    p_user_name text DEFAULT NULL::text
+)
  RETURNS TABLE(success boolean, total_hpp numeric, batches_consumed jsonb, error_message text)
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -189,6 +198,7 @@ DECLARE
   v_available_stock NUMERIC;
   v_product_name TEXT;
   v_fallback_cost NUMERIC := 0;
+  v_final_notes TEXT;
 BEGIN
   IF p_branch_id IS NULL THEN
     RETURN QUERY SELECT FALSE, 0::NUMERIC, '[]'::JSONB, 'Branch ID is REQUIRED'::TEXT;
@@ -236,7 +246,7 @@ BEGIN
     v_remaining := v_remaining - v_deduct_qty;
   END LOOP;
 
-  -- FIX: Handle negative stock with fallback cost
+  -- Handle negative stock with fallback cost
   IF v_remaining > 0 THEN
     INSERT INTO inventory_batches (product_id, branch_id, initial_quantity, remaining_quantity, unit_cost, batch_date, notes)
     VALUES (p_product_id, p_branch_id, 0, -v_remaining, v_fallback_cost, NOW(),
@@ -252,9 +262,38 @@ BEGIN
     v_remaining := 0;
   END IF;
 
-  INSERT INTO product_stock_movements (product_id, branch_id, type, reason, quantity, reference_id, reference_type, notes, created_at)
-  VALUES (p_product_id, p_branch_id, 'OUT', 'delivery', p_quantity, p_reference_id, 'fifo_consume',
-    format('FIFO consume: %s batches, HPP %s', jsonb_array_length(v_consumed), v_total_hpp), NOW());
+  -- Create Log Notes
+  v_final_notes := format('FIFO consume: %s batches, HPP %s', jsonb_array_length(v_consumed), v_total_hpp);
+  IF p_notes IS NOT NULL AND p_notes <> '' THEN
+      v_final_notes := p_notes || ' | ' || v_final_notes;
+  END IF;
+
+  INSERT INTO product_stock_movements (
+    product_id, 
+    branch_id, 
+    type, 
+    reason, 
+    quantity, 
+    reference_id, 
+    reference_type, 
+    notes, 
+    user_id,
+    user_name,
+    created_at
+  )
+  VALUES (
+    p_product_id, 
+    p_branch_id, 
+    'OUT', 
+    p_reason, 
+    p_quantity, 
+    p_reference_id, 
+    'fifo_consume',
+    v_final_notes, 
+    p_user_id,
+    p_user_name,
+    NOW()
+  );
 
   RETURN QUERY SELECT TRUE, v_total_hpp, v_consumed, NULL::TEXT;
 EXCEPTION WHEN OTHERS THEN
@@ -827,7 +866,17 @@ $function$
 -- =====================================================
 -- Function: restore_inventory_fifo
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.restore_inventory_fifo(p_product_id uuid, p_branch_id uuid, p_quantity numeric, p_unit_cost numeric DEFAULT 0, p_reference_id text DEFAULT NULL::text)
+CREATE OR REPLACE FUNCTION public.restore_inventory_fifo(
+    p_product_id uuid,
+    p_branch_id uuid,
+    p_quantity numeric,
+    p_unit_cost numeric DEFAULT 0,
+    p_reference_id text DEFAULT NULL::text,
+    p_reason text DEFAULT 'restock'::text,
+    p_notes text DEFAULT NULL::text,
+    p_user_id uuid DEFAULT NULL::uuid,
+    p_user_name text DEFAULT NULL::text
+)
  RETURNS TABLE(success boolean, batch_id uuid, error_message text)
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -835,36 +884,24 @@ AS $function$
 DECLARE
   v_new_batch_id UUID;
   v_product_name TEXT;
+  v_final_notes TEXT;
 BEGIN
-  -- ==================== VALIDASI ====================
-
   IF p_branch_id IS NULL THEN
-    RETURN QUERY SELECT FALSE, NULL::UUID,
-      'Branch ID is REQUIRED - tidak boleh lintas cabang!'::TEXT;
+    RETURN QUERY SELECT FALSE, NULL::UUID, 'Branch ID is REQUIRED'::TEXT;
     RETURN;
   END IF;
-
-  IF p_product_id IS NULL THEN
-    RETURN QUERY SELECT FALSE, NULL::UUID, 'Product ID is required'::TEXT;
-    RETURN;
-  END IF;
-
   IF p_quantity <= 0 THEN
     RETURN QUERY SELECT FALSE, NULL::UUID, 'Quantity must be positive'::TEXT;
     RETURN;
   END IF;
 
-  -- Get product name
-  SELECT name INTO v_product_name
-  FROM products WHERE id = p_product_id;
-
+  SELECT name INTO v_product_name FROM products WHERE id = p_product_id;
   IF v_product_name IS NULL THEN
     RETURN QUERY SELECT FALSE, NULL::UUID, 'Product not found'::TEXT;
     RETURN;
   END IF;
 
-  -- ==================== CREATE BATCH ====================
-
+  -- Create New Batch
   INSERT INTO inventory_batches (
     product_id,
     branch_id,
@@ -878,33 +915,41 @@ BEGIN
     p_branch_id,
     p_quantity,
     p_quantity,
-    COALESCE(p_unit_cost, 0),
+    p_unit_cost,
     NOW(),
-    format('Restored: %s', COALESCE(p_reference_id, 'manual'))
+    COALESCE(p_notes, format('Restock: %s', p_reference_id))
   )
   RETURNING id INTO v_new_batch_id;
 
-  -- ==================== LOGGING ====================
+  -- Create Log Notes
+  v_final_notes := format('FIFO Restore. Batch: %s', v_new_batch_id);
+  IF p_notes IS NOT NULL AND p_notes <> '' THEN
+      v_final_notes := p_notes || ' | ' || v_final_notes;
+  END IF;
 
   INSERT INTO product_stock_movements (
     product_id,
     branch_id,
     type,
+    reason,
     quantity,
     reference_id,
     reference_type,
-    unit_cost,
     notes,
+    user_id,
+    user_name,
     created_at
   ) VALUES (
     p_product_id,
     p_branch_id,
     'IN',
+    p_reason,
     p_quantity,
     p_reference_id,
-    'fifo_restore',
-    p_unit_cost,
-    format('FIFO restore: batch %s', v_new_batch_id),
+    'stock_in',
+    v_final_notes,
+    p_user_id,
+    p_user_name,
     NOW()
   );
 
