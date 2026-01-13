@@ -749,7 +749,7 @@ export default function DeliveryPage() {
                                                   </TableCell>
                                                   <TableCell className="text-xs text-center">
                                                     <span className={
-                                                      item.remainingQuantity > 0 
+                                                      item.remainingQuantity > 0
                                                         ? 'font-semibold text-orange-600 dark:text-orange-400'
                                                         : 'text-green-600 dark:text-green-400'
                                                     }>
@@ -995,20 +995,7 @@ export default function DeliveryPage() {
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
-                          {/* Edit button - controlled by granular permission */}
-                          {canEdit && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-8 w-8 p-0"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setEditingDelivery(delivery)
-                              }}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                          )}
+
                           {/* Delete button - controlled by granular permission */}
                           {canDelete && (
                             <Button
@@ -1204,17 +1191,7 @@ export default function DeliveryPage() {
                                         <Eye className="h-3 w-3 sm:mr-1" />
                                         <span className="hidden sm:inline">Detail</span>
                                       </Button>
-                                      {/* Edit button - controlled by granular permission */}
-                                      {canEdit && (
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          className="text-xs px-2 py-1"
-                                          onClick={() => setEditingDelivery(delivery)}
-                                        >
-                                          <Pencil className="h-3 w-3" />
-                                        </Button>
-                                      )}
+
                                       {/* Delete button - controlled by granular permission */}
                                       {canDelete && (
                                         <Button
@@ -1232,7 +1209,7 @@ export default function DeliveryPage() {
                                     </div>
                                   </TableCell>
                                 </TableRow>
-                                
+
                                 {/* Expanded row - Show delivery items */}
                                 {isExpanded && (
                                   <TableRow>
@@ -1274,7 +1251,7 @@ export default function DeliveryPage() {
                                                     </TableCell>
                                                     <TableCell className="text-xs text-center">
                                                       <span className={
-                                                        item.remainingQuantity > 0 
+                                                        item.remainingQuantity > 0
                                                           ? 'font-semibold text-orange-600 dark:text-orange-400'
                                                           : 'text-green-600 dark:text-green-400'
                                                       }>

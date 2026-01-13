@@ -1147,8 +1147,8 @@ DECLARE
   v_hpp_details TEXT := '';
   v_journal_id UUID;
   v_entry_number TEXT;
-  v_hpp_account_id UUID;
-  v_persediaan_id UUID;
+  v_hpp_account_id TEXT;
+  v_persediaan_id TEXT;
   v_total_ordered NUMERIC;
   v_total_delivered NUMERIC;
   v_new_status TEXT;
@@ -1175,14 +1175,14 @@ BEGIN
     FOR v_item IN
       SELECT product_id, quantity_delivered as quantity, product_name
       FROM delivery_items
-      WHERE delivery_id = p_delivery_id AND quantity_delivered > 0
+      WHERE delivery_items.delivery_id = p_delivery_id AND quantity_delivered > 0
     LOOP
-      PERFORM restore_inventory_fifo(
+      SELECT * INTO v_restore_result FROM restore_stock_fifo_v2(
         v_item.product_id,
-        p_branch_id,
         v_item.quantity,
-        0, -- Unit cost (will use estimates or specific batch if found)
-        format('update_delivery_rollback_%s', p_delivery_id)
+        format('update_delivery_rollback_%s', p_delivery_id),
+        'delivery_update_rollback',
+        p_branch_id
       );
     END LOOP;
   END IF;
@@ -1195,7 +1195,8 @@ BEGIN
   UPDATE journal_entries SET is_voided = TRUE, voided_reason = 'Delivery updated' 
   WHERE reference_id = p_delivery_id::TEXT AND reference_type = 'adjustment' AND branch_id = p_branch_id AND is_voided = FALSE;
 
-  DELETE FROM commission_entries WHERE delivery_id = p_delivery_id;
+  -- Fix: Qualify delivery_id column to avoid ambiguity with output parameter
+  DELETE FROM commission_entries WHERE commission_entries.delivery_id = p_delivery_id::text;
 
   -- 4. Update Delivery Header
   UPDATE deliveries
@@ -1209,7 +1210,8 @@ BEGIN
   WHERE id = p_delivery_id;
 
   -- 5. Refresh items: Delete old items and Process new items
-  DELETE FROM delivery_items WHERE delivery_id = p_delivery_id;
+  -- Fix: Qualify delivery_id column
+  DELETE FROM delivery_items WHERE delivery_items.delivery_id = p_delivery_id;
 
   FOR v_new_item IN SELECT * FROM jsonb_array_elements(p_items)
   LOOP
@@ -1230,8 +1232,8 @@ BEGIN
 
       -- Consume Stock (FIFO) - Only if not office sale (already consumed)
       IF NOT COALESCE(v_transaction.is_office_sale, FALSE) THEN
-        SELECT * INTO v_consume_result FROM consume_inventory_fifo(
-          v_product_id, p_branch_id, v_qty, format('delivery_update_%s', p_delivery_id)
+        SELECT * INTO v_consume_result FROM consume_stock_fifo_v2(
+          v_product_id, v_qty, format('delivery_update_%s', p_delivery_id), 'delivery_update', p_branch_id
         );
 
         IF NOT v_consume_result.success THEN
@@ -1488,7 +1490,7 @@ DECLARE
   v_delivery RECORD;
   v_transaction RECORD;
   v_item RECORD;
-  v_restore_result RECORD;
+  v_restore_success BOOLEAN;
   v_items_restored INTEGER := 0;
   v_journals_voided INTEGER := 0;
   v_total_ordered NUMERIC;
@@ -1547,7 +1549,7 @@ BEGIN
       AND di.quantity_delivered > 0
   LOOP
     IF v_item.calculated_type = 'product' THEN
-      SELECT f.success INTO v_restore_result
+      SELECT f.success INTO v_restore_success
       FROM restore_stock_fifo_v2(
         v_item.product_id,
         v_item.quantity,
@@ -1557,7 +1559,7 @@ BEGIN
       ) f;
     ELSE
       -- Handle Material restore
-      SELECT f.success INTO v_restore_result
+      SELECT f.success INTO v_restore_success
       FROM restore_material_fifo_v2(
         v_item.product_id, -- It's material_id here
         v_item.quantity,
@@ -1568,7 +1570,7 @@ BEGIN
       ) f;
     END IF;
 
-    IF v_restore_result THEN
+    IF v_restore_success THEN
       v_items_restored := v_items_restored + 1;
     END IF;
   END LOOP;
