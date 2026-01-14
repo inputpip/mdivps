@@ -47,8 +47,8 @@ DECLARE
   v_current_stock NUMERIC;
   v_new_stock NUMERIC;
   v_adjustment_value NUMERIC;
-  v_bahan_baku_account_id UUID;
-  v_selisih_account_id UUID;
+  v_bahan_baku_account_id TEXT;
+  v_modal_account_id TEXT;
   v_entry_number TEXT;
   v_fifo_success BOOLEAN;
 BEGIN
@@ -92,8 +92,8 @@ BEGIN
   SELECT id INTO v_bahan_baku_account_id FROM accounts
   WHERE branch_id = p_branch_id AND code = '1320' AND is_active = TRUE LIMIT 1;
 
-  SELECT id INTO v_selisih_account_id FROM accounts
-  WHERE branch_id = p_branch_id AND code = '8100' AND is_active = TRUE LIMIT 1;
+  SELECT id INTO v_modal_account_id FROM accounts
+  WHERE branch_id = p_branch_id AND code = '3100' AND is_active = TRUE LIMIT 1;
 
   -- Generate primary key for adjustment
   v_adjustment_id := gen_random_uuid();
@@ -131,7 +131,7 @@ BEGIN
 
   -- ==================== CREATE JOURNAL ENTRY ====================
 
-  IF v_adjustment_value > 0 AND v_bahan_baku_account_id IS NOT NULL AND v_selisih_account_id IS NOT NULL THEN
+  IF v_adjustment_value > 0 AND v_bahan_baku_account_id IS NOT NULL AND v_modal_account_id IS NOT NULL THEN
     SELECT 'JE-' || TO_CHAR(NOW(), 'YYYYMMDD') || '-' || LPAD(
       (COALESCE((SELECT COUNT(*) + 1 FROM journal_entries WHERE branch_id = p_branch_id AND DATE(created_at) = CURRENT_DATE), 1))::TEXT, 4, '0')
     INTO v_entry_number;
@@ -142,14 +142,14 @@ BEGIN
 
     IF p_quantity_change > 0 THEN
       INSERT INTO journal_entry_lines (journal_entry_id, account_id, account_name, debit_amount, credit_amount, description, line_number)
-      VALUES (v_journal_id, v_bahan_baku_account_id, (SELECT name FROM accounts WHERE id = v_bahan_baku_account_id), v_adjustment_value, 0, 'Penambahan bahan baku', 1);
+      VALUES (v_journal_id, v_bahan_baku_account_id, (SELECT name FROM accounts WHERE id = v_bahan_baku_account_id), v_adjustment_value, 0, 'Penambahan bahan baku (Koreksi Modal Disetor)', 1);
       INSERT INTO journal_entry_lines (journal_entry_id, account_id, account_name, debit_amount, credit_amount, description, line_number)
-      VALUES (v_journal_id, v_selisih_account_id, (SELECT name FROM accounts WHERE id = v_selisih_account_id), 0, v_adjustment_value, 'Selisih stok', 2);
+      VALUES (v_journal_id, v_modal_account_id, (SELECT name FROM accounts WHERE id = v_modal_account_id), 0, v_adjustment_value, 'Penyesuaian Modal Disetor', 2);
     ELSE
       INSERT INTO journal_entry_lines (journal_entry_id, account_id, account_name, debit_amount, credit_amount, description, line_number)
-      VALUES (v_journal_id, v_selisih_account_id, (SELECT name FROM accounts WHERE id = v_selisih_account_id), v_adjustment_value, 0, 'Selisih stok', 1);
+      VALUES (v_journal_id, v_modal_account_id, (SELECT name FROM accounts WHERE id = v_modal_account_id), v_adjustment_value, 0, 'Penyesuaian Modal Disetor', 1);
       INSERT INTO journal_entry_lines (journal_entry_id, account_id, account_name, debit_amount, credit_amount, description, line_number)
-      VALUES (v_journal_id, v_bahan_baku_account_id, (SELECT name FROM accounts WHERE id = v_bahan_baku_account_id), 0, v_adjustment_value, 'Pengurangan bahan baku', 2);
+      VALUES (v_journal_id, v_bahan_baku_account_id, (SELECT name FROM accounts WHERE id = v_bahan_baku_account_id), 0, v_adjustment_value, 'Pengurangan bahan baku (Koreksi Modal Disetor)', 2);
     END IF;
   END IF;
 
@@ -177,8 +177,8 @@ DECLARE
   v_current_stock NUMERIC;
   v_new_stock NUMERIC;
   v_adjustment_value NUMERIC;
-  v_persediaan_account_id UUID;
-  v_selisih_account_id UUID;
+  v_persediaan_account_id TEXT;
+  v_modal_account_id TEXT;
   v_entry_number TEXT;
   v_fifo_success BOOLEAN;
 BEGIN
@@ -224,9 +224,9 @@ BEGIN
   SELECT id INTO v_persediaan_account_id FROM accounts
   WHERE branch_id = p_branch_id AND code = '1310' AND is_active = TRUE LIMIT 1;
 
-  -- Selisih Stok account (usually 8100 or specific)
-  SELECT id INTO v_selisih_account_id FROM accounts
-  WHERE branch_id = p_branch_id AND code = '8100' AND is_active = TRUE LIMIT 1;
+  -- Modal Disetor account (3100)
+  SELECT id INTO v_modal_account_id FROM accounts
+  WHERE branch_id = p_branch_id AND code = '3100' AND is_active = TRUE LIMIT 1;
 
   -- Generate primary key for adjustment
   v_adjustment_id := gen_random_uuid();
@@ -263,7 +263,7 @@ BEGIN
 
   -- ==================== CREATE JOURNAL ENTRY (if value > 0) ====================
 
-  IF v_adjustment_value > 0 AND v_persediaan_account_id IS NOT NULL AND v_selisih_account_id IS NOT NULL THEN
+  IF v_adjustment_value > 0 AND v_persediaan_account_id IS NOT NULL AND v_modal_account_id IS NOT NULL THEN
     SELECT 'JE-' || TO_CHAR(NOW(), 'YYYYMMDD') || '-' || LPAD(
       (COALESCE(
         (SELECT COUNT(*) + 1 FROM journal_entries
@@ -283,19 +283,17 @@ BEGIN
     ) RETURNING id INTO v_journal_id;
 
     IF p_quantity_change > 0 THEN
-      -- Stock IN: Dr. Persediaan, Cr. Selisih
       INSERT INTO journal_entry_lines (journal_entry_id, account_id, account_name, debit_amount, credit_amount, description, line_number)
-      VALUES (v_journal_id, v_persediaan_account_id, (SELECT name FROM accounts WHERE id = v_persediaan_account_id), v_adjustment_value, 0, 'Penambahan persediaan', 1);
+      VALUES (v_journal_id, v_persediaan_account_id, (SELECT name FROM accounts WHERE id = v_persediaan_account_id), v_adjustment_value, 0, 'Penambahan produk (Koreksi Modal Disetor)', 1);
 
       INSERT INTO journal_entry_lines (journal_entry_id, account_id, account_name, debit_amount, credit_amount, description, line_number)
-      VALUES (v_journal_id, v_selisih_account_id, (SELECT name FROM accounts WHERE id = v_selisih_account_id), 0, v_adjustment_value, 'Selisih stok', 2);
+      VALUES (v_journal_id, v_modal_account_id, (SELECT name FROM accounts WHERE id = v_modal_account_id), 0, v_adjustment_value, 'Penyesuaian Modal Disetor', 2);
     ELSE
-      -- Stock OUT: Dr. Selisih, Cr. Persediaan
       INSERT INTO journal_entry_lines (journal_entry_id, account_id, account_name, debit_amount, credit_amount, description, line_number)
-      VALUES (v_journal_id, v_selisih_account_id, (SELECT name FROM accounts WHERE id = v_selisih_account_id), v_adjustment_value, 0, 'Selisih stok', 1);
+      VALUES (v_journal_id, v_modal_account_id, (SELECT name FROM accounts WHERE id = v_modal_account_id), v_adjustment_value, 0, 'Penyesuaian Modal Disetor', 1);
 
       INSERT INTO journal_entry_lines (journal_entry_id, account_id, account_name, debit_amount, credit_amount, description, line_number)
-      VALUES (v_journal_id, v_persediaan_account_id, (SELECT name FROM accounts WHERE id = v_persediaan_account_id), 0, v_adjustment_value, 'Pengurangan persediaan', 2);
+      VALUES (v_journal_id, v_persediaan_account_id, (SELECT name FROM accounts WHERE id = v_persediaan_account_id), 0, v_adjustment_value, 'Pengurangan produk (Koreksi Modal Disetor)', 2);
     END IF;
   END IF;
 

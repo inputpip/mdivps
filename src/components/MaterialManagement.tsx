@@ -19,7 +19,8 @@ import { useAuth } from '@/hooks/useAuth'
 import { CreatePurchaseOrderDialog } from './CreatePurchaseOrderDialog'
 import { Badge } from './ui/badge'
 import { useToast } from './ui/use-toast'
-import { Trash2, ChevronDown, ChevronUp, Package, Search, X, FileText, Printer, FileDown } from 'lucide-react'
+import { Trash2, ChevronDown, ChevronUp, Package, Search, X, FileText, Printer, FileDown, Scale } from 'lucide-react'
+import { MaterialStockAdjustmentDialog } from './MaterialStockAdjustmentDialog'
 import { canManageEmployees, isOwner } from '@/utils/roleUtils'
 import { useCompanySettings } from '@/hooks/useCompanySettings'
 import { format } from 'date-fns'
@@ -69,6 +70,7 @@ export const MaterialManagement = () => {
   const canManageMaterials = canManageEmployees(user) || (user && user.role?.toLowerCase() === 'supervisor')
   const [isRequestPoOpen, setIsRequestPoOpen] = useState(false)
   const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null)
+  const [isAdjustmentOpen, setIsAdjustmentOpen] = useState(false)
   const [editingMaterial, setEditingMaterial] = useState<Material | null>(null)
   const [isMaterialListOpen, setIsMaterialListOpen] = useState(true)
   const [typeFilter, setTypeFilter] = useState<string>("")
@@ -85,7 +87,7 @@ export const MaterialManagement = () => {
   const filteredMaterials = materials?.filter(material => {
     const matchesType = !typeFilter || material.type === typeFilter
     const matchesLowStock = !lowStockFilter || (material.type === 'Stock' && material.stock <= (material.minStock || 0))
-    
+
     return matchesType && matchesLowStock
   }) || []
 
@@ -101,15 +103,20 @@ export const MaterialManagement = () => {
     setIsRequestPoOpen(true)
   }
 
+  const handleOpenAdjustment = (material: Material) => {
+    setSelectedMaterial(material)
+    setIsAdjustmentOpen(true)
+  }
+
   const handleEditClick = (material: Material) => {
     setEditingMaterial(material);
     // Fix: Only pass allowed fields and map type if needed
     const { name, unit, pricePerUnit, stock, minStock, description } = material;
     const type: 'Stock' | 'Beli' = material.type === 'Jasa' ? 'Stock' : material.type;
-    
+
     // For "Beli" type, set minStock to 0 since it's not used
     const adjustedMinStock = type === 'Beli' ? 0 : minStock;
-    
+
     reset({ name, type, unit, pricePerUnit, stock, minStock: adjustedMinStock, description });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -144,6 +151,11 @@ export const MaterialManagement = () => {
       ...data,
       id: editingMaterial?.id, // Include ID if editing
     };
+
+    // If editing, explicitly remove stock to prevent accidental overwrites of FIFO data
+    if (editingMaterial) {
+      delete materialToSave.stock;
+    }
 
     upsertMaterial.mutate(materialToSave, {
       onSuccess: (savedMaterial) => {
@@ -306,6 +318,12 @@ export const MaterialManagement = () => {
         <div />
       </CreatePurchaseOrderDialog>
 
+      <MaterialStockAdjustmentDialog
+        open={isAdjustmentOpen}
+        onOpenChange={setIsAdjustmentOpen}
+        material={selectedMaterial}
+      />
+
       {canManageMaterials && (
         <Card>
           <CardHeader>
@@ -315,107 +333,113 @@ export const MaterialManagement = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-          <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-              <div className="space-y-2 lg:col-span-2">
-                <Label htmlFor="name">Nama Bahan</Label>
-                <Input id="name" {...register("name")} />
-                {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="type">Jenis Bahan</Label>
-                <Controller
-                  name="type"
-                  control={control}
-                  render={({ field }) => (
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Pilih jenis bahan" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Stock">Stock</SelectItem>
-                        <SelectItem value="Beli">Beli</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
-                {errors.type && <p className="text-sm text-destructive">{errors.type.message}</p>}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="unit">Satuan</Label>
-                <Input id="unit" {...register("unit")} placeholder="meter, lembar, kg" />
-                {errors.unit && <p className="text-sm text-destructive">{errors.unit.message}</p>}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="pricePerUnit">Harga per Satuan</Label>
-                <Controller
-                  name="pricePerUnit"
-                  control={control}
-                  render={({ field }) => (
-                    <NumberInput
-                      id="pricePerUnit"
-                      value={field.value}
-                      onChange={(value) => field.onChange(value || 0)}
-                      min={0}
-                      decimalPlaces={2}
-                    />
-                  )}
-                />
-                {errors.pricePerUnit && <p className="text-sm text-destructive">{errors.pricePerUnit.message}</p>}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="stock">Stok Saat Ini</Label>
-                <Controller
-                  name="stock"
-                  control={control}
-                  render={({ field }) => (
-                    <NumberInput
-                      id="stock"
-                      value={field.value}
-                      onChange={(value) => field.onChange(value || 0)}
-                      min={0}
-                      decimalPlaces={2}
-                    />
-                  )}
-                />
-                {errors.stock && <p className="text-sm text-destructive">{errors.stock.message}</p>}
-              </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-              {selectedType === 'Stock' && (
+            <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                <div className="space-y-2 lg:col-span-2">
+                  <Label htmlFor="name">Nama Bahan</Label>
+                  <Input id="name" {...register("name")} />
+                  {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
+                </div>
                 <div className="space-y-2">
-                  <Label htmlFor="minStock">Stok Minimal</Label>
+                  <Label htmlFor="type">Jenis Bahan</Label>
                   <Controller
-                    name="minStock"
+                    name="type"
+                    control={control}
+                    render={({ field }) => (
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Pilih jenis bahan" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Stock">Stock</SelectItem>
+                          <SelectItem value="Beli">Beli</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                  {errors.type && <p className="text-sm text-destructive">{errors.type.message}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="unit">Satuan</Label>
+                  <Input id="unit" {...register("unit")} placeholder="meter, lembar, kg" />
+                  {errors.unit && <p className="text-sm text-destructive">{errors.unit.message}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="pricePerUnit">Harga per Satuan</Label>
+                  <Controller
+                    name="pricePerUnit"
                     control={control}
                     render={({ field }) => (
                       <NumberInput
-                        id="minStock"
+                        id="pricePerUnit"
                         value={field.value}
                         onChange={(value) => field.onChange(value || 0)}
                         min={0}
-                        decimalPlaces={0}
+                        decimalPlaces={2}
                       />
                     )}
                   />
-                  {errors.minStock && <p className="text-sm text-destructive">{errors.minStock.message}</p>}
+                  {errors.pricePerUnit && <p className="text-sm text-destructive">{errors.pricePerUnit.message}</p>}
                 </div>
-              )}
-              <div className="space-y-2 lg:col-span-4">
-                <Label htmlFor="description">Deskripsi (Opsional)</Label>
-                <Textarea id="description" {...register("description")} />
+                <div className="space-y-2">
+                  <Label htmlFor="stock">Stok Awal (Saat Create)</Label>
+                  <Controller
+                    name="stock"
+                    control={control}
+                    render={({ field }) => (
+                      <NumberInput
+                        id="stock"
+                        value={field.value}
+                        onChange={(value) => field.onChange(value || 0)}
+                        min={0}
+                        decimalPlaces={2}
+                        disabled={!!editingMaterial}
+                      />
+                    )}
+                  />
+                  {editingMaterial && (
+                    <p className="text-[10px] text-muted-foreground">
+                      Gunakan tombol "Update Stok" di daftar bahan untuk perubahan stok berjalan.
+                    </p>
+                  )}
+                  {errors.stock && <p className="text-sm text-destructive">{errors.stock.message}</p>}
+                </div>
               </div>
-            </div>
-            <div className="flex gap-2">
-              <Button type="submit" disabled={upsertMaterial.isPending}>
-                {upsertMaterial.isPending ? "Menyimpan..." : (editingMaterial ? 'Simpan Perubahan' : 'Simpan Bahan Baru')}
-              </Button>
-              {editingMaterial && (
-                <Button type="button" variant="outline" onClick={handleCancelEdit}>Batal</Button>
-              )}
-            </div>
-          </form>
-        </CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                {selectedType === 'Stock' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="minStock">Stok Minimal</Label>
+                    <Controller
+                      name="minStock"
+                      control={control}
+                      render={({ field }) => (
+                        <NumberInput
+                          id="minStock"
+                          value={field.value}
+                          onChange={(value) => field.onChange(value || 0)}
+                          min={0}
+                          decimalPlaces={0}
+                        />
+                      )}
+                    />
+                    {errors.minStock && <p className="text-sm text-destructive">{errors.minStock.message}</p>}
+                  </div>
+                )}
+                <div className="space-y-2 lg:col-span-4">
+                  <Label htmlFor="description">Deskripsi (Opsional)</Label>
+                  <Textarea id="description" {...register("description")} />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button type="submit" disabled={upsertMaterial.isPending}>
+                  {upsertMaterial.isPending ? "Menyimpan..." : (editingMaterial ? 'Simpan Perubahan' : 'Simpan Bahan Baru')}
+                </Button>
+                {editingMaterial && (
+                  <Button type="button" variant="outline" onClick={handleCancelEdit}>Batal</Button>
+                )}
+              </div>
+            </form>
+          </CardContent>
         </Card>
       )}
 
@@ -430,9 +454,9 @@ export const MaterialManagement = () => {
                     Daftar Bahan & Stok
                   </CardTitle>
                   <CardDescription>
-                    {canManageMaterials 
+                    {canManageMaterials
                       ? 'Kelola semua bahan baku dan stok yang tersedia.'
-                      : user?.role?.toLowerCase() === 'designer' 
+                      : user?.role?.toLowerCase() === 'designer'
                         ? 'Lihat informasi bahan baku dan request Purchase Order (PO).'
                         : 'Lihat informasi bahan baku dan stok (hanya baca).'}
                   </CardDescription>
@@ -443,7 +467,7 @@ export const MaterialManagement = () => {
           </CollapsibleTrigger>
           <CollapsibleContent>
             <CardContent>
-              
+
               {/* Filter Controls */}
               <div className="mb-6 space-y-4">
                 <div className="flex gap-4 items-center flex-wrap">
@@ -495,7 +519,7 @@ export const MaterialManagement = () => {
                   </div>
                 </div>
               </div>
-              
+
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -513,8 +537,8 @@ export const MaterialManagement = () => {
                   ) : filteredMaterials?.map((material) => (
                     <TableRow key={material.id}>
                       <TableCell className="font-medium">
-                        <Link 
-                          to={`/materials/${material.id}`} 
+                        <Link
+                          to={`/materials/${material.id}`}
                           className="text-blue-600 hover:text-blue-800 hover:underline transition-colors"
                         >
                           {material.name}
@@ -523,7 +547,7 @@ export const MaterialManagement = () => {
                       <TableCell>
                         <Badge variant="outline" className={
                           material.type === 'Stock' ? 'bg-purple-100 text-purple-800' :
-                          'bg-orange-100 text-orange-800'
+                            'bg-orange-100 text-orange-800'
                         }>
                           {material.type}
                         </Badge>
@@ -555,15 +579,26 @@ export const MaterialManagement = () => {
                       <TableCell>
                         <div className="flex gap-2">
                           {canManageMaterials && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleOpenAdjustment(material)}
+                              className="border-blue-300 text-blue-600 hover:bg-blue-50"
+                            >
+                              <Scale className="h-4 w-4 mr-1" />
+                              Update Stok
+                            </Button>
+                          )}
+                          {canManageMaterials && (
                             <Button variant="outline" size="sm" onClick={() => handleEditClick(material)}>Edit</Button>
                           )}
                           <Button variant="secondary" size="sm" onClick={() => handleOpenRequestPo(material)}>
                             Request PO
                           </Button>
                           {isOwner(user) && (
-                            <Button 
-                              variant="destructive" 
-                              size="sm" 
+                            <Button
+                              variant="destructive"
+                              size="sm"
                               onClick={() => handleDeleteClick(material)}
                               disabled={deleteMaterial.isPending}
                             >

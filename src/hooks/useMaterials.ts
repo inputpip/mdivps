@@ -41,6 +41,7 @@ export const useMaterials = () => {
   const { data: materials, isLoading } = useQuery<Material[]>({
     queryKey: ['materials', currentBranch?.id],
     queryFn: async () => {
+      // 1. Fetch materials
       let query = supabase
         .from('materials')
         .select('*');
@@ -50,9 +51,30 @@ export const useMaterials = () => {
         query = query.or(`branch_id.eq.${currentBranch.id},branch_id.is.null`);
       }
 
-      const { data, error } = await query;
-      if (error) throw new Error(error.message);
-      return data ? data.map(fromDbToApp) : [];
+      const { data: materialsData, error: materialsError } = await query;
+      if (materialsError) throw new Error(materialsError.message);
+
+      // 2. Fetch actual stock from v_material_current_stock VIEW for accurate FIFO count
+      let stockQuery = supabase.from('v_material_current_stock').select('material_id, current_stock');
+      if (currentBranch?.id) {
+        stockQuery = stockQuery.or(`branch_id.eq.${currentBranch.id},branch_id.is.null`);
+      }
+
+      const { data: stockData } = await stockQuery;
+
+      // 3. Create stock map for quick lookup
+      const stockMap = new Map<string, number>();
+      if (stockData) {
+        stockData.forEach((s: any) => stockMap.set(s.material_id, Number(s.current_stock) || 0));
+      }
+
+      // 4. Map and override with View data (Source of Truth)
+      return materialsData ? materialsData.map(m => {
+        const material = fromDbToApp(m);
+        // Override stock with value from VIEW (FIFO)
+        material.stock = stockMap.get(m.id) ?? 0;
+        return material;
+      }) : [];
     },
     enabled: !!currentBranch,
     // Optimized for material management pages
@@ -114,15 +136,22 @@ export const useMaterials = () => {
           .single();
         existing = currentRaw;
 
+        // materials.stock is DEPRECATED - do not overwrite with calculated view value
+        delete dbData.stock;
+
         const { error } = await supabase
           .from('materials')
           .update(dbData)
           .eq('id', material.id!);
         if (error) throw error;
       } else {
+        // For new materials, treated similarly to products
+        const materialToInsert = { ...dbData };
+        delete materialToInsert.stock;
+
         const { data: dataRaw, error } = await supabase
           .from('materials')
-          .insert(dbData)
+          .insert(materialToInsert)
           .select();
         if (error) throw error;
         // Handle PostgREST array response
@@ -197,10 +226,42 @@ export const useMaterials = () => {
     };
   }, [queryClient]);
 
+  const adjustStock = useMutation({
+    mutationFn: async ({ materialId, quantityChange, reason, unitCost }: { materialId: string, quantityChange: number, reason: string, unitCost?: number }): Promise<void> => {
+      if (!currentBranch?.id) throw new Error('Branch required');
+
+      console.log('[adjustStock] Calling create_material_stock_adjustment_atomic RPC:', { materialId, quantityChange, reason });
+
+      const { data: rpcResultRaw, error } = await supabase.rpc('create_material_stock_adjustment_atomic', {
+        p_material_id: materialId,
+        p_branch_id: currentBranch.id,
+        p_quantity_change: quantityChange,
+        p_reason: reason,
+        p_unit_cost: unitCost || 0
+      });
+
+      if (error) {
+        console.error('[adjustStock] RPC error:', error);
+        throw new Error(error.message);
+      }
+
+      const rpcResult = Array.isArray(rpcResultRaw) ? rpcResultRaw[0] : rpcResultRaw;
+      if (!rpcResult?.success) throw new Error(rpcResult?.error_message || 'Failed to adjust material stock');
+
+      console.log('[adjustStock] Stock adjusted successfully');
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['materials'] });
+      queryClient.invalidateQueries({ queryKey: ['journalEntries'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+    },
+  });
+
   return {
     materials,
     isLoading,
     addStock,
+    adjustStock,
     upsertMaterial,
     deleteMaterial,
   }
