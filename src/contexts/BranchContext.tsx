@@ -37,14 +37,16 @@ export function BranchProvider({ children }: { children: ReactNode }) {
     [user?.role]
   );
 
-  // Roles that can switch branches: owner, admin, sales, kasir, kasir sales
+  // Roles that can switch branches by default: owner, admin, sales, cashier, kasir, kasir sales
   const canAccessAllBranches = useMemo(() => {
     const role = user?.role?.toLowerCase();
     return isHeadOffice ||
-           role === 'admin' ||
-           role === 'sales' ||
-           role === 'kasir' ||
-           role === 'kasir sales';
+      role === 'admin' ||
+      role === 'sales' ||
+      role === 'kasir' ||
+      role === 'cashier' ||
+      role === 'kasir sales' ||
+      role === 'kasir_sales';
   }, [user?.role, isHeadOffice]);
 
   // Fetch user's branch and available branches
@@ -201,40 +203,58 @@ export function BranchProvider({ children }: { children: ReactNode }) {
           const company = Array.isArray(companyData) ? companyData[0] : companyData;
 
           if (company) {
-          setCurrentCompany({
-            id: company.id,
-            name: company.name,
-            code: company.code,
-            isHeadOffice: company.is_head_office,
-            address: company.address,
-            phone: company.phone,
-            email: company.email,
-            taxId: company.tax_id,
-            logoUrl: company.logo_url,
-            isActive: company.is_active,
-            createdAt: new Date(company.created_at),
-            updatedAt: new Date(company.updated_at),
-          });
+            setCurrentCompany({
+              id: company.id,
+              name: company.name,
+              code: company.code,
+              isHeadOffice: company.is_head_office,
+              address: company.address,
+              phone: company.phone,
+              email: company.email,
+              taxId: company.tax_id,
+              logoUrl: company.logo_url,
+              isActive: company.is_active,
+              createdAt: new Date(company.created_at),
+              updatedAt: new Date(company.updated_at),
+            });
           }
         }
       }
 
-      // Get all available branches (based on user role)
-      let branchesQuery = supabase
+      // Fetch role permissions to check for granular branch access
+      let granularPermissions: Record<string, boolean> = {};
+      if (user.role && user.role !== 'owner') {
+        const { data: rolePermData } = await supabase
+          .from('role_permissions')
+          .select('permissions')
+          .eq('role_id', user.role)
+          .limit(1);
+
+        const rolePerm = Array.isArray(rolePermData) ? rolePermData[0] : rolePermData;
+        if (rolePerm?.permissions) {
+          granularPermissions = rolePerm.permissions;
+        }
+      }
+
+      // Get all active branches
+      const { data: allBranches } = await supabase
         .from('branches')
         .select('*')
         .eq('is_active', true);
 
-      // If not head office, only get user's branch
-      if (!canAccessAllBranches) {
-        branchesQuery = branchesQuery.eq('id', profile.branch_id);
-      }
+      if (allBranches) {
+        let accessibleBranches = allBranches;
 
-      const { data: branches } = await branchesQuery;
+        // If not head office/admin and not a default role with full access, filter by granular permissions
+        if (!isHeadOffice && user.role !== 'admin') {
+          accessibleBranches = allBranches.filter(b =>
+            b.id === profile.branch_id || // Always include home branch
+            granularPermissions[`branch_access_${b.id}`] === true // include branches with explicit access
+          );
+        }
 
-      if (branches) {
         setAvailableBranches(
-          branches.map((b) => ({
+          accessibleBranches.map((b) => ({
             id: b.id,
             companyId: b.company_id,
             name: b.name,

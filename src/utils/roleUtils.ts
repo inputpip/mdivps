@@ -57,9 +57,9 @@ export const canManageRoles = (user: RoleInput): boolean => {
 };
 
 // Check if user can create delivery without driver (web view only)
-// Allowed for: kasir, kasir sales, admin, owner
+// Allowed for: cashier, kasir, kasir sales, admin, owner
 export const canDeliverWithoutDriver = (user: RoleInput): boolean => {
-  return hasAnyRole(user, ['owner', 'admin', 'kasir sales', 'kasir']);
+  return hasAnyRole(user, ['owner', 'admin', 'kasir sales', 'kasir', 'cashier']);
 };
 
 // Backward compatibility aliases

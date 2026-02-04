@@ -27,8 +27,8 @@ export function BranchSelector() {
   } = useBranch();
   const [open, setOpen] = useState(false);
 
-  // Jika user tidak bisa akses multiple branches, jangan tampilkan selector
-  if (!canAccessAllBranches || availableBranches.length <= 1) {
+  // Tampilkan selector jika ada lebih dari 1 cabang yang bisa diakses
+  if (availableBranches.length <= 1) {
     return (
       <div className="flex items-center gap-2 px-3 py-2 bg-muted rounded-md">
         <Building2 className="w-4 h-4 text-muted-foreground" />
