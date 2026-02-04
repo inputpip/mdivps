@@ -62,6 +62,7 @@ import { MigrationTransactionDialog } from "./MigrationTransactionDialog"
 import { isOwner } from '@/utils/roleUtils'
 import { useDeliveryEmployees, useDeliveryHistory } from "@/hooks/useDeliveries"
 import { useAccounts } from "@/hooks/useAccounts"
+import { useSalesEmployees } from "@/hooks/useSalesCommission"
 import { DeliveryFormContent } from "@/components/DeliveryFormContent"
 import { DeliveryCompletionDialog } from "@/components/DeliveryCompletionDialog"
 import { TransactionDeliveryInfo } from "@/types/delivery"
@@ -108,12 +109,17 @@ export function TransactionTable() {
   const [customerTypeFilter, setCustomerTypeFilter] = React.useState<'all' | 'Rumahan' | 'Kios/Toko'>('all'); // Filter by customer classification
   const [retasiFilter, setRetasiFilter] = React.useState<string>('all'); // 'all' or retasi_number
   const [cashierFilter, setCashierFilter] = React.useState<string>('all'); // 'all' or cashier_name
+  const [salesFilter, setSalesFilter] = React.useState<string>('all'); // 'all' or sales_name
   const [filteredTransactions, setFilteredTransactions] = React.useState<Transaction[]>([]);
 
   const { transactions, isLoading, deleteTransaction } = useTransactions();
 
   // Get drivers (supir) for filter dropdown
   const { data: deliveryEmployees } = useDeliveryEmployees();
+  // Get sales employees for filter dropdown
+  // Note: We need to import useSalesEmployees from hook
+  const { data: salesEmployees } = useSalesEmployees();
+
   const drivers = React.useMemo(() => {
     if (!deliveryEmployees) return [];
     return deliveryEmployees.filter(emp => emp.role === 'supir');
@@ -275,6 +281,16 @@ export function TransactionTable() {
       });
     }
 
+    // Filter by sales
+    if (salesFilter !== 'all') {
+      filtered = filtered.filter(transaction => {
+        // Compare salesName case-insensitive and trimmed to handle slight variations
+        const trxSales = (transaction.salesName || '').trim().toLowerCase();
+        const filterSales = salesFilter.trim().toLowerCase();
+        return trxSales === filterSales;
+      });
+    }
+
     // Filter by search (customer name or order ID)
     if (customerSearch.trim()) {
       const searchLower = customerSearch.toLowerCase().trim();
@@ -292,7 +308,7 @@ export function TransactionTable() {
     });
 
     setFilteredTransactions(filtered);
-  }, [transactions, dateRange, ppnFilter, driverFilter, paymentFilter, paymentAccountFilter, customerTypeFilter, retasiFilter, cashierFilter, customerSearch, isMobile, transactionDriverMap]);
+  }, [transactions, dateRange, ppnFilter, driverFilter, paymentFilter, paymentAccountFilter, customerTypeFilter, retasiFilter, cashierFilter, salesFilter, customerSearch, isMobile, transactionDriverMap]);
 
   const clearFilters = () => {
     setCustomerSearch('');
@@ -304,6 +320,7 @@ export function TransactionTable() {
     setCustomerTypeFilter('all');
     setRetasiFilter('all');
     setCashierFilter('all');
+    setSalesFilter('all');
   };
 
   // Get unique retasi numbers from transactions
@@ -578,6 +595,19 @@ export function TransactionTable() {
                 </span>
               </div>
             ))}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: "salesName",
+      header: "Sales",
+      cell: ({ row }) => {
+        const salesName = row.getValue("salesName") as string | null;
+        if (!salesName) return <span className="text-xs text-muted-foreground">-</span>;
+        return (
+          <div className="max-w-[120px] truncate text-sm font-medium" title={salesName}>
+            {salesName}
           </div>
         );
       },
@@ -1201,6 +1231,24 @@ export function TransactionTable() {
                 </Select>
               </div>
             )}
+
+            {/* Sales Filter */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Sales</label>
+              <Select value={salesFilter} onValueChange={setSalesFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Semua Sales" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Semua Sales</SelectItem>
+                  {salesEmployees?.map((sales) => (
+                    <SelectItem key={sales.id} value={sales.name}>
+                      {sales.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
             {/* Cashier Filter */}
             {uniqueCashiers.length > 0 && (
