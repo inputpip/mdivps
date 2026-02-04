@@ -397,6 +397,13 @@ export function ReceivablesTable() {
     return { counts, amounts }
   }, [allReceivables])
 
+  const { totalFilteredAmount, totalFilteredCount } = React.useMemo(() => {
+    return {
+      totalFilteredAmount: receivables.reduce((sum, t) => sum + (t.total - (t.paidAmount || 0)), 0),
+      totalFilteredCount: receivables.length
+    }
+  }, [receivables])
+
   const handleExportExcel = () => {
     const exportData = receivables.map((t, idx) => {
       const days = getAgingDays(t.orderDate)
@@ -525,30 +532,40 @@ export function ReceivablesTable() {
       </div>
 
       {/* Summary Cards - Due Status */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-lg p-4">
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-500" />
             <h3 className="font-medium text-red-900 dark:text-red-200">Jatuh Tempo</h3>
           </div>
-          <p className="text-2xl font-bold text-red-600 dark:text-red-400">{overdueCount}</p>
-          <p className="text-sm text-red-700 dark:text-red-300">Transaksi terlambat</p>
+          <p className="text-xl md:text-2xl font-bold text-red-600 dark:text-red-400">{overdueCount}</p>
+          <p className="text-xs md:text-sm text-red-700 dark:text-red-300">Transaksi terlambat</p>
         </div>
         <div className="bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-900 rounded-lg p-4">
           <div className="flex items-center gap-2">
             <Clock className="w-5 h-5 text-orange-600 dark:text-orange-500" />
             <h3 className="font-medium text-orange-900 dark:text-orange-200">Segera Jatuh Tempo</h3>
           </div>
-          <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">{dueSoonCount}</p>
-          <p className="text-sm text-orange-700 dark:text-orange-300">≤ 3 hari lagi</p>
+          <p className="text-xl md:text-2xl font-bold text-orange-600 dark:text-orange-400">{dueSoonCount}</p>
+          <p className="text-xs md:text-sm text-orange-700 dark:text-orange-300">≤ 3 hari lagi</p>
         </div>
         <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 rounded-lg p-4">
           <div className="flex items-center gap-2">
             <Calendar className="w-5 h-5 text-blue-600 dark:text-blue-500" />
             <h3 className="font-medium text-blue-900 dark:text-blue-200">Total Piutang</h3>
           </div>
-          <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{allReceivables.length}</p>
-          <p className="text-sm text-blue-700 dark:text-blue-300">Belum lunas</p>
+          <p className="text-xl md:text-2xl font-bold text-blue-600 dark:text-blue-400">{allReceivables.length}</p>
+          <p className="text-xs md:text-sm text-blue-700 dark:text-blue-300">Semua (Belum lunas)</p>
+        </div>
+        <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900 rounded-lg p-4">
+          <div className="flex items-center gap-2">
+            <CreditCard className="w-5 h-5 text-emerald-600 dark:text-emerald-500" />
+            <h3 className="font-medium text-emerald-900 dark:text-emerald-200">Nominal Filter</h3>
+          </div>
+          <p className="text-xl md:text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+            {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(totalFilteredAmount)}
+          </p>
+          <p className="text-xs md:text-sm text-emerald-700 dark:text-emerald-300">{totalFilteredCount} transaksi terpilih</p>
         </div>
       </div>
 
