@@ -227,72 +227,76 @@ export function PayReceivableDialog({ open, onOpenChange, transaction }: PayRece
                   Jumlah melebihi sisa tagihan ({new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR" }).format(remainingAmount)})
                 </p>
               )}
-              <div>
-                <Label htmlFor="paymentDate" className="mb-2 block">Tanggal Pembayaran</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant={"outline"}
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !watchedDate && "text-muted-foreground"
-                      )}
-                      disabled={!canBackdate}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {watchedDate ? format(watchedDate, "PPP", { locale: id }) : <span>Pilih tanggal</span>}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={watchedDate}
-                      onSelect={(date) => setValue("paymentDate", date as Date)}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-                {!canBackdate && <p className="text-[10px] text-muted-foreground mt-1">Anda tidak memiliki izin untuk mengubah tanggal (Backdate).</p>}
-                {errors.paymentDate && <p className="text-sm text-destructive mt-1">{errors.paymentDate.message}</p>}
-              </div>
-              <div>
-                <Label htmlFor="paymentAccountId">Setor Ke Akun</Label>
-                <Select
-                  value={watch("paymentAccountId") || ""}
-                  onValueChange={(value) => setValue("paymentAccountId", value)}
-                >
-                  <SelectTrigger><SelectValue placeholder="Pilih Akun..." /></SelectTrigger>
-                  <SelectContent>
-                    {accounts?.filter(a => a.isPaymentAccount).map(acc => {
-                      const isMyAccount = acc.employeeId === user?.id;
-                      return (
-                        <SelectItem key={acc.id} value={acc.id}>
-                          <Wallet className="inline-block mr-2 h-4 w-4" />
-                          {acc.name}
-                          {isMyAccount && <span className="text-green-600 font-medium ml-2">(Kas Saya)</span>}
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
-                {errors.paymentAccountId && <p className="text-sm text-destructive mt-1">{errors.paymentAccountId.message}</p>}
-              </div>
-              <div>
-                <Label htmlFor="notes">Catatan (Opsional)</Label>
-                <Textarea
-                  id="notes"
-                  placeholder="Catatan tambahan untuk pembayaran ini..."
-                  {...register("notes")}
-                  rows={2}
-                />
-                {errors.notes && <p className="text-sm text-destructive mt-1">{errors.notes.message}</p>}
-              </div>
             </div>
-            <DialogFooter>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Menyimpan..." : "Simpan Pembayaran"}
-              </Button>
-            </DialogFooter>
+
+            <div>
+              <Label htmlFor="paymentDate" className="mb-2 block">Tanggal Pembayaran</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={"outline"}
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !watchedDate && "text-muted-foreground"
+                    )}
+                    disabled={!canBackdate}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {watchedDate ? format(watchedDate, "PPP", { locale: id }) : <span>Pilih tanggal</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    selected={watchedDate}
+                    onSelect={(date) => setValue("paymentDate", date as Date)}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+              {!canBackdate && <p className="text-[10px] text-muted-foreground mt-1">Anda tidak memiliki izin untuk mengubah tanggal (Backdate).</p>}
+              {errors.paymentDate && <p className="text-sm text-destructive mt-1">{errors.paymentDate.message}</p>}
+            </div>
+
+            <div>
+              <Label htmlFor="paymentAccountId">Setor Ke Akun</Label>
+              <Select
+                value={watch("paymentAccountId") || ""}
+                onValueChange={(value) => setValue("paymentAccountId", value)}
+              >
+                <SelectTrigger><SelectValue placeholder="Pilih Akun..." /></SelectTrigger>
+                <SelectContent>
+                  {accounts?.filter(a => a.isPaymentAccount).map(acc => {
+                    const isMyAccount = acc.employeeId === user?.id;
+                    return (
+                      <SelectItem key={acc.id} value={acc.id}>
+                        <Wallet className="inline-block mr-2 h-4 w-4" />
+                        {acc.name}
+                        {isMyAccount && <span className="text-green-600 font-medium ml-2">(Kas Saya)</span>}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+              {errors.paymentAccountId && <p className="text-sm text-destructive mt-1">{errors.paymentAccountId.message}</p>}
+            </div>
+
+            <div>
+              <Label htmlFor="notes">Catatan (Opsional)</Label>
+              <Textarea
+                id="notes"
+                placeholder="Catatan tambahan untuk pembayaran ini..."
+                {...register("notes")}
+                rows={2}
+              />
+              {errors.notes && <p className="text-sm text-destructive mt-1">{errors.notes.message}</p>}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? "Menyimpan..." : "Simpan Pembayaran"}
+            </Button>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
