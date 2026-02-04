@@ -18,6 +18,7 @@ export const PERMISSIONS = {
   // Financial
   FINANCIAL: 'financial',
   RECEIVABLE_BACKDATE: 'receivable_backdate',
+  RECEIVABLE_DELETE: 'receivable_delete',
 
   // Production
   PRODUCTION: 'production',
@@ -71,6 +72,7 @@ const mapGranularToSimplified = (granularPerms: Record<string, boolean>): Record
       granularPerms.cash_flow_view === true,
 
     receivable_backdate: granularPerms.receivable_backdate === true,
+    receivable_delete: granularPerms.receivable_delete === true,
 
     // Reports - need at least one report permission
     reports: granularPerms.stock_reports === true ||

@@ -12,6 +12,7 @@ import { PayReceivableDialog } from "./PayReceivableDialog"
 import { ReceivablesReportPDF } from "./ReceivablesReportPDF"
 // import { PaymentHistoryRow } from "./PaymentHistoryRow" // Removed
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./ui/dropdown-menu"
+import { usePermissions } from "@/hooks/usePermissions"
 import { MoreHorizontal, ChevronDown, ChevronRight, CheckCircle, Clock, AlertTriangle, Calendar, Filter, Printer, Pencil, FileSpreadsheet, Search, CreditCard } from "lucide-react"
 import * as XLSX from 'xlsx'
 import { Input } from "./ui/input"
@@ -171,6 +172,9 @@ export function ReceivablesTable() {
     setTempDueDate(undefined)
   }
 
+
+  const { hasPermission } = usePermissions();
+  const canDeleteReceivable = hasPermission('receivable_delete');
 
   const columns: ColumnDef<Transaction>[] = [
     {
@@ -346,7 +350,7 @@ export function ReceivablesTable() {
             <DropdownMenuItem onClick={() => handlePayClick(row.original)}>
               Bayar
             </DropdownMenuItem>
-            {(user?.role === 'admin' || user?.role === 'owner') && (
+            {canDeleteReceivable && (
               <DropdownMenuItem
                 className="text-red-600 focus:text-red-600 focus:bg-red-50"
                 onClick={() => handleDeleteClick(row.original)}

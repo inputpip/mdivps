@@ -15,6 +15,7 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { useToast } from "@/components/ui/use-toast"
+import { usePermissions } from "@/hooks/usePermissions"
 
 // No need for type declaration when using direct import
 
@@ -149,7 +150,14 @@ export function PaymentHistoryTable() {
     doc.save(fileName)
   }
 
-  const handleDeletePayment = (paymentId: string) => {
+  const { hasPermission } = usePermissions();
+  const canDelete = hasPermission('receivable_delete');
+
+  const handleDeleteHistory = (paymentId: string) => {
+    if (!canDelete) {
+      toast({ variant: "destructive", title: "Akses Ditolak", description: "Anda tidak memiliki izin untuk menghapus history pembayaran." })
+      return;
+    }
     setSelectedPaymentId(paymentId)
     setDeleteDialogOpen(true)
   }
@@ -328,13 +336,15 @@ export function PaymentHistoryTable() {
                       {payment.user_name}
                     </td>
                     <td className="px-3 py-2 text-center">
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => handleDeletePayment(payment.id)}
-                      >
-                        Hapus
-                      </Button>
+                      {canDelete && (
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleDeleteHistory(payment.id)}
+                        >
+                          Hapus
+                        </Button>
+                      )}
                     </td>
                   </tr>
                 ))
