@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { useToast } from '@/components/ui/use-toast'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Shield, Save, RotateCcw, Settings, Eye, Plus, Edit, Trash2, Building2 } from 'lucide-react'
+import { Shield, Save, RotateCcw, Settings, Eye, Plus, Edit, Trash2, Building2, Calendar } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useRoles } from '@/hooks/useRoles'
 import { useBranches } from '@/hooks/useBranches'
@@ -125,6 +125,7 @@ const FEATURES = [
       { id: 'accounts_delete', name: 'Hapus Akun', icon: Trash2 },
       { id: 'receivables_view', name: 'Lihat Piutang', icon: Eye },
       { id: 'receivables_edit', name: 'Edit Piutang', icon: Edit },
+      { id: 'receivable_backdate', name: 'Pelunasan Piutang Backdate (Mundur Tanggal)', icon: Calendar },
       { id: 'payables_view', name: 'Lihat Hutang', icon: Eye },
       { id: 'payables_create', name: 'Tambah Hutang', icon: Plus },
       { id: 'payables_edit', name: 'Edit Hutang', icon: Edit },
@@ -572,9 +573,8 @@ export const RolePermissionManagement = () => {
               {category.items.map((item) => (
                 <div
                   key={item.id}
-                  className={`flex items-center justify-between p-3 border rounded-lg ${
-                    selectedRole === 'owner' ? 'bg-green-50 border-green-200' : 'hover:bg-gray-50'
-                  }`}
+                  className={`flex items-center justify-between p-3 border rounded-lg ${selectedRole === 'owner' ? 'bg-green-50 border-green-200' : 'hover:bg-gray-50'
+                    }`}
                 >
                   <div className="flex items-center gap-2 flex-1">
                     <item.icon className="h-4 w-4 text-muted-foreground" />

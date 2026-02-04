@@ -17,9 +17,15 @@ import { useAuth } from "@/hooks/useAuth"
 import { useBranch } from "@/contexts/BranchContext"
 import { useQueryClient } from "@tanstack/react-query"
 import { supabase } from "@/integrations/supabase/client"
-import { Wallet } from "lucide-react"
+import { Wallet, Calendar as CalendarIcon } from "lucide-react"
 import { useTimezone } from "@/contexts/TimezoneContext"
 import { getOfficeDateString } from "@/utils/officeTime"
+import { usePermissions } from "@/hooks/usePermissions"
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover"
+import { Calendar } from "./ui/calendar"
+import { format } from "date-fns"
+import { id } from "date-fns/locale/id"
+import { cn } from "@/lib/utils"
 // journalService removed - now using RPC for all journal operations
 
 // ============================================================================
@@ -35,12 +41,16 @@ const getPaymentSchema = (maxAmount: number) => z.object({
     .min(1, "Jumlah pembayaran harus lebih dari 0.")
     .max(maxAmount, `Jumlah pembayaran tidak boleh melebihi sisa tagihan (${new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR" }).format(maxAmount)})`),
   paymentAccountId: z.string().min(1, "Akun pembayaran harus dipilih."),
+  paymentDate: z.date({
+    required_error: "Tanggal pembayaran harus dipilih.",
+  }),
   notes: z.string().optional(),
 })
 
 type PaymentFormData = {
   amount: number;
   paymentAccountId: string;
+  paymentDate: Date;
   notes?: string;
 }
 
@@ -58,12 +68,21 @@ export function PayReceivableDialog({ open, onOpenChange, transaction }: PayRece
   const queryClient = useQueryClient()
   const { accounts, getEmployeeCashAccount } = useAccounts()
 
+  const { hasPermission } = usePermissions();
+
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const remainingAmount = transaction ? transaction.total - (transaction.paidAmount || 0) : 0
 
+  const canBackdate = hasPermission('receivable_backdate');
+
   const { register, handleSubmit, reset, setValue, formState: { errors }, watch, trigger } = useForm<PaymentFormData>({
     resolver: zodResolver(getPaymentSchema(remainingAmount)),
+    defaultValues: {
+      paymentDate: new Date(),
+    }
   })
+
+  const watchedDate = watch("paymentDate");
 
   const watchedAmount = watch("amount")
 
@@ -111,7 +130,8 @@ export function PayReceivableDialog({ open, onOpenChange, transaction }: PayRece
         p_payment_account_id: data.paymentAccountId,
         p_notes: data.notes || null,
         p_branch_id: currentBranch?.id,
-        p_recorded_by_name: user.name || user.email || 'Unknown User'
+        p_recorded_by_name: user.name || user.email || 'Unknown User',
+        p_payment_date: format(data.paymentDate, 'yyyy-MM-dd')
       });
 
       if (rpcError) {
@@ -207,45 +227,72 @@ export function PayReceivableDialog({ open, onOpenChange, transaction }: PayRece
                   Jumlah melebihi sisa tagihan ({new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR" }).format(remainingAmount)})
                 </p>
               )}
+              <div>
+                <Label htmlFor="paymentDate" className="mb-2 block">Tanggal Pembayaran</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant={"outline"}
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !watchedDate && "text-muted-foreground"
+                      )}
+                      disabled={!canBackdate}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {watchedDate ? format(watchedDate, "PPP", { locale: id }) : <span>Pilih tanggal</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={watchedDate}
+                      onSelect={(date) => setValue("paymentDate", date as Date)}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+                {!canBackdate && <p className="text-[10px] text-muted-foreground mt-1">Anda tidak memiliki izin untuk mengubah tanggal (Backdate).</p>}
+                {errors.paymentDate && <p className="text-sm text-destructive mt-1">{errors.paymentDate.message}</p>}
+              </div>
+              <div>
+                <Label htmlFor="paymentAccountId">Setor Ke Akun</Label>
+                <Select
+                  value={watch("paymentAccountId") || ""}
+                  onValueChange={(value) => setValue("paymentAccountId", value)}
+                >
+                  <SelectTrigger><SelectValue placeholder="Pilih Akun..." /></SelectTrigger>
+                  <SelectContent>
+                    {accounts?.filter(a => a.isPaymentAccount).map(acc => {
+                      const isMyAccount = acc.employeeId === user?.id;
+                      return (
+                        <SelectItem key={acc.id} value={acc.id}>
+                          <Wallet className="inline-block mr-2 h-4 w-4" />
+                          {acc.name}
+                          {isMyAccount && <span className="text-green-600 font-medium ml-2">(Kas Saya)</span>}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+                {errors.paymentAccountId && <p className="text-sm text-destructive mt-1">{errors.paymentAccountId.message}</p>}
+              </div>
+              <div>
+                <Label htmlFor="notes">Catatan (Opsional)</Label>
+                <Textarea
+                  id="notes"
+                  placeholder="Catatan tambahan untuk pembayaran ini..."
+                  {...register("notes")}
+                  rows={2}
+                />
+                {errors.notes && <p className="text-sm text-destructive mt-1">{errors.notes.message}</p>}
+              </div>
             </div>
-            <div>
-              <Label htmlFor="paymentAccountId">Setor Ke Akun</Label>
-              <Select
-                value={watch("paymentAccountId") || ""}
-                onValueChange={(value) => setValue("paymentAccountId", value)}
-              >
-                <SelectTrigger><SelectValue placeholder="Pilih Akun..." /></SelectTrigger>
-                <SelectContent>
-                  {accounts?.filter(a => a.isPaymentAccount).map(acc => {
-                    const isMyAccount = acc.employeeId === user?.id;
-                    return (
-                      <SelectItem key={acc.id} value={acc.id}>
-                        <Wallet className="inline-block mr-2 h-4 w-4" />
-                        {acc.name}
-                        {isMyAccount && <span className="text-green-600 font-medium ml-2">(Kas Saya)</span>}
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-              {errors.paymentAccountId && <p className="text-sm text-destructive mt-1">{errors.paymentAccountId.message}</p>}
-            </div>
-            <div>
-              <Label htmlFor="notes">Catatan (Opsional)</Label>
-              <Textarea
-                id="notes"
-                placeholder="Catatan tambahan untuk pembayaran ini..."
-                {...register("notes")}
-                rows={2}
-              />
-              {errors.notes && <p className="text-sm text-destructive mt-1">{errors.notes.message}</p>}
-            </div>
-          </div>
-          <DialogFooter>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Menyimpan..." : "Simpan Pembayaran"}
-            </Button>
-          </DialogFooter>
+            <DialogFooter>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? "Menyimpan..." : "Simpan Pembayaran"}
+              </Button>
+            </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
