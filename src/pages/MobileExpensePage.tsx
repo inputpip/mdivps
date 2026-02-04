@@ -338,42 +338,42 @@ export default function MobileExpensePage() {
                             todaysExpenses.map(exp => (
                                 <div key={exp.id} className="bg-white p-3 rounded-lg shadow-sm border border-slate-100 flex justify-between items-center">
                                     <div className="overflow-hidden flex-1">
-                                <p className="font-medium text-sm truncate">{exp.description}</p>
-                                <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
-                                    <Badge variant="secondary" className="text-[10px] h-4 px-1">{exp.expenseAccountName}</Badge>
-                                    <span>•</span>
-                                    <span>{format(new Date(exp.date), "HH:mm")}</span>
-                                </div>
-                                {exp.photoUrl && (
-                                    <Dialog>
-                                        <DialogTrigger asChild>
-                                            <Button variant="link" size="sm" className="h-auto p-0 text-[10px] text-blue-600 mt-1 flex items-center gap-1">
-                                                <ImageIcon className="h-3 w-3"/> Lihat Bukti
-                                            </Button>
-                                        </DialogTrigger>
-                                        <DialogContent className="p-0 border-0 bg-black/90 max-w-sm mx-auto">
-                                            <div className="relative w-full h-[80vh] flex items-center justify-center">
-                                                <img 
-                                                    src={exp.photoUrl.startsWith('http') ? exp.photoUrl : PhotoUploadService.getPhotoUrl(exp.photoUrl, 'expenses')} 
-                                                    alt="Bukti" 
-                                                    className="max-w-full max-h-full object-contain" 
-                                                />
-                                            </div>
-                                        </DialogContent>
-                                    </Dialog>
-                                )}
-                            </div>        </div>
+                                        <p className="font-medium text-sm truncate">{exp.description}</p>
+                                        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                                            <Badge variant="secondary" className="text-[10px] h-4 px-1">{exp.expenseAccountName}</Badge>
+                                            <span>•</span>
+                                            <span>{format(new Date(exp.date), "HH:mm")}</span>
+                                        </div>
+                                        {exp.photoUrl && (
+                                            <Dialog>
+                                                <DialogTrigger asChild>
+                                                    <Button variant="link" size="sm" className="h-auto p-0 text-[10px] text-blue-600 mt-1 flex items-center gap-1">
+                                                        <ImageIcon className="h-3 w-3" /> Lihat Bukti
+                                                    </Button>
+                                                </DialogTrigger>
+                                                <DialogContent className="p-0 border-0 bg-black/90 max-w-sm mx-auto">
+                                                    <div className="relative w-full h-[80vh] flex items-center justify-center">
+                                                        <img
+                                                            src={exp.photoUrl.startsWith('http') ? exp.photoUrl : PhotoUploadService.getPhotoUrl(exp.photoUrl, 'expenses')}
+                                                            alt="Bukti"
+                                                            className="max-w-full max-h-full object-contain"
+                                                        />
+                                                    </div>
+                                                </DialogContent>
+                                            </Dialog>
+                                        )}
+                                    </div>
                                     <div className="text-right whitespace-nowrap pl-2">
                                         <p className="font-bold text-sm text-red-600">-Rp {formatNumber(exp.amount)}</p>
                                         <p className="text-[10px] text-muted-foreground">{exp.accountName}</p>
                                     </div>
                                 </div>
-                    ))
+                            ))
                         )}
+                    </div>
                 </div>
-            </div>
 
-        </div>
+            </div>
         </div >
     )
 }
