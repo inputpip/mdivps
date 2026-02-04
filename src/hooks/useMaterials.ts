@@ -27,10 +27,10 @@ const fromAppToDb = (appMaterial: Partial<Omit<Material, 'id' | 'createdAt' | 'u
   if (minStock !== undefined) {
     dbData.min_stock = minStock;
   }
-  // Skip type field as it doesn't exist in database yet
-  // if (type !== undefined) {
-  //   dbData.type = type;
-  // }
+  // Field type exists in DB
+  if (type !== undefined) {
+    dbData.type = type;
+  }
   return dbData;
 };
 
@@ -147,7 +147,10 @@ export const useMaterials = () => {
       } else {
         // For new materials, treated similarly to products
         const materialToInsert = { ...dbData };
-        delete materialToInsert.stock;
+        // Ensure stock has a value (default 0) to satisfy NOT NULL constraint
+        if (materialToInsert.stock === undefined || materialToInsert.stock === null) {
+          materialToInsert.stock = 0;
+        }
 
         const { data: dataRaw, error } = await supabase
           .from('materials')

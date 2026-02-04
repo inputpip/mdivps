@@ -582,6 +582,19 @@ export function TransactionTable() {
       ),
     },
     {
+      accessorKey: "paymentAccountName",
+      header: "Akun Pembayaran",
+      cell: ({ row }) => {
+        const accName = row.original.paymentAccountName; // Access from original object
+        if (!accName) return <span className="text-xs text-muted-foreground">-</span>;
+        return (
+          <div className="max-w-[150px] truncate text-sm font-medium" title={accName}>
+            {accName}
+          </div>
+        );
+      },
+    },
+    {
       id: "items",
       header: "Item Pesanan",
       cell: ({ row }) => {
@@ -865,6 +878,7 @@ export function TransactionTable() {
       'No Order': t.id,
       'Pelanggan': t.customerName,
       'Tgl Order': t.orderDate ? format(new Date(t.orderDate), "d MMM yyyy, HH:mm", { locale: id }) : 'N/A',
+      'Sales': t.salesName || '-',
       'Kasir': t.cashierName,
       'Item Pesanan': t.items.map(i => `${i.product?.name} (${i.quantity})`).join(", "),
       'Subtotal (DPP)': t.ppnEnabled ? (t.subtotal || t.total - (t.ppnAmount || 0)) : t.total,
@@ -872,6 +886,7 @@ export function TransactionTable() {
       'Total': t.total,
       'Dibayar': t.paidAmount || 0,
       'Sisa': t.total - (t.paidAmount || 0),
+      'Akun Pembayaran': t.paymentAccountName || '-',
       'Status Pembayaran': (t.paidAmount || 0) === 0 ? 'Kredit' :
         (t.paidAmount || 0) >= t.total ? 'Tunai' : 'Kredit',
       'Status PPN': t.ppnEnabled ? (t.ppnMode === 'include' ? 'PPN Include' : 'PPN Exclude') : 'Non PPN'
@@ -882,6 +897,7 @@ export function TransactionTable() {
       'No Order': '',
       'Pelanggan': '',
       'Tgl Order': '',
+      'Sales': '',
       'Kasir': '',
       'Item Pesanan': `TOTAL (${exportTransactions.length} transaksi)`,
       'Subtotal (DPP)': subtotalSum,
@@ -889,6 +905,7 @@ export function TransactionTable() {
       'Total': totalSum,
       'Dibayar': paidSum,
       'Sisa': remainingSum,
+      'Akun Pembayaran': '',
       'Status Pembayaran': '',
       'Status PPN': ''
     });
@@ -938,17 +955,19 @@ export function TransactionTable() {
 
     // Data table with PPN column
     autoTable(doc, {
-      head: [['No. Order', 'Pelanggan', 'Tgl Order', 'Item Pesanan', 'Total', 'Dibayar', 'Sisa', 'Status']],
+      head: [['No. Order', 'Pelanggan', 'Tgl', 'Sales', 'Item Pesanan', 'Total', 'Dibayar', 'Sisa', 'Akun', 'Status']],
       body: [
         ...exportTransactions.map(t => {
           return [
             t.id,
             t.customerName,
             t.orderDate ? format(new Date(t.orderDate), "dd/MM/yy", { locale: id }) : 'N/A',
+            t.salesName || '-',
             t.items.map(i => `${i.product?.name} (${i.quantity})`).join(", "),
             formatCurrency(t.total),
             formatCurrency(t.paidAmount || 0),
             formatCurrency(t.total - (t.paidAmount || 0)),
+            t.paymentAccountName || '-',
             (t.paidAmount || 0) === 0 ? 'Kredit' :
               (t.paidAmount || 0) >= t.total ? 'Tunai' : 'Kredit'
           ];
@@ -958,34 +977,38 @@ export function TransactionTable() {
           '',
           '',
           'TOTAL',
+          '',
           `(${exportTransactions.length} transaksi)`,
           formatCurrency(totalSum),
           formatCurrency(paidSum),
           formatCurrency(remainingSum),
+          '',
           ''
         ]
       ],
       startY: 40,
       styles: {
-        fontSize: 7,
-        cellPadding: 1.5,
+        fontSize: 6, // Reduced font size to fit more columns
+        cellPadding: 1,
         overflow: 'linebreak'
       },
       headStyles: {
         fillColor: [41, 128, 185],
         textColor: 255,
-        fontSize: 7,
+        fontSize: 6,
         fontStyle: 'bold'
       },
       columnStyles: {
-        0: { cellWidth: 25 },
-        1: { cellWidth: 35 },
-        2: { cellWidth: 20 },
-        3: { cellWidth: 80 }, // Wider for items
-        4: { cellWidth: 25, halign: 'right' },
-        5: { cellWidth: 25, halign: 'right' },
-        6: { cellWidth: 25, halign: 'right' },
-        7: { cellWidth: 20, halign: 'center' }
+        0: { cellWidth: 20 },
+        1: { cellWidth: 30 },
+        2: { cellWidth: 15 },
+        3: { cellWidth: 20 }, // Sales
+        4: { cellWidth: 60 }, // Items (Reduced)
+        5: { cellWidth: 22, halign: 'right' },
+        6: { cellWidth: 22, halign: 'right' },
+        7: { cellWidth: 22, halign: 'right' },
+        8: { cellWidth: 25 }, // Akun Pembayaran
+        9: { cellWidth: 15, halign: 'center' }, // Status
       },
       didParseCell: function (data: any) {
         // Highlight summary row

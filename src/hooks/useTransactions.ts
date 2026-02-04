@@ -84,6 +84,7 @@ const fromDb = (dbTransaction: any): Transaction => {
     designerId: dbTransaction.designer_id || null,
     operatorId: dbTransaction.operator_id || null,
     paymentAccountId: dbTransaction.payment_account_id || null,
+    paymentAccountName: dbTransaction.payment_account?.name || null, // Mapped from join
     orderDate: new Date(dbTransaction.order_date),
     finishDate: dbTransaction.finish_date ? new Date(dbTransaction.finish_date) : null,
     items: formattedItems,
@@ -118,7 +119,12 @@ export const useTransactions = (filters?: {
     queryKey: ['transactions', filters, currentBranch?.id],
     queryFn: async () => {
       // Join dengan customers untuk mendapatkan classification DAN address
-      const selectFields = '*, customer:customers(classification, address)';
+      // Join dengan accounts untuk mendapatkan nama akun pembayaran
+      const selectFields = `
+        *,
+        customer:customers(classification, address),
+        payment_account:payment_account_id(name)
+      `;
 
       let query = supabase
         .from('transactions')
@@ -196,10 +202,10 @@ export const useTransactions = (filters?: {
         const product = item.product;
         const isMaterial = product?._isMaterial || product?.type === 'material';
         const materialId = isMaterial ? (product?._materialId || product?.materialId) : null;
-        const productId = isMaterial 
+        const productId = isMaterial
           ? `material-${materialId}`  // Send prefixed ID for detection in RPC
           : (product?.id || item.productId);
-        
+
         return {
           product_id: productId,
           material_id: materialId || undefined,  // Send actual material UUID separately

@@ -247,6 +247,26 @@ export function DeliveryFormContent({ transaction, onSuccess, onDeliveryCreated 
       return
     }
 
+    // Validate duplicate items (BLOCK approach)
+    // This prevents user from submitting multiple rows for the same product, 
+    // which causes confusion and potential double counting issues.
+    const productKeysCheck = new Set<string>();
+    for (const item of itemsToDeliver) {
+      // Create unique key based on Product + Bonus status
+      // We treat Bonus items as distinct from Regular items
+      const key = `${item.productId}-${!!item.isBonus}`;
+
+      if (productKeysCheck.has(key)) {
+        toast({
+          variant: "destructive",
+          title: "Duplikasi Produk Terdeteksi",
+          description: `Produk "${item.productName}" muncul lebih dari sekali di pengantaran ini. Mohon gabungkan jumlahnya dalam satu baris, atau perbaiki data transaksi.`
+        })
+        return; // BLOCK submission
+      }
+      productKeysCheck.add(key);
+    }
+
     setIsSubmitting(true)
     try {
       // Upload photo to VPS using PhotoUploadService
@@ -280,6 +300,7 @@ export function DeliveryFormContent({ transaction, onSuccess, onDeliveryCreated 
         width: item.width,
         height: item.height,
         notes: item.notes || undefined,
+        isBonus: item.isBonus, // Added: explicit bonus flag
       }))
 
       const result = await createDelivery.mutateAsync({

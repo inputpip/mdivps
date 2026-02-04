@@ -580,65 +580,44 @@ BEGIN
   -- ==================== GENERATE COMMISSIONS ====================
   
   IF p_driver_id IS NOT NULL OR p_helper_id IS NOT NULL THEN
-      -- ==================== GENERATE COMMISSIONS (FIXED: AGGREGATED) ====================
-      -- Fix: Aggregate items first to prevent double counting if frontend sends duplicate rows
-      FOR v_item IN 
-        SELECT 
-          (value->>'product_id')::UUID as product_id,
-          (value->>'product_name') as product_name,
-          COALESCE((value->>'is_bonus')::BOOLEAN, FALSE) as is_bonus,
-          SUM((value->>'quantity')::NUMERIC) as quantity
-        FROM jsonb_array_elements(p_items)
-        GROUP BY 1, 2, 3
-      LOOP
-        v_product_id := v_item.product_id;
-        v_product_name := v_item.product_name;
-        v_is_bonus := v_item.is_bonus;
-        v_qty := v_item.quantity;
-  
-        -- Skip commissions for bonus items or zero quantity
-        IF v_qty > 0 AND NOT v_is_bonus THEN
-          -- Driver Commission
-          IF p_driver_id IS NOT NULL THEN
-            -- Extra Guard: Check if commission already exists for this exact batch
-            IF NOT EXISTS (
-              SELECT 1 FROM commission_entries 
-              WHERE delivery_id = v_delivery_id AND product_id = v_product_id AND user_id = p_driver_id
-            ) THEN
-                INSERT INTO commission_entries (
-                  user_id, user_name, role, product_id, product_name, quantity, rate_per_qty, amount, 
-                  transaction_id, delivery_id, ref, status, branch_id, created_at
-                )
-                SELECT 
-                  p_driver_id, (SELECT full_name FROM profiles WHERE id = p_driver_id), 'driver', 
-                  v_product_id, v_product_name, v_qty, cr.rate_per_qty, v_qty * cr.rate_per_qty, 
-                  p_transaction_id, v_delivery_id, 'DEL-' || v_delivery_id, 'pending', p_branch_id, NOW()
-                FROM commission_rules cr
-                WHERE cr.product_id = v_product_id AND cr.role = 'driver' AND cr.rate_per_qty > 0;
-            END IF;
-          END IF;
-  
-          -- Helper Commission
-          IF p_helper_id IS NOT NULL THEN
-            -- Extra Guard: Check if commission already exists for this exact batch
-            IF NOT EXISTS (
-              SELECT 1 FROM commission_entries 
-              WHERE delivery_id = v_delivery_id AND product_id = v_product_id AND user_id = p_helper_id
-            ) THEN
-                INSERT INTO commission_entries (
-                  user_id, user_name, role, product_id, product_name, quantity, rate_per_qty, amount, 
-                  transaction_id, delivery_id, ref, status, branch_id, created_at
-                )
-                SELECT 
-                  p_helper_id, (SELECT full_name FROM profiles WHERE id = p_helper_id), 'helper', 
-                  v_product_id, v_product_name, v_qty, cr.rate_per_qty, v_qty * cr.rate_per_qty, 
-                  p_transaction_id, v_delivery_id, 'DEL-' || v_delivery_id, 'pending', p_branch_id, NOW()
-                FROM commission_rules cr
-                WHERE cr.product_id = v_product_id AND cr.role = 'helper' AND cr.rate_per_qty > 0;
-            END IF;
-          END IF;
+    FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
+    LOOP
+      v_product_id := (v_item->>'product_id')::UUID;
+      v_qty := (v_item->>'quantity')::NUMERIC;
+      v_product_name := v_item->>'product_name';
+      v_is_bonus := COALESCE((v_item->>'is_bonus')::BOOLEAN, FALSE);
+
+      -- Skip bonus items
+      IF v_qty > 0 AND NOT v_is_bonus THEN
+        -- Driver Commission
+        IF p_driver_id IS NOT NULL THEN
+          INSERT INTO commission_entries (
+            user_id, user_name, role, product_id, product_name, quantity, rate_per_qty, amount, 
+            transaction_id, delivery_id, ref, status, branch_id, created_at
+          )
+          SELECT 
+            p_driver_id, (SELECT full_name FROM profiles WHERE id = p_driver_id), 'driver', 
+            v_product_id, v_product_name, v_qty, cr.rate_per_qty, v_qty * cr.rate_per_qty, 
+            p_transaction_id, v_delivery_id, 'DEL-' || v_delivery_id, 'pending', p_branch_id, NOW()
+          FROM commission_rules cr
+          WHERE cr.product_id = v_product_id AND cr.role = 'driver' AND cr.rate_per_qty > 0;
         END IF;
-      END LOOP;
+
+        -- Helper Commission
+        IF p_helper_id IS NOT NULL THEN
+          INSERT INTO commission_entries (
+            user_id, user_name, role, product_id, product_name, quantity, rate_per_qty, amount, 
+            transaction_id, delivery_id, ref, status, branch_id, created_at
+          )
+          SELECT 
+            p_helper_id, (SELECT full_name FROM profiles WHERE id = p_helper_id), 'helper', 
+            v_product_id, v_product_name, v_qty, cr.rate_per_qty, v_qty * cr.rate_per_qty, 
+            p_transaction_id, v_delivery_id, 'DEL-' || v_delivery_id, 'pending', p_branch_id, NOW()
+          FROM commission_rules cr
+          WHERE cr.product_id = v_product_id AND cr.role = 'helper' AND cr.rate_per_qty > 0;
+        END IF;
+      END IF;
+    END LOOP;
   END IF;
 
   RETURN QUERY SELECT TRUE, v_delivery_id, v_delivery_number, v_total_hpp_real, v_journal_id, NULL::TEXT;

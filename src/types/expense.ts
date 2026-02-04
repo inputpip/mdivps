@@ -8,5 +8,6 @@ export interface Expense {
   expenseAccountName?: string; // Expense account name (e.g. "Beban Operasional")
   date: Date;
   category: string;
+  photoUrl?: string; // URL/Filename bukti foto
   createdAt: Date;
 }

@@ -173,8 +173,8 @@ function getBaseUrl(): string {
     if (selectedUrl) {
       return selectedUrl;
     }
-    // No server selected yet - return empty to trigger server selector
-    return '';
+    // No server selected yet - fallback to default mkw instead of crashing
+    return 'https://mkw.aquvit.id';
   }
 
   // For localhost/development, use local proxy server for testing

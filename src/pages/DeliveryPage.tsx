@@ -138,6 +138,10 @@ export default function DeliveryPage() {
   const canEdit = canEditDelivery()
   const canAccessHistory = canViewDeliveryHistory()
 
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 15
+
   const filteredTransactions = transactions?.filter(transaction =>
     transaction.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     transaction.id.toLowerCase().includes(searchQuery.toLowerCase())
@@ -181,6 +185,16 @@ export default function DeliveryPage() {
 
     return matchesSearch && matchesDateRange && matchesDriver && matchesHelper
   }) || []
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [historySearchQuery, startDate, endDate, selectedDriver, selectedHelper])
+
+  // Pagination Calculation
+  const totalPages = Math.ceil(filteredDeliveryHistory.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const paginatedHistory = filteredDeliveryHistory.slice(startIndex, startIndex + itemsPerPage)
 
   const getOverallStatus = (transaction: TransactionDeliveryInfo) => {
     const totalItems = transaction.deliverySummary.reduce((sum, item) => sum + item.orderedQuantity, 0)
@@ -945,7 +959,7 @@ export default function DeliveryPage() {
                     </p>
                   </div>
                 ) : (
-                  filteredDeliveryHistory.map((delivery: any, index: number) => (
+                  paginatedHistory.map((delivery: any, index: number) => (
                     <div
                       key={delivery.id}
                       className="bg-white dark:bg-gray-800 border rounded-lg p-3 shadow-sm"
@@ -958,7 +972,7 @@ export default function DeliveryPage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
                             <span className="bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 text-xs font-bold px-2 py-0.5 rounded">
-                              #{index + 1}
+                              #{startIndex + index + 1}
                             </span>
                             <span className="text-xs text-gray-500 dark:text-gray-400">
                               {format(delivery.deliveryDate, "d MMM", { locale: idLocale })}
@@ -1065,7 +1079,7 @@ export default function DeliveryPage() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {filteredDeliveryHistory.map((delivery: any, index: number) => {
+                          {paginatedHistory.map((delivery: any, index: number) => {
                             const isExpanded = expandedDeliveries.has(delivery.id)
                             return (
                               <React.Fragment key={delivery.id}>
@@ -1085,7 +1099,7 @@ export default function DeliveryPage() {
                                         )}
                                       </Button>
                                       <Badge variant="outline" className="text-xs">
-                                        #{index + 1}
+                                        #{startIndex + index + 1}
                                       </Badge>
                                     </div>
                                   </TableCell>
@@ -1285,6 +1299,64 @@ export default function DeliveryPage() {
                 </CardContent>
               </Card>
             )}
+
+            {/* Pagination Controls */}
+            {filteredDeliveryHistory.length > itemsPerPage && (
+              <div className="flex items-center justify-center gap-2 mt-6">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="h-8 w-8 p-0"
+                >
+                  &lt;
+                </Button>
+
+                {/* Page Numbers */}
+                {(() => {
+                  const pages = [];
+                  const maxVisible = 5;
+
+                  if (totalPages <= maxVisible) {
+                    for (let i = 1; i <= totalPages; i++) pages.push(i);
+                  } else {
+                    if (currentPage <= 3) {
+                      pages.push(1, 2, 3, '...', totalPages);
+                    } else if (currentPage >= totalPages - 2) {
+                      pages.push(1, '...', totalPages - 2, totalPages - 1, totalPages);
+                    } else {
+                      pages.push(1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages);
+                    }
+                  }
+
+                  return pages.map((page, idx) => (
+                    <Button
+                      key={idx}
+                      variant={page === currentPage ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => typeof page === 'number' && setCurrentPage(page)}
+                      disabled={typeof page !== 'number'}
+                      className={`h-8 w-8 p-0 ${typeof page !== 'number' ? 'cursor-default border-none hover:bg-transparent' : ''}`}
+                    >
+                      {page}
+                    </Button>
+                  ));
+                })()}
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className="h-8 w-8 p-0"
+                >
+                  &gt;
+                </Button>
+              </div>
+            )}
+
+
           </TabsContent>
         )}
       </Tabs>

@@ -25,6 +25,7 @@ const fromDbToApp = (dbExpense: any): Expense => ({
   expenseAccountName: dbExpense.expense_account_name,
   date: new Date(dbExpense.date),
   category: dbExpense.category,
+  photoUrl: dbExpense.photo_url,
   createdAt: new Date(dbExpense.created_at),
 });
 
@@ -199,6 +200,7 @@ export const useExpenses = () => {
               expense_account_name: newExpenseData.expenseAccountName,
             },
             p_branch_id: currentBranch.id,
+            p_photo_url: newExpenseData.photoUrl || null,
           });
 
         if (rpcError) {
