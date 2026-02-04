@@ -12,7 +12,7 @@ import { PayReceivableDialog } from "./PayReceivableDialog"
 import { ReceivablesReportPDF } from "./ReceivablesReportPDF"
 // import { PaymentHistoryRow } from "./PaymentHistoryRow" // Removed
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./ui/dropdown-menu"
-import { MoreHorizontal, ChevronDown, ChevronRight, CheckCircle, Clock, AlertTriangle, Calendar, Filter, Printer, Pencil, FileSpreadsheet, Search } from "lucide-react"
+import { MoreHorizontal, ChevronDown, ChevronRight, CheckCircle, Clock, AlertTriangle, Calendar, Filter, Printer, Pencil, FileSpreadsheet, Search, CreditCard } from "lucide-react"
 import * as XLSX from 'xlsx'
 import { Input } from "./ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
