@@ -21,12 +21,13 @@ import { Badge } from './ui/badge'
 import { useToast } from './ui/use-toast'
 import { Trash2, ChevronDown, ChevronUp, Package, Search, X, FileText, Printer, FileDown, Scale } from 'lucide-react'
 import { MaterialStockAdjustmentDialog } from './MaterialStockAdjustmentDialog'
-import { canManageEmployees, isOwner } from '@/utils/roleUtils'
+import { isOwner } from '@/utils/roleUtils'
 import { useCompanySettings } from '@/hooks/useCompanySettings'
 import { format } from 'date-fns'
 import { id as idLocale } from 'date-fns/locale'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import { usePermissions } from '@/hooks/usePermissions'
 
 const materialSchema = z.object({
   name: z.string().min(3, { message: "Nama bahan minimal 3 karakter." }),
@@ -65,9 +66,10 @@ export const MaterialManagement = () => {
   const { user } = useAuth()
   const { toast } = useToast()
   const { settings: companyInfo } = useCompanySettings()
+  const { canManageMaterials: checkCanManage } = usePermissions()
 
   // Permission checks
-  const canManageMaterials = canManageEmployees(user) || (user && user.role?.toLowerCase() === 'supervisor')
+  const canManageMaterials = checkCanManage()
   const [isRequestPoOpen, setIsRequestPoOpen] = useState(false)
   const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null)
   const [isAdjustmentOpen, setIsAdjustmentOpen] = useState(false)

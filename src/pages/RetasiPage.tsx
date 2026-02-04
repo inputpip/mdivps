@@ -219,6 +219,7 @@ export default function RetasiPage() {
               "Retasi Ke": idx === 0 ? r.retasi_ke : "",
               "Status": idx === 0 ? (r.is_returned ? "KEMBALI" : "BERANGKAT") : "",
               "Supir": idx === 0 ? (r.driver_name || "-") : "",
+              "Helper": idx === 0 ? (r.helper_name || "-") : "",
               "Produk": item.product_name,
               "Qty Bawa": item.quantity,
               "Qty Kembali": item.returned_qty || 0,
@@ -269,6 +270,7 @@ export default function RetasiPage() {
             "Retasi Ke": r.retasi_ke,
             "Status": r.is_returned ? "KEMBALI" : "BERANGKAT",
             "Supir": r.driver_name || "-",
+            "Helper": r.helper_name || "-",
             "Produk": "(Data lama tanpa detail)",
             "Qty Bawa": r.total_items,
             "Qty Kembali": r.returned_items_count || 0,
@@ -403,6 +405,7 @@ export default function RetasiPage() {
                   <TableHead>Status</TableHead>
                   <TableHead>Retasi Ke</TableHead>
                   <TableHead>Supir</TableHead>
+                  <TableHead>Helper</TableHead>
                   <TableHead>Produk</TableHead>
                   <TableHead className="text-center">Bawa</TableHead>
                   <TableHead className="text-center">Kembali</TableHead>
@@ -415,14 +418,14 @@ export default function RetasiPage() {
                 {isLoading ? (
                   Array.from({ length: 5 }).map((_, i) => (
                     <TableRow key={i}>
-                      <TableCell colSpan={10}>
+                      <TableCell colSpan={11}>
                         <Skeleton className="h-6 w-full" />
                       </TableCell>
                     </TableRow>
                   ))
                 ) : filteredRetasi.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center text-muted-foreground">
+                    <TableCell colSpan={11} className="text-center text-muted-foreground">
                       Tidak ada data
                     </TableCell>
                   </TableRow>
@@ -463,6 +466,7 @@ export default function RetasiPage() {
                           </TableCell>
                           <TableCell>Retasi {retasi.retasi_ke}</TableCell>
                           <TableCell>{retasi.driver_name || '-'}</TableCell>
+                          <TableCell>{retasi.helper_name || '-'}</TableCell>
                           <TableCell className="text-muted-foreground italic">(Data lama)</TableCell>
                           <TableCell className="text-center">{retasi.total_items}</TableCell>
                           <TableCell className="text-center">{retasi.returned_items_count || 0}</TableCell>
@@ -519,6 +523,7 @@ export default function RetasiPage() {
                           </TableCell>
                           <TableCell>{idx === 0 ? `Retasi ${retasi.retasi_ke}` : ''}</TableCell>
                           <TableCell>{idx === 0 ? (retasi.driver_name || '-') : ''}</TableCell>
+                          <TableCell>{idx === 0 ? (retasi.helper_name || '-') : ''}</TableCell>
                           <TableCell className="font-medium">{item.product_name}</TableCell>
                           <TableCell className="text-center">{item.quantity || 0}</TableCell>
                           <TableCell className="text-center">{item.returned_quantity || 0}</TableCell>
@@ -1118,6 +1123,10 @@ function RetasiDetailDialog({ retasi }: { retasi: any }) {
             <div>
               <span className="text-slate-500">Supir:</span>
               <p className="font-medium">{retasi.driver_name || '-'}</p>
+            </div>
+            <div>
+              <span className="text-slate-500">Helper:</span>
+              <p className="font-medium">{retasi.helper_name || '-'}</p>
             </div>
             <div>
               <span className="text-slate-500">Status:</span>

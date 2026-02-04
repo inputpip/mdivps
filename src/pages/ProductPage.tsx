@@ -48,8 +48,8 @@ export default function ProductPage() {
   const [stockOutReason, setStockOutReason] = useState('')
   const [stockOutNotes, setStockOutNotes] = useState('')
 
-  const canManage = hasPermission(PERMISSIONS.PRODUCTS)
-  const canDelete = hasPermission(PERMISSIONS.PRODUCTS)
+  const canManage = hasPermission(PERMISSIONS.PRODUCTS_MANAGE)
+  const canDelete = user?.role === 'owner' || user?.role === 'admin' || user?.role === 'super_admin'
 
   const baseColumns = [
     {
@@ -69,8 +69,8 @@ export default function ProductPage() {
       header: "Jenis",
       render: (row: any) => (
         <span className={`inline-flex px-2 py-0.5 rounded-full text-xs ${row.type === 'Produksi'
-            ? 'bg-emerald-100 text-emerald-700'
-            : 'bg-blue-100 text-blue-700'
+          ? 'bg-emerald-100 text-emerald-700'
+          : 'bg-blue-100 text-blue-700'
           }`}>
           {row.type}
         </span>

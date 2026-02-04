@@ -6,7 +6,9 @@ import { getRolePermissions } from '@/services/rolePermissionService';
 export const PERMISSIONS = {
   // Core Data Access
   PRODUCTS: 'products',
+  PRODUCTS_MANAGE: 'products_manage',
   MATERIALS: 'materials',
+  MATERIALS_MANAGE: 'materials_manage',
   TRANSACTIONS: 'transactions',
   CUSTOMERS: 'customers',
   EMPLOYEES: 'employees',
@@ -34,9 +36,11 @@ const mapGranularToSimplified = (granularPerms: Record<string, boolean>): Record
   return {
     // Products - need at least view access
     products: granularPerms.products_view === true,
+    products_manage: granularPerms.products_create === true || granularPerms.products_edit === true,
 
     // Materials - need at least view access
     materials: granularPerms.materials_view === true,
+    materials_manage: granularPerms.materials_create === true || granularPerms.materials_edit === true,
 
     // Transactions - need POS or transaction view access
     transactions: granularPerms.pos_access === true || granularPerms.transactions_view === true,
@@ -198,7 +202,9 @@ export const usePermissions = () => {
 
   // Specific permission checks
   const canAccessProducts = () => hasPermission(PERMISSIONS.PRODUCTS);
+  const canManageProducts = () => hasPermission(PERMISSIONS.PRODUCTS_MANAGE);
   const canAccessMaterials = () => hasPermission(PERMISSIONS.MATERIALS);
+  const canManageMaterials = () => hasPermission(PERMISSIONS.MATERIALS_MANAGE);
   const canAccessTransactions = () => hasPermission(PERMISSIONS.TRANSACTIONS);
   const canAccessCustomers = () => hasPermission(PERMISSIONS.CUSTOMERS);
   const canAccessEmployees = () => hasPermission(PERMISSIONS.EMPLOYEES);
@@ -219,7 +225,9 @@ export const usePermissions = () => {
     userRole: user?.role,
     // Simplified access methods
     canAccessProducts,
+    canManageProducts,
     canAccessMaterials,
+    canManageMaterials,
     canAccessTransactions,
     canAccessCustomers,
     canAccessEmployees,

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState, useCallback } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -15,9 +15,12 @@ import { BOMItem } from "@/types/production"
 import { format } from 'date-fns'
 import { validateProductForProduction } from "@/utils/productValidation"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
-import { Trash2, Package, AlertTriangle, Printer } from "lucide-react"
+import { Trash2, Package, AlertTriangle, Printer, ChevronLeft, ChevronRight, FileDown, FileText } from "lucide-react"
 import { ProductionPrintDialog } from "@/components/ProductionPrintDialog"
 import { formatNumber, formatMoney } from "@/utils/formatNumber"
+import * as XLSX from 'xlsx'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
 
 export default function ProductionPage() {
   const { user } = useAuth()
@@ -25,13 +28,13 @@ export default function ProductionPage() {
   const { materials, isLoading: isLoadingMaterials } = useMaterials()
   const { productions, isLoading, fetchProductions, getBOM, processProduction, processError, deleteProduction } = useProduction()
   const { toast } = useToast()
-  
+
   const [selectedProductId, setSelectedProductId] = useState<string>("")
   const [quantity, setQuantity] = useState<number>(1)
   const [consumeBOM, setConsumeBOM] = useState<boolean>(true)
   const [note, setNote] = useState<string>("")
   const [bom, setBom] = useState<BOMItem[]>([])
-  
+
   // Error input states
   const [selectedMaterialId, setSelectedMaterialId] = useState<string>("")
   const [errorQuantity, setErrorQuantity] = useState<number>(1)
@@ -41,14 +44,18 @@ export default function ProductionPage() {
   const [isPrintDialogOpen, setIsPrintDialogOpen] = useState(false)
   const [selectedProduction, setSelectedProduction] = useState<any>(null)
 
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
+
   // Filter only Produksi type products (finished goods)
-  const finishedGoods = useMemo(() => 
-    products?.filter(p => p.type === 'Produksi') || [], 
+  const finishedGoods = useMemo(() =>
+    products?.filter(p => p.type === 'Produksi') || [],
     [products]
   )
 
-  const selectedProduct = useMemo(() => 
-    finishedGoods.find(p => p.id === selectedProductId), 
+  const selectedProduct = useMemo(() =>
+    finishedGoods.find(p => p.id === selectedProductId),
     [finishedGoods, selectedProductId]
   )
 
@@ -76,6 +83,59 @@ export default function ProductionPage() {
     }
   }, [finishedGoods, selectedProductId])
 
+  // Pagination Logic
+  const totalPages = Math.ceil(productions.length / itemsPerPage)
+  const paginatedProductions = productions.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  )
+
+  // EXPORT EXCEL
+  const handleExportExcel = () => {
+    const dataToExport = productions.map(p => ({
+      'Waktu': format(new Date(p.createdAt), 'dd/MM/yyyy HH:mm'),
+      'Ref': p.ref,
+      'Produk': p.productName,
+      'Qty': p.quantity,
+      'Konsumsi BOM': p.consumeBOM ? 'Ya' : 'Tidak',
+      'Catatan': p.note || '-'
+    }))
+
+    const ws = XLSX.utils.json_to_sheet(dataToExport)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, "Riwayat Produksi")
+    XLSX.writeFile(wb, `Riwayat_Produksi_${format(new Date(), 'yyyy-MM-dd')}.xlsx`)
+  }
+
+  // EXPORT PDF
+  const handleExportPDF = () => {
+    const doc = new jsPDF()
+
+    doc.setFontSize(16)
+    doc.text('Laporan Riwayat Produksi', 14, 22)
+    doc.setFontSize(10)
+    doc.text(`Dicetak pada: ${format(new Date(), 'dd MMM yyyy HH:mm')}`, 14, 30)
+
+    const tableData = productions.map(p => [
+      format(new Date(p.createdAt), 'dd/MM/yyyy HH:mm'),
+      p.ref,
+      p.productName,
+      p.quantity.toString(),
+      p.consumeBOM ? 'Ya' : 'Tidak',
+      p.note || '-'
+    ])
+
+    autoTable(doc, {
+      head: [['Waktu', 'Ref', 'Produk', 'Qty', 'BOM', 'Catatan']],
+      body: tableData,
+      startY: 35,
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [41, 128, 185] }
+    })
+
+    doc.save(`Laporan_Produksi_${format(new Date(), 'yyyy-MM-dd')}.pdf`)
+  }
+
   const handleProduction = async () => {
     if (!selectedProductId || quantity <= 0 || !user) {
       toast({
@@ -88,7 +148,7 @@ export default function ProductionPage() {
 
     if (!selectedProduct) {
       toast({
-        variant: "destructive", 
+        variant: "destructive",
         title: "Error",
         description: "Produk tidak ditemukan"
       })
@@ -100,7 +160,7 @@ export default function ProductionPage() {
     if (!validation.valid) {
       toast({
         variant: "destructive",
-        title: "Validation Error", 
+        title: "Validation Error",
         description: validation.message
       })
       return
@@ -117,6 +177,7 @@ export default function ProductionPage() {
     if (success) {
       setQuantity(1)
       setNote("")
+      setCurrentPage(1) // Reset to page 1
     }
   }
 
@@ -211,10 +272,10 @@ export default function ProductionPage() {
           </div>
           <div>
             <div className="text-xs text-slate-600 dark:text-slate-400 mb-1">Catatan (opsional)</div>
-            <Input 
-              value={note} 
-              onChange={(e) => setNote(e.target.value)} 
-              placeholder="Catatan produksi" 
+            <Input
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Catatan produksi"
             />
           </div>
         </div>
@@ -230,8 +291,8 @@ export default function ProductionPage() {
               Konsumsi BOM
             </Label>
           </div>
-          <Button 
-            className="bg-blue-600 hover:bg-blue-700 text-white" 
+          <Button
+            className="bg-blue-600 hover:bg-blue-700 text-white"
             onClick={handleProduction}
             disabled={isLoading || !selectedProductId || quantity <= 0}
           >
@@ -337,8 +398,8 @@ export default function ProductionPage() {
           <div className="text-xs text-slate-500 dark:text-slate-400">
             Tanggal input: {format(new Date(), 'dd/MM/yyyy HH:mm')} | Yang mencatat: {user?.name || 'Unknown'}
           </div>
-          <Button 
-            className="bg-red-600 hover:bg-red-700 text-white" 
+          <Button
+            className="bg-red-600 hover:bg-red-700 text-white"
             onClick={handleError}
             disabled={isLoading || !selectedMaterialId || errorQuantity <= 0}
           >
@@ -348,7 +409,17 @@ export default function ProductionPage() {
       </section>
 
       <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl">
-        <div className="px-4 py-3 font-medium text-slate-800 dark:text-slate-200">Riwayat Produksi Terakhir</div>
+        <div className="px-4 py-3 border-b flex items-center justify-between">
+          <h3 className="font-medium text-slate-800 dark:text-slate-200">Riwayat Produksi</h3>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={handleExportExcel} disabled={productions.length === 0}>
+              <FileDown className="h-4 w-4 mr-1" /> Excel
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleExportPDF} disabled={productions.length === 0}>
+              <FileText className="h-4 w-4 mr-1" /> PDF
+            </Button>
+          </div>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm min-w-[600px]">
             <thead className="bg-slate-50 dark:bg-slate-800">
@@ -363,7 +434,7 @@ export default function ProductionPage() {
               </tr>
             </thead>
             <tbody>
-              {productions.map((record) => (
+              {paginatedProductions.map((record) => (
                 <tr key={record.id} className="border-t border-slate-200 dark:border-slate-700">
                   <td className="px-3 py-2 text-slate-700 dark:text-slate-300">
                     {format(record.createdAt, 'dd/MM/yyyy HH:mm')}
@@ -374,11 +445,10 @@ export default function ProductionPage() {
                   <td className="px-3 py-2 text-slate-700 dark:text-slate-300">{record.productName}</td>
                   <td className="px-3 py-2 font-medium text-slate-700 dark:text-slate-300">{formatNumber(record.quantity)}</td>
                   <td className="px-3 py-2">
-                    <span className={`px-2 py-1 rounded-full text-xs ${
-                      record.consumeBOM
+                    <span className={`px-2 py-1 rounded-full text-xs ${record.consumeBOM
                         ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'
                         : 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-300'
-                    }`}>
+                      }`}>
                       {record.consumeBOM ? 'Ya' : 'Tidak'}
                     </span>
                   </td>
@@ -387,7 +457,6 @@ export default function ProductionPage() {
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-2">
-                      {/* Print Button - Available for all users */}
                       <Button
                         variant="outline"
                         size="sm"
@@ -398,7 +467,6 @@ export default function ProductionPage() {
                         Cetak
                       </Button>
 
-                      {/* Delete Button - Only for owner and admin */}
                       {user && ['owner', 'admin'].includes(user.role || '') && (
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
@@ -434,7 +502,7 @@ export default function ProductionPage() {
                   </td>
                 </tr>
               ))}
-              {productions.length === 0 && (
+              {paginatedProductions.length === 0 && (
                 <tr>
                   <td className="px-3 py-6 text-center text-slate-500 dark:text-slate-400" colSpan={7}>
                     {isLoading ? 'Loading...' : 'Belum ada produksi'}
@@ -444,6 +512,23 @@ export default function ProductionPage() {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="px-4 py-3 border-t flex items-center justify-between">
+            <div className="text-sm text-slate-500">
+              Halaman {currentPage} dari {totalPages}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>
+                <ChevronLeft className="h-4 w-4" /> Prev
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>
+                Next <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* Print Dialog */}
