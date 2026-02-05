@@ -117,9 +117,12 @@ export const useEmployeeAdvances = () => {
       // Filter out cancelled advances
       query = query.neq('status', 'cancelled');
 
-      // Role-based filtering: only kasir, admin, owner can see all data
+      // Role-based filtering: only kasir, cashier, admin, owner can see all data
       // Other users can only see their own advances
-      if (user && !['kasir', 'admin', 'owner'].includes(user.role || '')) {
+      const allowedRoles = ['kasir', 'cashier', 'kasir sales', 'admin', 'owner'];
+      const userRole = user?.role?.toLowerCase();
+
+      if (user && !allowedRoles.includes(userRole || '')) {
         query = query.eq('employee_id', user.id);
       }
 

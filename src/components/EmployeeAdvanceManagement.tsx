@@ -117,9 +117,8 @@ export function EmployeeAdvanceManagement() {
   const isAdminOrOwnerOrCashier = canManageCash(user);
   const isOwnerRole = isOwner(user);
 
-  // Filter hanya panjar yang belum lunas
-  const advancesUnpaid = advances?.filter(adv => adv.remainingAmount > 0) || [];
-  const groupedAdvances = advancesUnpaid.reduce((groups, advance) => {
+  // Tampilkan semua panjar untuk riwayat (baik yang sudah lunas maupun belum)
+  const groupedAdvances = (advances || []).reduce((groups, advance) => {
     const employeeName = advance.employeeName;
     if (!groups[employeeName]) {
       groups[employeeName] = [];

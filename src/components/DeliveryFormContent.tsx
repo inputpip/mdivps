@@ -63,7 +63,7 @@ export function DeliveryFormContent({ transaction, onSuccess, onDeliveryCreated 
       itemId: `${item.productId}-${index}`, // Unique identifier per row
       productId: item.productId,
       productName: item.productName,
-      isBonus: item.productName.includes("BONUS") || item.productName.includes("(BONUS)"),
+      isBonus: item.productName.toUpperCase().includes("BONUS"),
       orderedQuantity: item.orderedQuantity,
       deliveredQuantity: item.deliveredQuantity,
       remainingQuantity: item.remainingQuantity,
@@ -102,7 +102,7 @@ export function DeliveryFormContent({ transaction, onSuccess, onDeliveryCreated 
           itemId: `${item.productId}-${index}`,
           productId: item.productId,
           productName: item.productName,
-          isBonus: item.productName.includes("BONUS") || item.productName.includes("(BONUS)"),
+          isBonus: item.productName.toUpperCase().includes("BONUS"),
           orderedQuantity: item.orderedQuantity,
           deliveredQuantity: item.deliveredQuantity,
           remainingQuantity: item.remainingQuantity,

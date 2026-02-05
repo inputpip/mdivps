@@ -41,11 +41,11 @@ export const isAdminOrOwner = (user: RoleInput): boolean => {
 };
 
 export const canManageCash = (user: RoleInput): boolean => {
-  return hasAnyRole(user, ['owner', 'admin', 'cashier']);
+  return hasAnyRole(user, ['owner', 'admin', 'cashier', 'kasir', 'kasir sales']);
 };
 
 export const canManageEmployees = (user: RoleInput): boolean => {
-  return hasAnyRole(user, ['owner', 'admin']);
+  return hasAnyRole(user, ['owner', 'admin', 'kasir', 'kasir sales']);
 };
 
 export const canDeleteTransactions = (user: RoleInput): boolean => {
