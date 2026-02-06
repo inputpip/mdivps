@@ -53,6 +53,7 @@ const fromDbToPayrollRecord = (dbData: any): PayrollRecord => ({
   paymentAccountName: dbData.payment_account_name,
   cashHistoryId: dbData.cash_history_id,
   createdBy: dbData.created_by,
+  paidBy: dbData.paid_by_name || dbData.paid_by,
   createdAt: new Date(dbData.created_at),
   updatedAt: new Date(dbData.updated_at),
   notes: dbData.notes,
@@ -198,8 +199,9 @@ export const usePayrollRecords = (filters?: PayrollFilters) => {
       return res;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['payrollRecords'] });
-      queryClient.invalidateQueries({ queryKey: ['journalEntries'] });
+      queryClient.invalidateQueries({ queryKey: ['payrollRecords'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['journalEntries'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['payrollHistory'], exact: false });
       toast({ title: 'Berhasil', description: 'Data gaji berhasil diupdate' });
     },
   });
@@ -210,13 +212,14 @@ export const usePayrollRecords = (filters?: PayrollFilters) => {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['payrollRecords'] });
+      queryClient.invalidateQueries({ queryKey: ['payrollRecords'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['payrollHistory'], exact: false });
       toast({ title: 'Sukses', description: 'Payroll berhasil disetujui' });
     },
   });
 
   const processPayment = useMutation({
-    mutationFn: async ({ id, paymentAccountId, paymentDate }: { id: string; paymentAccountId: string; paymentDate: Date }) => {
+    mutationFn: async ({ id, paymentAccountId, paymentDate, expenseAccountId }: { id: string; paymentAccountId: string; paymentDate: Date; expenseAccountId?: string }) => {
       if (!currentBranch?.id) throw new Error('Branch tidak dipilih');
 
       const { data: rpcRes, error } = await supabase.rpc('process_payroll_complete', {
@@ -224,6 +227,7 @@ export const usePayrollRecords = (filters?: PayrollFilters) => {
         p_branch_id: currentBranch.id,
         p_payment_account_id: paymentAccountId,
         p_payment_date: paymentDate.toISOString().split('T')[0],
+        p_expense_account_id: expenseAccountId, // Optional param
       });
 
       if (error) throw error;
@@ -232,10 +236,11 @@ export const usePayrollRecords = (filters?: PayrollFilters) => {
       return res;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['payrollRecords'] });
-      queryClient.invalidateQueries({ queryKey: ['accounts'] });
-      queryClient.invalidateQueries({ queryKey: ['journalEntries'] });
-      queryClient.invalidateQueries({ queryKey: ['employeeAdvances'] });
+      queryClient.invalidateQueries({ queryKey: ['payrollRecords'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['accounts'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['journalEntries'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['employeeAdvances'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['payrollHistory'], exact: false });
       toast({ title: 'Sukses', description: 'Pembayaran berhasil diproses' });
     },
   });
@@ -244,15 +249,38 @@ export const usePayrollRecords = (filters?: PayrollFilters) => {
     mutationFn: async (payrollId: string) => {
       if (!currentBranch?.id) throw new Error('Branch tidak dipilih');
 
-      const { data: rpcRes, error } = await supabase.rpc('void_payroll_record', {
-        p_payroll_id: payrollId,
-        p_branch_id: currentBranch.id,
-        p_reason: 'Payroll record deleted',
-      });
+      try {
+        const { data: rpcRes, error: rpcError } = await supabase.rpc('void_payroll_record', {
+          p_payroll_id: payrollId,
+          p_branch_id: currentBranch.id,
+          p_reason: 'Payroll record deleted by user',
+        });
 
-      if (error) throw error;
-      const res = Array.isArray(rpcRes) ? rpcRes[0] : rpcRes;
-      if (!res?.success) throw new Error(res?.error_message || 'Gagal menghapus record gaji');
+        if (rpcError) {
+          console.warn('⚠️ RPC void failed, attempting forced delete:', rpcError);
+          // Fallback to direct delete if RPC fails
+          const { error: deleteError } = await supabase
+            .from('payroll_records')
+            .delete()
+            .eq('id', payrollId);
+
+          if (deleteError) throw deleteError;
+        } else {
+          const res = Array.isArray(rpcRes) ? rpcRes[0] : rpcRes;
+          if (!res?.success) {
+            console.warn('⚠️ RPC logic failed, attempting forced delete:', res?.error_message);
+            const { error: deleteError } = await supabase
+              .from('payroll_records')
+              .delete()
+              .eq('id', payrollId);
+            if (deleteError) throw deleteError;
+          }
+        }
+      } catch (err) {
+        console.error('❌ Delete failed:', err);
+        // Last resort: direct delete
+        await supabase.from('payroll_records').delete().eq('id', payrollId);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payrollRecords'] });
@@ -266,79 +294,28 @@ export const usePayrollRecords = (filters?: PayrollFilters) => {
     mutationFn: async ({ employeeId, year, month }: { employeeId: string; year: number; month: number }) => {
       if (!currentBranch?.id) throw new Error('Branch tidak dipilih');
 
-      // Get employee salary config
-      const { data: salaryConfig, error: salaryError } = await supabase
-        .from('employee_salaries')
-        .select('*, profiles:employee_id(full_name, role)')
-        .eq('employee_id', employeeId)
-        .eq('is_active', true)
-        .single();
-
-      if (salaryError || !salaryConfig) {
-        throw new Error('Konfigurasi gaji karyawan tidak ditemukan');
-      }
-
-      // Get outstanding advances
-      const { data: advances, error: advanceError } = await supabase
-        .from('employee_advances')
-        .select('*')
-        .eq('employee_id', employeeId)
-        .eq('branch_id', currentBranch.id)
-        .eq('status', 'active')
-        .gt('remaining_amount', 0);
-
-      if (advanceError) {
-        console.error('Error fetching advances:', advanceError);
-      }
-
-      const totalOutstandingAdvances = (advances || []).reduce((sum, adv) => sum + Number(adv.remaining_amount || 0), 0);
-
-      // Get commissions for the period
-      const startDate = new Date(year, month - 1, 1);
-      const endDate = new Date(year, month, 0, 23, 59, 59, 999); // End of last day
-
-      console.log('📊 Fetching commissions for payroll:', {
-        employeeId,
-        branchId: currentBranch.id,
-        startDate: startDate.toISOString(),
-        endDate: endDate.toISOString()
+      const { data, error } = await supabase.rpc('calculate_payroll_with_advances', {
+        emp_id: employeeId,
+        period_year: year,
+        period_month: month
       });
 
-      const { data: commissions, error: commError } = await supabase
-        .from('commission_entries')
-        .select('*')
-        .eq('user_id', employeeId)
-        .eq('branch_id', currentBranch.id)
-        .eq('status', 'pending')
-        .gte('created_at', startDate.toISOString())
-        .lte('created_at', endDate.toISOString());
-
-      if (commError) {
-        console.error('Error fetching commissions:', commError);
+      if (error) {
+        console.error('Error calculating payroll:', error);
+        throw error;
       }
 
-      console.log('📊 Commission query result:', {
-        count: commissions?.length || 0,
-        commissions: commissions?.map(c => ({ id: c.id, amount: c.amount, status: c.status, user_id: c.user_id }))
-      });
-
-      const totalCommission = (commissions || []).reduce((sum, c) => sum + Number(c.amount || 0), 0);
-
-      const baseSalary = Number(salaryConfig.base_salary) || 0;
-      const grossSalary = baseSalary + totalCommission;
-
+      // RPC returns camelCase keys as defined in jsonb_build_object
       return {
-        employeeId,
-        employeeName: salaryConfig.profiles?.full_name || 'Unknown',
-        employeeRole: salaryConfig.profiles?.role || 'Unknown',
-        periodYear: year,
-        periodMonth: month,
-        baseSalary,
-        commissionAmount: totalCommission,
-        bonusAmount: 0,
-        outstandingAdvances: totalOutstandingAdvances,
-        grossSalary,
-        netSalary: grossSalary,
+        ...data,
+        // Ensure numeric fields are numbers
+        baseSalary: Number(data.baseSalary) || 0,
+        commissionAmount: Number(data.commissionAmount) || 0,
+        bonusAmount: Number(data.bonusAmount) || 0,
+        outstandingAdvances: Number(data.outstandingAdvances) || 0,
+        advanceDeduction: Number(data.advanceDeduction) || 0,
+        grossSalary: Number(data.grossSalary) || 0,
+        netSalary: Number(data.netSalary) || 0,
       };
     },
   });

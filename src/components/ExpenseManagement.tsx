@@ -18,7 +18,7 @@ import { format } from "date-fns"
 import { id } from "date-fns/locale/id"
 import { useAuth } from "@/hooks/useAuth"
 import { canManageCash } from '@/utils/roleUtils'
-import { Trash2, Check, ChevronsUpDown, Filter, X, Search, FileDown, Upload, Image as ImageIcon, Loader2 } from "lucide-react"
+import { Trash2, Check, ChevronsUpDown, Filter, X, Search, FileDown, Image as ImageIcon, Loader2 } from "lucide-react"
 import * as XLSX from "xlsx"
 import { ExpenseReceiptPDF } from "./ExpenseReceiptPDF"
 import { Badge } from "./ui/badge"
@@ -481,12 +481,64 @@ export function ExpenseManagement() {
         <CardContent>
           {/* ... Filter Section (kept same, assuming it's part of your requirement to keep it) ... */}
           {showFilters && (
-            <div className="mb-4 p-4 border rounded-lg bg-muted/50 space-y-4">
-              <div className="flex items-center justify-between">
-                <p>Filter Aktif...</p>
-                <Button variant="ghost" size="sm" onClick={clearFilters}><X className="h-4 w-4 mr-2" /> Reset</Button>
+            <div className="mb-4 p-4 border rounded-lg bg-slate-50 space-y-4 shadow-inner">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="font-semibold text-sm text-slate-700">Filter Pencarian</h3>
+                <Button variant="ghost" size="sm" onClick={clearFilters} className="text-red-500 hover:text-red-700 h-8">
+                  <X className="h-4 w-4 mr-1" /> Reset Filter
+                </Button>
               </div>
-              {/* Simplified filter UI placeholder to save space in this replacement block, assuming logic is there */}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Date Range */}
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Dari Tanggal</Label>
+                  <DateTimePicker
+                    date={filterStartDate}
+                    setDate={setFilterStartDate}
+                    placeholder="Pilih tanggal awal"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Sampai Tanggal</Label>
+                  <DateTimePicker
+                    date={filterEndDate}
+                    setDate={setFilterEndDate}
+                    placeholder="Pilih tanggal akhir"
+                  />
+                </div>
+
+                {/* Account Filters */}
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Akun Beban</Label>
+                  <Select value={filterExpenseAccountId} onValueChange={setFilterExpenseAccountId}>
+                    <SelectTrigger className="h-10 bg-white">
+                      <SelectValue placeholder="Semua Akun Beban" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Semua Akun Beban</SelectItem>
+                      {expenseAccounts.map(acc => (
+                        <SelectItem key={acc.id} value={acc.id}>{acc.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Sumber Dana</Label>
+                  <Select value={filterPaymentAccountId} onValueChange={setFilterPaymentAccountId}>
+                    <SelectTrigger className="h-10 bg-white">
+                      <SelectValue placeholder="Semua Sumber Dana" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Semua Sumber Dana</SelectItem>
+                      {paymentAccounts.map(acc => (
+                        <SelectItem key={acc.id} value={acc.id}>{acc.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </div>
           )}
 

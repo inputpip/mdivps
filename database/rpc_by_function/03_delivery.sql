@@ -50,7 +50,7 @@ $function$
 -- Function: get_delivery_summary
 -- =====================================================
 CREATE OR REPLACE FUNCTION public.get_delivery_summary(transaction_id_param text)
- RETURNS TABLE(product_id uuid, product_name text, ordered_quantity integer, delivered_quantity integer, remaining_quantity integer, unit text, width numeric, height numeric)
+ RETURNS TABLE(product_id uuid, product_name text, is_bonus boolean, ordered_quantity integer, delivered_quantity integer, remaining_quantity integer, unit text, width numeric, height numeric)
  LANGUAGE plpgsql
 AS $function$
 BEGIN
@@ -58,6 +58,7 @@ BEGIN
   SELECT 
     p.product_id,
     p.product_name,
+    p.is_bonus,
     p.ordered_quantity::INTEGER,
     COALESCE(di_summary.delivered_quantity, 0)::INTEGER,
     (p.ordered_quantity - COALESCE(di_summary.delivered_quantity, 0))::INTEGER,
@@ -66,31 +67,29 @@ BEGIN
     p.height
   FROM (
     SELECT 
-      (ti.product->>'id')::uuid as product_id,
-      ti.product->>'name' as product_name,
-      ti.quantity as ordered_quantity,
-      ti.unit as unit,
-      ti.width as width,
-      ti.height as height
+      COALESCE((item->>'productId')::uuid, (item->'product'->>'id')::uuid) as product_id,
+      COALESCE(item->>'productName', item->'product'->>'name') as product_name,
+      COALESCE((item->>'isBonus')::boolean, (item->>'is_bonus')::boolean, false) as is_bonus,
+      (item->>'quantity')::integer as ordered_quantity,
+      item->>'unit' as unit,
+      (item->>'width')::numeric as width,
+      (item->>'height')::numeric as height
     FROM transactions t
-    JOIN LATERAL jsonb_to_recordset(t.items) AS ti(
-      product jsonb,
-      quantity integer,
-      unit text,
-      width decimal,
-      height decimal
-    ) ON true
+    CROSS JOIN LATERAL jsonb_array_elements(t.items) AS item
     WHERE t.id = transaction_id_param
+    AND NOT COALESCE((item->>'_isSalesMeta')::boolean, (item->>'_isMigrationMeta')::boolean, false)
   ) p
   LEFT JOIN (
     SELECT 
       di.product_id,
+      di.is_bonus,
       SUM(di.quantity_delivered) as delivered_quantity
     FROM deliveries d
     JOIN delivery_items di ON di.delivery_id = d.id
     WHERE d.transaction_id = transaction_id_param
-    GROUP BY di.product_id
-  ) di_summary ON di_summary.product_id = p.product_id;
+    GROUP BY di.product_id, di.is_bonus
+  ) di_summary ON di_summary.product_id = p.product_id 
+               AND (di_summary.is_bonus = p.is_bonus OR (di_summary.is_bonus IS NULL AND p.is_bonus = false));
 END;
 $function$
 ;

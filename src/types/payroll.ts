@@ -62,11 +62,9 @@ export interface PayrollRecord {
   paymentAccountId?: string;
   paymentAccountName?: string;
 
-  // Integration
-  cashHistoryId?: string;
-
   // Metadata
   createdBy?: string;
+  paidBy?: string;
   createdAt: Date;
   updatedAt: Date;
   notes?: string;

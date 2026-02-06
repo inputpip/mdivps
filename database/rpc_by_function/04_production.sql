@@ -662,7 +662,8 @@ BEGIN
   IF v_record.consume_bom THEN
     FOR v_movement IN 
       SELECT material_id, quantity FROM material_stock_movements 
-      WHERE reference_id = v_record.id::TEXT AND reference_type = 'production' AND type = 'OUT'
+      WHERE (reference_id = v_record.id::TEXT OR reference_id = v_record.ref) 
+        AND reference_type = 'production' AND type = 'OUT'
     LOOP
       PERFORM public.restore_material_fifo_v2(
         v_movement.material_id, 
@@ -677,7 +678,8 @@ BEGIN
     -- This was a spoilage/error record
     FOR v_movement IN 
       SELECT material_id, quantity FROM material_stock_movements 
-      WHERE reference_id = v_record.id::TEXT AND reference_type = 'production' AND type = 'OUT'
+      WHERE (reference_id = v_record.id::TEXT OR reference_id = v_record.ref) 
+        AND reference_type = 'production' AND type = 'OUT'
     LOOP
       PERFORM public.restore_material_fifo_v2(
         v_movement.material_id, 
@@ -710,7 +712,8 @@ BEGIN
 
   -- 4. Delete Material Stock Movements
   DELETE FROM material_stock_movements 
-  WHERE reference_id = v_record.id::TEXT AND reference_type = 'production';
+  WHERE (reference_id = v_record.id::TEXT OR reference_id = v_record.ref) 
+    AND reference_type = 'production';
 
   -- 5. Void Related Journals
   FOR v_journal_id IN 

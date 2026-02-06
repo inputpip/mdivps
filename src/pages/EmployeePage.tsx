@@ -12,7 +12,6 @@ import {
   Trash2,
   KeyRound,
   DollarSign,
-  History,
   Users,
   Calculator,
   Settings,
@@ -20,7 +19,9 @@ import {
   CheckCircle,
   Clock,
   AlertTriangle,
-  Shield
+  Shield,
+  FileText,
+  Printer
 } from "lucide-react"
 import { useEmployees } from "@/hooks/useEmployees"
 import { Employee } from "@/types/employee"
@@ -30,14 +31,15 @@ import { SalaryConfigDialog } from "@/components/SalaryConfigDialog"
 import { PayrollRecordDialog } from "@/components/PayrollRecordDialog"
 import { EditPayrollDialog } from "@/components/EditPayrollDialog"
 import { PaymentConfirmationDialog } from "@/components/PaymentConfirmationDialog"
-import { PayrollHistoryTable } from "@/components/PayrollHistoryTable"
 import { RoleCommissionSetup } from "@/components/RoleCommissionSetup"
+import { PayrollSlipPDF } from "@/components/PayrollSlipPDF"
 import { PinSetupDialog } from "@/components/PinSetupDialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/hooks/useAuth"
 import { useToast } from "@/components/ui/use-toast"
 import { isOwner, isAdmin } from "@/utils/roleUtils"
 import { useEmployeeSalaries, usePayrollRecords, usePayrollSummary } from "@/hooks/usePayroll"
+import { useAccounts } from "@/hooks/useAccounts"
 import { EmployeeSalary, PayrollRecord } from "@/types/payroll"
 import {
   AlertDialog,
@@ -69,6 +71,7 @@ export default function EmployeePage() {
 
   const { user } = useAuth()
   const { toast } = useToast()
+  const { accounts } = useAccounts()
   const { employees, isLoading, deleteEmployee, isError, error } = useEmployees()
   const { salaryConfigs, isLoading: isLoadingSalaries } = useEmployeeSalaries()
   const { payrollRecords, approvePayrollRecord, processPayment, deletePayrollRecord } = usePayrollRecords({
@@ -177,11 +180,18 @@ export default function EmployeePage() {
   const handleConfirmPayment = async (paymentAccountId: string) => {
     if (!selectedPayrollRecord) return
 
+    // Find salary expense account (priority: Code 6110 -> search by name "Beban Gaji")
+    const expenseAccount = accounts?.find(a =>
+      a.code === '6110' ||
+      (a.name.toLowerCase().includes('beban') && a.name.toLowerCase().includes('gaji'))
+    )
+
     try {
       await processPayment.mutateAsync({
         id: selectedPayrollRecord.id,
         paymentAccountId: paymentAccountId,
-        paymentDate: new Date()
+        paymentDate: new Date(),
+        expenseAccountId: expenseAccount?.id
       })
       toast({
         title: "Sukses",
@@ -387,12 +397,8 @@ export default function EmployeePage() {
                 Setup Komisi
               </TabsTrigger>
               <TabsTrigger value="payroll-records" className="gap-2">
-                <Calculator className="h-4 w-4" />
+                <FileText className="h-4 w-4" />
                 Catatan Gaji
-              </TabsTrigger>
-              <TabsTrigger value="payroll-history" className="gap-2">
-                <History className="h-4 w-4" />
-                Riwayat Pembayaran
               </TabsTrigger>
             </>
           )}
@@ -644,12 +650,13 @@ export default function EmployeePage() {
                       <TableRow>
                         <TableHead>Karyawan</TableHead>
                         <TableHead className="text-right">Gaji Pokok</TableHead>
-                        <TableHead className="text-right">Komisi</TableHead>
-                        <TableHead className="text-right">Bonus</TableHead>
-                        <TableHead className="text-right">Sisa Panjar</TableHead>
-                        <TableHead className="text-right">Potongan</TableHead>
-                        <TableHead className="text-right">Total</TableHead>
+                        <TableHead className="text-right">Komisi/Bonus</TableHead>
+                        <TableHead className="text-right">Potongan/Panjar</TableHead>
+                        <TableHead className="text-right">Total Net</TableHead>
                         <TableHead>Status</TableHead>
+                        <TableHead>Tgl Bayar</TableHead>
+                        <TableHead>Akun Bayar</TableHead>
+                        <TableHead>Dibayar Oleh</TableHead>
                         <TableHead className="text-right">Aksi</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -666,37 +673,21 @@ export default function EmployeePage() {
                             {formatCurrency(record.baseSalaryAmount)}
                           </TableCell>
                           <TableCell className="text-right">
-                            {record.commissionAmount > 0 ? (
-                              <span className="text-green-600 font-medium">
-                                {formatCurrency(record.commissionAmount)}
-                              </span>
+                            {record.commissionAmount + record.bonusAmount > 0 ? (
+                              <div className="text-xs">
+                                {record.commissionAmount > 0 && <p className="text-green-600">K: {formatCurrency(record.commissionAmount)}</p>}
+                                {record.bonusAmount > 0 && <p className="text-blue-600">B: {formatCurrency(record.bonusAmount)}</p>}
+                              </div>
                             ) : (
                               <span className="text-muted-foreground">-</span>
                             )}
                           </TableCell>
                           <TableCell className="text-right">
-                            {record.bonusAmount > 0 ? (
-                              <span className="text-blue-600 font-medium">
-                                {formatCurrency(record.bonusAmount)}
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground">-</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {record.outstandingAdvances && record.outstandingAdvances > 0 ? (
-                              <span className="text-orange-600 font-medium">
-                                {formatCurrency(record.outstandingAdvances)}
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground">-</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {record.deductionAmount > 0 ? (
-                              <span className="text-red-600 font-medium">
-                                ({formatCurrency(record.deductionAmount)})
-                              </span>
+                            {record.deductionAmount + record.outstandingAdvances > 0 ? (
+                              <div className="text-xs">
+                                {record.outstandingAdvances > 0 && <p className="text-orange-600">Pj: {formatCurrency(record.outstandingAdvances)}</p>}
+                                {record.deductionAmount > 0 && <p className="text-red-600">Pt: ({formatCurrency(record.deductionAmount)})</p>}
+                              </div>
                             ) : (
                               <span className="text-muted-foreground">-</span>
                             )}
@@ -708,6 +699,27 @@ export default function EmployeePage() {
                           </TableCell>
                           <TableCell>
                             {getPayrollStatusBadge(record.status)}
+                          </TableCell>
+                          <TableCell>
+                            {record.status === 'paid' && record.paymentDate ? (
+                              <span className="text-xs text-muted-foreground">{record.paymentDate.toLocaleDateString('id-ID')}</span>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {record.status === 'paid' && record.paymentAccountName ? (
+                              <span className="text-xs text-muted-foreground">{record.paymentAccountName}</span>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {record.status === 'paid' && record.paidBy ? (
+                              <span className="text-xs text-muted-foreground">{record.paidBy}</span>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex gap-2 justify-end">
@@ -776,9 +788,23 @@ export default function EmployeePage() {
                                 </>
                               )}
                               {record.status === 'paid' && (
-                                <span className="text-xs text-green-600 font-medium">
-                                  ✓ Selesai
-                                </span>
+                                <div className="flex gap-2 justify-end">
+                                  <span className="text-xs text-green-600 font-medium self-center">
+                                    ✓ Selesai
+                                  </span>
+                                  <PayrollSlipPDF record={record} />
+                                  {userIsOwnerRole && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      title="Hapus / Batalkan Bayar"
+                                      onClick={() => handleDeletePayrollClick(record)}
+                                      className="text-red-500 hover:text-red-700 h-7 w-7 p-0"
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                  )}
+                                </div>
                               )}
                             </div>
                           </TableCell>
@@ -791,23 +817,6 @@ export default function EmployeePage() {
             </Card>
           </TabsContent>
         )}
-
-        {/* Payroll History Tab */}
-        {userCanManagePayroll && (
-          <TabsContent value="payroll-history" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Riwayat Pembayaran Gaji</CardTitle>
-                <CardDescription>
-                  Histori semua pembayaran gaji yang telah dilakukan
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <PayrollHistoryTable />
-              </CardContent>
-            </Card>
-          </TabsContent>
-        )}
       </Tabs>
 
       {/* Delete Payroll Confirmation Dialog */}
@@ -815,18 +824,20 @@ export default function EmployeePage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Hapus Catatan Gaji</AlertDialogTitle>
-            <AlertDialogDescription>
-              {payrollToDelete && (
-                <>
-                  Apakah Anda yakin ingin menghapus catatan gaji untuk{' '}
-                  <span className="font-semibold">{payrollToDelete.employeeName}</span> periode{' '}
-                  <span className="font-semibold">{payrollToDelete.periodDisplay}</span>?
-                  <br /><br />
-                  <span className="text-amber-600 font-medium">
-                    ⚠️ Tindakan ini tidak dapat dibatalkan.
-                  </span>
-                </>
-              )}
+            <AlertDialogDescription asChild>
+              <div>
+                {payrollToDelete && (
+                  <>
+                    Apakah Anda yakin ingin menghapus catatan gaji untuk{' '}
+                    <span className="font-semibold">{payrollToDelete.employeeName}</span> periode{' '}
+                    <span className="font-semibold">{payrollToDelete.periodDisplay}</span>?
+                    <br /><br />
+                    <span className="text-amber-600 font-medium">
+                      ⚠️ Tindakan ini tidak dapat dibatalkan. Jurnal akuntansi terkait akan otomatis dibatalkan (void).
+                    </span>
+                  </>
+                )}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

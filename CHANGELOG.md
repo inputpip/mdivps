@@ -9,12 +9,66 @@ Semua perubahan penting pada proyek AQUVIT ERP System didokumentasikan di file i
 3. [Server Architecture](#server-architecture-diagram)
 4. [VPS Server Information](#vps-server-information)
 5. [Version History](#v43-2026-01-04---rpc-atomic-operations-penting)
+   - [v4.4] **Payroll Dynamic Account Identification** 🚀 NEW
    - [v4.3] **RPC Atomic Operations** ⚠️ PENTING!
    - [v4.2] Accounting System Improvements
    - [v4.1] Permission System & Notification
    - [v4] APK Build & Bluetooth Printer
    - [v3] Dashboard Enhancement & Retasi
    - [Earlier versions...]
+
+---
+
+## [v4.5] 2026-02-06 - Payroll Journal Balancing & Slip Print
+
+### Features & Improvements
+
+1. **Balanced Payroll Journal Logic**
+   - Menjamin jurnal gaji selalu seimbang (balance) dengan mengkreditkan potongan gaji (lainnya) ke akun "Pendapatan Lain-lain" atau "Potongan". Jika tidak ditemukan, otomatis mencari fallback akun penampung yang sesuai.
+   - Ref: `database/rpc_by_function/12_payroll_salary.sql`
+
+2. **Payroll Record Deletion Fix (Atomic Void)**
+   - Memperbaiki bug `column "payroll_id" does not exist` pada tabel komisi saat proses hapus gaji. Sekarang menggunakan `reference_id`.
+   - Proses hapus di UI sekarang lebih "kebal" terhadap error jurnal lama agar data tetap bisa dibersihkan.
+
+3. **Unified Payroll UI & Slip Printing**
+   - Menghapus tab "Riwayat Pembayaran" dan menggabungkannya ke dalam "Catatan Gaji".
+   - Menambahkan kolom: **Tgl Bayar**, **Akun**, dan **Dibayar Oleh** di tabel utama.
+   - Menambahkan tombol **Cetak Slip Gaji** (Format A5 PDF) dengan detail penerimaan, potongan, dan terbilang.
+   - Role **Owner** sekarang bisa menghapus record gaji yang sudah berstatus 'paid' jika terjadi kesalahan input.
+
+4. **Mass Migration of Incorrect Advance Journals**
+   - Memperbaiki ribuan data kasbon historis di database **Nabire** dan **Manokwari** yang sebelumnya salah masuk ke akun "Pajak Masukan" (1230), sekarang sudah benar masuk ke "Piutang Karyawan" (1220) di masing-masing cabang.
+
+---
+
+## [v4.4] 2026-02-05 - Payroll Dynamic Account Identification
+
+### Features & Improvements
+
+1. **Dynamic Salary Expense Account Identification**
+   - **Masalah**: Frontend sebelumnya hardcoded mencari akun Gaji dengan kode '6110'. Jika akun tersebut tidak ada atau memiliki ID berbeda antar branch, proses payment gagal.
+   - **Solusi**: Frontend (`EmployeePage.tsx`) sekarang melakukan pencarian dinamis:
+     - Prioritas 1: Mencari akun dengan kode `'6110'`.
+     - Prioritas 2: Mencari akun yang mengandung kata `"Beban"` dan `"Gaji"` (case-insensitive).
+   - **Implementasi**: ID akun yang ditemukan dikirim ke backend melalui parameter baru `p_expense_account_id`.
+
+2. **RPC `process_payroll_complete` Enhancement**
+   - File: `database/rpc_by_function/12_payroll_salary.sql`
+   - Menambahkan parameter `p_expense_account_id` (TEXT, default NULL).
+   - Logika: Menggunakan ID yang diberikan jika ada, jika tidak tetap fallback ke lookup kode '6110' (backward compatibility).
+
+3. **Multi-Database Deployment**
+   - Fix dideploy serentak ke database **Nabire** (`aquvit_new`) dan **Manokwari** (`mkw_db`).
+   - PostgREST restarted di kedua environment.
+
+### File yang Dimodifikasi
+
+| File | Perubahan |
+|------|-----------|
+| `src/pages/EmployeePage.tsx` | Implementasi lookup akun dinamis sebelum payment |
+| `src/hooks/usePayroll.ts` | Update `processPayment` mutation untuk mendukung `expenseAccountId` |
+| `database/rpc_by_function/12_payroll_salary.sql` | Update signature fungsi RPC dan logika lookup akun |
 
 ---
 

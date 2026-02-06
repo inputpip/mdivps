@@ -191,7 +191,7 @@ $function$
 -- =====================================================
 -- Function: process_payroll_complete
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.process_payroll_complete(p_payroll_id uuid, p_branch_id uuid, p_payment_account_id uuid, p_payment_date date DEFAULT CURRENT_DATE)
+CREATE OR REPLACE FUNCTION public.process_payroll_complete(p_payroll_id uuid, p_branch_id uuid, p_payment_account_id text, p_payment_date date DEFAULT CURRENT_DATE, p_expense_account_id text DEFAULT NULL)
  RETURNS TABLE(success boolean, journal_id uuid, advances_updated integer, commissions_paid integer, error_message text)
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -211,8 +211,8 @@ DECLARE
   v_remaining_deduction NUMERIC;
   v_advance RECORD;
   v_amount_to_deduct NUMERIC;
-  v_beban_gaji_account UUID;
-  v_panjar_account UUID;
+  v_beban_gaji_account TEXT;
+  v_panjar_account TEXT;
   v_period_start DATE;
   v_period_end DATE;
 BEGIN
@@ -262,19 +262,29 @@ BEGIN
   v_period_start := v_payroll.period_start;
   v_period_end := v_payroll.period_end;
   -- ==================== GET ACCOUNT IDS ====================
-  -- Beban Gaji (6110)
-  SELECT id INTO v_beban_gaji_account
-  FROM accounts
-  WHERE branch_id = p_branch_id AND code = '6110' AND is_active = TRUE
-  LIMIT 1;
-  -- Panjar Karyawan (1260)
+  -- Beban Gaji (Keyword Search)
+  IF p_expense_account_id IS NOT NULL THEN
+    v_beban_gaji_account := p_expense_account_id;
+  ELSE
+    SELECT id INTO v_beban_gaji_account
+    FROM accounts
+    WHERE branch_id = p_branch_id 
+      AND (name ILIKE '%Beban%' AND name ILIKE '%Gaji%')
+      AND is_active = TRUE
+    LIMIT 1;
+  END IF;
+
+  -- Panjar Karyawan / Kasbon (Keyword Search)
   SELECT id INTO v_panjar_account
   FROM accounts
-  WHERE branch_id = p_branch_id AND code = '1260' AND is_active = TRUE
+  WHERE branch_id = p_branch_id 
+    AND (name ILIKE '%Panjar%' OR name ILIKE '%Kasbon%' OR (name ILIKE '%Piutang%' AND name ILIKE '%Karyawan%'))
+    AND is_active = TRUE
   LIMIT 1;
+
   IF v_beban_gaji_account IS NULL THEN
     RETURN QUERY SELECT FALSE, NULL::UUID, 0, 0,
-      'Akun Beban Gaji (6110) tidak ditemukan'::TEXT;
+      'Akun Beban Gaji tidak ditemukan (Keyword: Beban Gaji). Mohon periksa nama akun di COA Anda.'::TEXT;
     RETURN;
   END IF;
   -- ==================== BUILD JOURNAL LINES ====================
@@ -303,32 +313,41 @@ BEGIN
       'credit_amount', v_advance_deduction,
       'description', format('Potongan panjar %s', v_employee_name)
     );
-  ELSIF v_advance_deduction > 0 AND v_panjar_account IS NULL THEN
-    -- If no panjar account, add to kas credit instead
-    v_journal_lines := jsonb_set(
-      v_journal_lines,
-      '{1,credit_amount}',
-      to_jsonb(v_net_salary + v_advance_deduction)
-    );
   END IF;
-  -- Credit: Other deductions (salary deduction) - goes to company revenue or adjustment
+
+  -- Credit: Other deductions (salary deduction) - IMPORTANT: MUST BALANCE THE JOURNAL
   IF v_salary_deduction > 0 THEN
-    -- Could credit to different account if needed, for now add to kas
-    NULL; -- Already included in net salary calculation
+    -- Find an adjustment/income account for deductions
+    DECLARE
+      v_adjustment_account TEXT;
+    BEGIN
+      SELECT id INTO v_adjustment_account FROM accounts 
+      WHERE branch_id = p_branch_id 
+        AND (name ILIKE '%Pendapatan%Lain%' OR name ILIKE '%Penyesuaian%' OR name ILIKE '%Potongan%')
+        AND is_active = TRUE LIMIT 1;
+        
+      v_journal_lines := v_journal_lines || jsonb_build_object(
+        'account_id', COALESCE(v_adjustment_account, p_payment_account_id), -- Fallback to payment account if no adjustment account
+        'debit_amount', 0,
+        'credit_amount', v_salary_deduction,
+        'description', format('Potongan gaji lainnya %s', v_employee_name)
+      );
+    END;
   END IF;
   -- ==================== CREATE JOURNAL ====================
-  SELECT cja.journal_id INTO v_journal_id FROM create_journal_atomic(
-    p_branch_id,
-    p_payment_date,
-    format('Pembayaran Gaji %s - %s/%s',
+  SELECT c.journal_id INTO v_journal_id FROM create_journal_atomic(
+    p_branch_id := p_branch_id,
+    p_description := format('Pembayaran Gaji %s - %s/%s',
       v_employee_name,
       EXTRACT(MONTH FROM v_period_start),
       EXTRACT(YEAR FROM v_period_start)),
-    'payroll',
-    p_payroll_id::TEXT,
-    v_journal_lines,
-    TRUE
-  );
+    p_reference_type := 'payroll',
+    p_reference_id := p_payroll_id::TEXT,
+    p_lines := v_journal_lines,
+    p_entry_date := p_payment_date,
+    p_auto_post := TRUE,
+    p_created_by := NULL::uuid
+  ) c;
   -- ==================== UPDATE PAYROLL STATUS ====================
   UPDATE payroll_records
   SET
@@ -359,7 +378,8 @@ BEGIN
   IF v_payroll.employee_id IS NOT NULL THEN
     UPDATE commission_entries
     SET status = 'paid'
-    WHERE user_id = v_payroll.employee_id
+    WHERE user_id = v_payroll.employee_id::TEXT
+      AND branch_id = p_branch_id
       AND status = 'pending'
       AND created_at >= v_period_start
       AND created_at <= v_period_end + INTERVAL '1 day';
@@ -449,9 +469,9 @@ DECLARE
   v_new_gross_salary NUMERIC;
   v_new_total_deductions NUMERIC;
   v_journal_id UUID;
-  v_beban_gaji_account UUID;
-  v_panjar_account UUID;
-  v_payment_account_id UUID;
+  v_beban_gaji_account TEXT;
+  v_panjar_account TEXT;
+  v_payment_account_id TEXT;
   v_journal_lines JSONB := '[]'::JSONB;
 BEGIN
   -- 1. Get Old Record
@@ -493,7 +513,7 @@ BEGIN
     IF v_journal_id IS NOT NULL THEN
       -- Get Accounts
       SELECT id INTO v_beban_gaji_account FROM accounts WHERE branch_id = p_branch_id AND code = '6110' LIMIT 1;
-      SELECT id INTO v_panjar_account FROM accounts WHERE branch_id = p_branch_id AND code = '1260' LIMIT 1;
+      SELECT id INTO v_panjar_account FROM accounts WHERE branch_id = p_branch_id AND code = '1220' LIMIT 1;
       v_payment_account_id := v_old_record.payment_account_id;
       -- Debit: Beban Gaji (gross)
       v_journal_lines := v_journal_lines || jsonb_build_object(
@@ -522,7 +542,7 @@ BEGIN
       DELETE FROM journal_entry_lines WHERE journal_entry_id = v_journal_id;
       
       INSERT INTO journal_entry_lines (journal_entry_id, line_number, account_id, description, debit_amount, credit_amount)
-      SELECT v_journal_id, row_number() OVER (), (line->>'account_id')::UUID, line->>'description', (line->>'debit_amount')::NUMERIC, (line->>'credit_amount')::NUMERIC
+      SELECT v_journal_id, row_number() OVER (), (line->>'account_id'), line->>'description', (line->>'debit_amount')::NUMERIC, (line->>'credit_amount')::NUMERIC
       FROM jsonb_array_elements(v_journal_lines) AS line;
       -- Update header totals
       UPDATE journal_entries 
@@ -589,13 +609,14 @@ BEGIN
 
   -- ==================== ROLLBACK COMMISSIONS ====================
   -- Reset commission status from 'paid' back to 'pending'
+  -- FIX: Use reference_id or check column existence
   UPDATE commission_entries
   SET
     status = 'pending',
     paid_at = NULL,
     paid_via = NULL,
     updated_at = NOW()
-  WHERE payroll_id = p_payroll_id
+  WHERE (payroll_id = p_payroll_id OR reference_id = p_payroll_id::TEXT)
     AND branch_id = p_branch_id
     AND status = 'paid';
   GET DIAGNOSTICS v_commissions_restored = ROW_COUNT;

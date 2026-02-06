@@ -155,9 +155,9 @@ BEGIN
     WHERE branch_id = p_branch_id AND code = '1110' AND is_active = TRUE LIMIT 1;
   END IF;
 
-  -- Piutang Karyawan (1230 atau sesuai chart of accounts)
+  -- Piutang Karyawan (1220 atau sesuai chart of accounts)
   SELECT id INTO v_piutang_karyawan_id FROM accounts
-  WHERE branch_id = p_branch_id AND code = '1230' AND is_active = TRUE LIMIT 1;
+  WHERE branch_id = p_branch_id AND code = '1220' AND is_active = TRUE LIMIT 1;
 
   -- Fallback: cari akun dengan nama mengandung "Piutang Karyawan"
   IF v_piutang_karyawan_id IS NULL THEN
@@ -442,7 +442,7 @@ BEGIN
   END IF;
 
   SELECT id INTO v_piutang_karyawan_id FROM accounts
-  WHERE branch_id = p_branch_id AND code = '1230' AND is_active = TRUE LIMIT 1;
+  WHERE branch_id = p_branch_id AND code = '1220' AND is_active = TRUE LIMIT 1;
 
   IF v_piutang_karyawan_id IS NULL THEN
     SELECT id INTO v_piutang_karyawan_id FROM accounts

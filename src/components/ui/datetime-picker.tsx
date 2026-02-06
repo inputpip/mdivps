@@ -20,9 +20,10 @@ interface DateTimePickerProps {
   date: Date | undefined;
   setDate: (date: Date | undefined) => void;
   disabled?: boolean;
+  placeholder?: string;
 }
 
-export function DateTimePicker({ date, setDate, disabled = false }: DateTimePickerProps) {
+export function DateTimePicker({ date, setDate, disabled = false, placeholder = "Pilih tanggal & waktu" }: DateTimePickerProps) {
   const [selectedDate, setSelectedDate] = React.useState<Date | undefined>(date);
   const [hour, setHour] = React.useState(date ? parseInt(format(date, "hh"), 10) : 12);
   const [minute, setMinute] = React.useState(date ? date.getMinutes() : 0);
@@ -44,7 +45,7 @@ export function DateTimePicker({ date, setDate, disabled = false }: DateTimePick
     return setMinutes(setHours(d, newHour), m);
   };
 
-  const updateDateTime = (newDatePart: Partial<{day: Date, h: number, m: number, ap: 'AM' | 'PM'}>) => {
+  const updateDateTime = (newDatePart: Partial<{ day: Date, h: number, m: number, ap: 'AM' | 'PM' }>) => {
     const currentDay = newDatePart.day || selectedDate || new Date();
     const currentHour = newDatePart.h ?? hour;
     const currentMinute = newDatePart.m ?? minute;
@@ -97,7 +98,7 @@ export function DateTimePicker({ date, setDate, disabled = false }: DateTimePick
           disabled={disabled}
         >
           <CalendarIcon className="mr-2 h-4 w-4" />
-          {date ? format(date, "dd/MM/yyyy hh:mm aa") : <span>Pilih tanggal & waktu</span>}
+          {date ? format(date, "dd/MM/yyyy hh:mm aa") : <span>{placeholder}</span>}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0">
@@ -135,9 +136,9 @@ export function DateTimePicker({ date, setDate, disabled = false }: DateTimePick
             </div>
             <div className="grid gap-1 text-center">
               <Label className="text-xs">&nbsp;</Label>
-              <ToggleGroup 
-                type="single" 
-                value={amPm} 
+              <ToggleGroup
+                type="single"
+                value={amPm}
                 onValueChange={handleAmPmChange}
                 className="h-8"
               >
