@@ -21,6 +21,28 @@ Semua perubahan penting pada proyek AQUVIT ERP System didokumentasikan di file i
 
 ---
 
+## [v4.7] 2026-02-08 - Active Delivery PDF & Quotation Fixes 🚚
+
+### Features & Improvements
+
+1.  **Active Delivery Management**
+    - Menambahkan fitur **Export PDF** untuk daftar "Pesanan Siap Antar" (Active Deliveries).
+    - Menambahkan panel ringkasan statistik (Total Pesanan, Total Sisa Item, Total Nilai Order) di tab Active Deliveries.
+    - PDF mencakup kolom: No, Order ID, Pelanggan, Tanggal, Total Order, Sisa Item, dan Status.
+
+2.  **Quotation System Fixes**
+    - **Database Access Fix:** Mengaktifkan Row Level Security (RLS) pada tabel `quotations` di database Nabire (`aquvit_new`) dan memberikan permission `GRANT ALL` ke `authenticated` role. Sebelumnya request ditolak (Unauthorized/Bad Request).
+    - **Timestamp Error Fix:** Memperbaiki bug "invalid input syntax for type timestamp" dengan menginisialisasi field `valid_until` sebagai `undefined` (bukan string kosong `""`) pada frontend.
+
+### File yang Dimodifikasi
+| File | Perubahan |
+|------|-----------|
+| `src/pages/DeliveryPage.tsx` | Added `generateActiveDeliveriesPDF` & Summary Stats UI |
+| `src/pages/QuotationsPage.tsx` | Fix timestamp initialization logic |
+| `database/table_schemas/quotations.sql` | RLS Policy update (via VPS command) |
+
+---
+
 ## [v4.6] 2026-02-07 - Payroll & Journal Hotfixes (Critical)
 
 ### Features & Improvements
