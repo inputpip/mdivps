@@ -132,8 +132,14 @@ BEGIN
   -- ==================== CREATE JOURNAL ENTRY ====================
 
   IF v_adjustment_value > 0 AND v_bahan_baku_account_id IS NOT NULL AND v_modal_account_id IS NOT NULL THEN
-    SELECT 'JE-' || TO_CHAR(NOW(), 'YYYYMMDD') || '-' || LPAD(
-      (COALESCE((SELECT COUNT(*) + 1 FROM journal_entries WHERE branch_id = p_branch_id AND DATE(created_at) = CURRENT_DATE), 1))::TEXT, 4, '0')
+    -- Generate entry number (Global across all branches)
+    SELECT 'JE-' || TO_CHAR(CURRENT_DATE, 'YYYYMMDD') || '-' || LPAD(
+      (COALESCE(
+        (SELECT MAX(CAST(SUBSTRING(entry_number FROM '-(\d+)$') AS INTEGER))
+         FROM journal_entries
+         WHERE DATE(entry_date) = CURRENT_DATE),
+        0
+      ) + 1)::TEXT, 4, '0')
     INTO v_entry_number;
 
     INSERT INTO journal_entries (id, branch_id, entry_number, entry_date, description, reference_type, reference_id, status, is_voided, created_at, updated_at)
@@ -264,13 +270,14 @@ BEGIN
   -- ==================== CREATE JOURNAL ENTRY (if value > 0) ====================
 
   IF v_adjustment_value > 0 AND v_persediaan_account_id IS NOT NULL AND v_modal_account_id IS NOT NULL THEN
-    SELECT 'JE-' || TO_CHAR(NOW(), 'YYYYMMDD') || '-' || LPAD(
+    -- Generate entry number (Global across all branches)
+    SELECT 'JE-' || TO_CHAR(CURRENT_DATE, 'YYYYMMDD') || '-' || LPAD(
       (COALESCE(
-        (SELECT COUNT(*) + 1 FROM journal_entries
-         WHERE branch_id = p_branch_id
-         AND DATE(created_at) = CURRENT_DATE),
-        1
-      ))::TEXT, 4, '0')
+        (SELECT MAX(CAST(SUBSTRING(entry_number FROM '-(\d+)$') AS INTEGER))
+         FROM journal_entries
+         WHERE DATE(entry_date) = CURRENT_DATE),
+        0
+      ) + 1)::TEXT, 4, '0')
     INTO v_entry_number;
 
     INSERT INTO journal_entries (

@@ -202,13 +202,14 @@ BEGIN
     NOW()
   );
   -- ==================== CREATE JOURNAL ENTRY ====================
-  SELECT 'JE-' || TO_CHAR(NOW(), 'YYYYMMDD') || '-' || LPAD(
+  -- Generate entry number (Global across all branches)
+  SELECT 'JE-' || TO_CHAR(v_payment_date, 'YYYYMMDD') || '-' || LPAD(
     (COALESCE(
-      (SELECT COUNT(*) + 1 FROM journal_entries
-       WHERE branch_id = p_branch_id
-       AND DATE(created_at) = CURRENT_DATE),
-      1
-    ))::TEXT, 4, '0')
+      (SELECT MAX(CAST(SUBSTRING(entry_number FROM '-(\d+)$') AS INTEGER))
+       FROM journal_entries
+       WHERE DATE(entry_date) = v_payment_date),
+      0
+    ) + 1)::TEXT, 4, '0')
   INTO v_entry_number;
   INSERT INTO journal_entries (
     id,

@@ -199,6 +199,8 @@ AS $function$
 DECLARE
   v_payroll RECORD;
   v_journal_id UUID;
+  v_journal_success BOOLEAN;
+  v_journal_error TEXT;
   v_journal_lines JSONB := '[]'::JSONB;
   v_employee_name TEXT;
   v_gross_salary NUMERIC;
@@ -335,7 +337,10 @@ BEGIN
     END;
   END IF;
   -- ==================== CREATE JOURNAL ====================
-  SELECT c.journal_id INTO v_journal_id FROM create_journal_atomic(
+  -- ==================== CREATE JOURNAL ====================
+  SELECT c.success, c.journal_id, c.error_message 
+  INTO v_journal_success, v_journal_id, v_journal_error
+  FROM create_journal_atomic(
     p_branch_id := p_branch_id,
     p_description := format('Pembayaran Gaji %s - %s/%s',
       v_employee_name,
@@ -348,11 +353,23 @@ BEGIN
     p_auto_post := TRUE,
     p_created_by := NULL::uuid
   ) c;
+
+  -- Validation: Ensure journal was created successfully
+  IF NOT v_journal_success OR v_journal_id IS NULL THEN
+    RETURN QUERY SELECT FALSE, NULL::UUID, 0, 0,
+      'Gagal Jurnal: ' || COALESCE(v_journal_error, 'Unknown Error')::TEXT;
+    RETURN;
+  END IF;
+
+
+
   -- ==================== UPDATE PAYROLL STATUS ====================
   UPDATE payroll_records
   SET
     status = 'paid',
     paid_date = p_payment_date,
+    payment_account_id = p_payment_account_id,
+    paid_by = auth.uid()::TEXT, -- Capture who paid (if auth context available)
     updated_at = NOW()
   WHERE id = p_payroll_id;
   -- ==================== UPDATE EMPLOYEE ADVANCES ====================

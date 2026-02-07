@@ -9,6 +9,8 @@ Semua perubahan penting pada proyek AQUVIT ERP System didokumentasikan di file i
 3. [Server Architecture](#server-architecture-diagram)
 4. [VPS Server Information](#vps-server-information)
 5. [Version History](#v43-2026-01-04---rpc-atomic-operations-penting)
+   - [v4.6] **Payroll & Journal Hotfixes** 🚑 CRITICAL
+   - [v4.5] **Payroll Journal Balancing** ⚖️
    - [v4.4] **Payroll Dynamic Account Identification** 🚀 NEW
    - [v4.3] **RPC Atomic Operations** ⚠️ PENTING!
    - [v4.2] Accounting System Improvements
@@ -16,6 +18,32 @@ Semua perubahan penting pada proyek AQUVIT ERP System didokumentasikan di file i
    - [v4] APK Build & Bluetooth Printer
    - [v3] Dashboard Enhancement & Retasi
    - [Earlier versions...]
+
+---
+
+## [v4.6] 2026-02-07 - Payroll & Journal Hotfixes (Critical)
+
+### Features & Improvements
+
+1.  **Robust Payroll Journal Logic**
+    - **Duplicate Key Fix:** Mengimplementasikan logika **Looping** pada `create_journal_atomic` untuk mencari nomor jurnal `JE-YYYYMMDD-XXXX` yang benar-benar unik. Menggantikan logika `MAX+1` yang rentan error saat data jurnal memiliki format campuran (4 digit & 7 digit).
+    - **Constraint Violation Fix:** Memperbaiki error saat pembayaran gaji bernilai **Rp 0** (habis dipotong kasbon). Sistem kini cerdas melewati pencatatan kredit Kas/Bank jika `net_salary` = 0.
+    - **Account Code Correction:** Mengoreksi akun default untuk potongan panjar dari '1120' (**Kas Dyah**) menjadi '1220' (**Piutang Karyawan**).
+
+2.  **Frontend Data Visibility**
+    - **Update View `payroll_summary`:** Menulis ulang view database untuk menyertakan kolom `payment_account_name` (dari tabel `accounts`) dan `paid_by_name` (dari tabel `profiles`).
+    - Memperbaiki masalah data "Akun Bayar" dan "Dibayar Oleh" yang tidak muncul di tabel Catatan Gaji.
+
+3.  **Database Cleanups**
+    - Menghapus duplikasi fungsi RPC `process_payroll_complete` yang menyebabkan ambiguitas saat dipanggil oleh Frontend.
+    - Memperbaiki tipe data JOIN pada view (TEXT vs UUID conflict).
+
+### File yang Dimodifikasi
+| File | Perubahan |
+|------|-----------|
+| `database/rpc_by_function/05_accounting_journal.sql` | Looping logic & Ambiguous column fix |
+| `fix_payroll_function_final.sql` | Logic skip zero payment & Account code fix |
+| `update_payroll_view.sql` | Recreate View payroll_summary |
 
 ---
 

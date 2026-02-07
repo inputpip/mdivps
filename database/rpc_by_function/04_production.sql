@@ -103,10 +103,10 @@ BEGIN
     WHERE code = '1310' AND branch_id = p_branch_id AND is_active = TRUE
     LIMIT 1;
     IF v_hpp_account_id IS NOT NULL AND v_persediaan_id IS NOT NULL THEN
-      v_entry_number := 'JE-' || TO_CHAR(NOW(), 'YYYYMMDD') || '-' ||
-        LPAD((SELECT COUNT(*) + 1 FROM journal_entries
-              WHERE branch_id = p_branch_id
-              AND DATE(created_at) = CURRENT_DATE)::TEXT, 4, '0');
+      -- Generate entry number (Global across all branches)
+      v_entry_number := 'JE-' || TO_CHAR(CURRENT_DATE, 'YYYYMMDD') || '-' ||
+        LPAD((COALESCE((SELECT MAX(CAST(SUBSTRING(entry_number FROM '-(\d+)$') AS INTEGER)) 
+                        FROM journal_entries WHERE DATE(entry_date) = CURRENT_DATE), 0) + 1)::TEXT, 4, '0');
       INSERT INTO journal_entries (
         entry_number,
         entry_date,

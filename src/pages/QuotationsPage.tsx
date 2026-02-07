@@ -172,7 +172,7 @@ export default function QuotationsPage() {
     customer_name: '',
     customer_address: '',
     customer_phone: '',
-    valid_until: '',
+    valid_until: undefined as unknown as string,
     notes: '',
     terms: 'Harga belum termasuk PPN\nBerlaku 7 hari sejak tanggal penawaran\nPembayaran: Cash / Transfer',
   })
@@ -325,6 +325,7 @@ export default function QuotationsPage() {
           selectedQuotation.id!,
           {
             ...formData,
+            valid_until: formData.valid_until || undefined,
             subtotal,
             total,
           },
@@ -335,6 +336,7 @@ export default function QuotationsPage() {
         await quotationService.createQuotation(
           {
             ...formData,
+            valid_until: formData.valid_until || undefined,
             quotation_date: new Date().toISOString(),
             status: 'draft',
             subtotal,
@@ -365,7 +367,7 @@ export default function QuotationsPage() {
       customer_name: '',
       customer_address: '',
       customer_phone: '',
-      valid_until: '',
+      valid_until: undefined as unknown as string,
       notes: '',
       terms: 'Harga belum termasuk PPN\nBerlaku 7 hari sejak tanggal penawaran\nPembayaran: Cash / Transfer',
     })
@@ -383,7 +385,7 @@ export default function QuotationsPage() {
         customer_name: fullQuotation.customer_name,
         customer_address: fullQuotation.customer_address || '',
         customer_phone: fullQuotation.customer_phone || '',
-        valid_until: fullQuotation.valid_until || '',
+        valid_until: fullQuotation.valid_until || undefined as unknown as string,
         notes: fullQuotation.notes || '',
         terms: fullQuotation.terms || '',
       })

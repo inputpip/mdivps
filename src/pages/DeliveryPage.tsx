@@ -17,7 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Truck, Package, Search, RefreshCw, Clock, CheckCircle, AlertCircle, Plus, History, Eye, Camera, Download, Filter, Calendar, Trash2, Loader2, Pencil, ChevronDown, ChevronUp, X } from "lucide-react"
+import { Truck, Package, Search, RefreshCw, Clock, CheckCircle, AlertCircle, Plus, History, Eye, Camera, Download, Filter, Calendar, Trash2, Loader2, Pencil, ChevronDown, ChevronUp, X, FileText } from "lucide-react"
 import { format } from "date-fns"
 import { id as idLocale } from "date-fns/locale/id"
 import { useTransactionsReadyForDelivery, useDeliveryHistory, useDeliveries } from "@/hooks/useDeliveries"
@@ -256,6 +256,133 @@ export default function DeliveryPage() {
     }
   }
 
+  const generateActiveDeliveriesPDF = async () => {
+    if (!filteredTransactions || filteredTransactions.length === 0) {
+      toast({
+        title: "Tidak ada data",
+        description: "Tidak ada data pengantaran aktif untuk dicetak",
+        variant: "destructive"
+      })
+      return
+    }
+
+    setIsGeneratingPDF(true)
+
+    try {
+      const doc = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4'
+      })
+
+      const pageWidth = 297
+      const margin = 15
+
+      // Header
+      doc.setFontSize(18)
+      doc.setFont(undefined, 'bold')
+      doc.text('DAFTAR PESANAN SIAP ANTAR', pageWidth / 2, 20, { align: 'center' })
+
+      // Filter info
+      doc.setFontSize(10)
+      doc.setFont(undefined, 'normal')
+      let yPos = 30
+
+      const filterInfo = []
+      if (searchQuery) {
+        filterInfo.push(`Pencarian: "${searchQuery}"`)
+      }
+
+      doc.text(`Dicetak pada: ${format(new Date(), 'dd MMM yyyy HH:mm', { locale: idLocale })}`, margin, yPos)
+      yPos += 7
+
+      if (filterInfo.length > 0) {
+        doc.text(`Filter: ${filterInfo.join(' | ')}`, margin, yPos)
+        yPos += 10
+      } else {
+        yPos += 3
+      }
+
+      // Summary
+      const totalOrders = filteredTransactions.length
+      const totalItems = filteredTransactions.reduce((acc, t) => acc + t.deliverySummary.reduce((sum, item) => sum + item.remainingQuantity, 0), 0)
+      const totalValue = filteredTransactions.reduce((acc, t) => acc + t.total, 0)
+
+      doc.setFont(undefined, 'bold')
+      doc.text(`Total Pesanan: ${totalOrders}`, margin, yPos)
+      yPos += 6
+      doc.text(`Total Sisa Item: ${totalItems}`, margin, yPos)
+      yPos += 6
+      doc.text(`Total Nilai Order: ${new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(totalValue)}`, margin, yPos)
+
+      yPos += 10
+
+      // Table data
+      const tableData = filteredTransactions.map((t, index) => {
+        const remaining = t.deliverySummary.reduce((sum, item) => sum + item.remainingQuantity, 0)
+        const status = getOverallStatus(t).status
+
+        return [
+          (index + 1).toString(),
+          t.id,
+          t.customerName,
+          format(new Date(t.orderDate), 'dd/MM/yyyy HH:mm'),
+          new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(t.total),
+          remaining.toString(),
+          status,
+          t.cashierName || '-'
+        ]
+      })
+
+      // Table
+      autoTable(doc, {
+        head: [['No', 'Order ID', 'Pelanggan', 'Tanggal Order', 'Total Order', 'Sisa Item', 'Status', 'Kasir']],
+        body: tableData,
+        startY: yPos,
+        margin: { left: margin, right: margin },
+        styles: { fontSize: 9, cellPadding: 3 },
+        headStyles: { fillColor: [22, 163, 74], textColor: 255, fontStyle: 'bold' }, // Green header to differentiate with history (blue)
+        columnStyles: {
+          0: { halign: 'center', cellWidth: 15 },
+          1: { halign: 'center', cellWidth: 35 },
+          2: { halign: 'left' },
+          3: { halign: 'center', cellWidth: 35 },
+          4: { halign: 'right', cellWidth: 40 },
+          5: { halign: 'center', cellWidth: 25 },
+          6: { halign: 'center', cellWidth: 30 },
+          7: { halign: 'left', cellWidth: 30 }
+        },
+        didDrawPage: (data) => {
+          // Footer
+          const pageHeight = doc.internal.pageSize.height
+          doc.setFontSize(8)
+          doc.setTextColor(100)
+          doc.setFont(undefined, 'normal')
+          doc.text(`Dicetak oleh: ${user?.name || user?.email || 'System'}`, margin, pageHeight - 10)
+          doc.text(`Halaman ${data.pageNumber}`, pageWidth - margin, pageHeight - 10, { align: 'right' })
+        }
+      })
+
+      const fileName = `laporan-pengantaran-aktif-${format(new Date(), 'yyyy-MM-dd-HHmm')}.pdf`
+      doc.save(fileName)
+
+      toast({
+        title: "PDF Berhasil Dibuat",
+        description: `Laporan berhasil diunduh: ${fileName}`
+      })
+
+    } catch (error) {
+      console.error('Error generating PDF:', error)
+      toast({
+        variant: "destructive",
+        title: "Gagal Membuat PDF",
+        description: "Terjadi kesalahan saat membuat file PDF."
+      })
+    } finally {
+      setIsGeneratingPDF(false)
+    }
+  }
+
   const generateHistoryPDF = async () => {
     setIsGeneratingPDF(true)
 
@@ -482,6 +609,44 @@ export default function DeliveryPage() {
           <div className="text-sm text-muted-foreground">
             {filteredTransactions.length} dari {transactions?.length || 0} pengantaran
           </div>
+
+          {!isLoading && filteredTransactions.length > 0 && !isMobile && (
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 p-4 bg-muted/30 rounded-lg border">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 w-full md:w-auto">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground mb-1">Total Pesanan</p>
+                  <p className="text-2xl font-bold">{filteredTransactions.length}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground mb-1">Total Sisa Item</p>
+                  <p className="text-2xl font-bold text-orange-600">
+                    {filteredTransactions.reduce((acc, t) => acc + t.deliverySummary.reduce((sum, item) => sum + item.remainingQuantity, 0), 0)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground mb-1">Total Nilai Order</p>
+                  <p className="text-2xl font-bold text-green-600">
+                    {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(
+                      filteredTransactions.reduce((acc, t) => acc + t.total, 0)
+                    )}
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                className="w-full md:w-auto gap-2 border-red-200 hover:bg-red-50 hover:text-red-700 dark:border-red-900 dark:hover:bg-red-900/20"
+                onClick={generateActiveDeliveriesPDF}
+                disabled={isGeneratingPDF}
+              >
+                {isGeneratingPDF ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <FileText className="h-4 w-4 text-red-600" />
+                )}
+                Export PDF
+              </Button>
+            </div>
+          )}
 
           {/* Mobile View - Card List */}
           {isMobile ? (

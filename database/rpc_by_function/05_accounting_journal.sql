@@ -667,6 +667,7 @@ CREATE OR REPLACE FUNCTION public.create_journal_atomic(p_branch_id uuid, p_desc
 AS $function$
 DECLARE
   v_journal_id UUID := gen_random_uuid();
+  v_next_num INTEGER;
   v_entry_number TEXT;
   v_total_debit NUMERIC := 0;
   v_total_credit NUMERIC := 0;
@@ -721,8 +722,23 @@ BEGIN
     RETURN;
   END IF;
 
-  -- Generate entry number
-  v_entry_number := 'JE-' || TO_CHAR(p_entry_date, 'YYYYMMDD') || '-' || LPAD(FLOOR(RANDOM()*10000)::TEXT, 4, '0');
+  -- Generate entry number (Global across all branches)
+  -- Generate entry number (Global across all branches)
+  -- Uses Loop to prevent Duplicate Key Exception
+  v_next_num := COALESCE(
+      (SELECT MAX(CAST(SUBSTRING(je.entry_number FROM '-(\d+)$') AS INTEGER))
+       FROM journal_entries je
+       WHERE DATE(je.entry_date) = p_entry_date),
+      0
+  );
+
+  LOOP
+    v_next_num := v_next_num + 1;
+    v_entry_number := 'JE-' || TO_CHAR(p_entry_date, 'YYYYMMDD') || '-' || LPAD(v_next_num::TEXT, 4, '0');
+    
+    -- Exit loop if this entry number does NOT exist
+    EXIT WHEN NOT EXISTS (SELECT 1 FROM journal_entries je WHERE je.entry_number = v_entry_number);
+  END LOOP;
 
   -- Create journal entry
   INSERT INTO journal_entries (
@@ -800,7 +816,6 @@ BEGIN
   END IF;
 
   RETURN QUERY SELECT TRUE, v_journal_id, v_entry_number, NULL::TEXT;
-
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, NULL::UUID, NULL::TEXT, SQLERRM::TEXT;
 END;
