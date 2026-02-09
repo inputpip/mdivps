@@ -13,7 +13,13 @@
 -- =====================================================
 -- Function: get_payment_history_rpc
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.get_payment_history_rpc(p_branch_id uuid, p_limit integer DEFAULT 100, p_date_from date DEFAULT NULL, p_date_to date DEFAULT NULL, p_account_id text DEFAULT NULL)
+CREATE OR REPLACE FUNCTION public.get_payment_history_rpc(
+    p_branch_id uuid, 
+    p_limit integer DEFAULT 100, 
+    p_date_from date DEFAULT NULL, 
+    p_date_to date DEFAULT NULL, 
+    p_account_id text DEFAULT NULL
+)
  RETURNS TABLE(id uuid, payment_date timestamp with time zone, amount numeric, transaction_id text, customer_name text, payment_method text, notes text, account_name text, user_name text, created_at timestamp with time zone)
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -25,7 +31,7 @@ BEGIN
         ph.payment_date,
         ph.amount,
         ph.transaction_id,
-        t.customer_name,
+        COALESCE(t.customer_name, 'Non-transaction Payment') as customer_name,
         ph.payment_method,
         ph.notes,
         COALESCE(a.name, 'Kas Besar') as account_name,

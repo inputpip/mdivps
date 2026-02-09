@@ -10,7 +10,7 @@ import { useBranch } from "@/contexts/BranchContext"
 import { useQueryClient } from "@tanstack/react-query"
 import { supabase } from "@/integrations/supabase/client"
 import { format } from 'date-fns'
-import { FileText, Download, Filter, Trash2, FileSpreadsheet } from "lucide-react"
+import { FileText, Download, Filter, Trash2, FileSpreadsheet, Search } from "lucide-react"
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
@@ -30,6 +30,7 @@ export function PaymentHistoryTable() {
     date_to: '',
     account_id: 'all'
   })
+  const [searchQuery, setSearchQuery] = useState('')
 
   const { paymentHistory, isLoading } = usePaymentHistory(filters)
 
@@ -43,10 +44,28 @@ export function PaymentHistoryTable() {
       date_to: '',
       account_id: 'all'
     })
+    setSearchQuery('')
   }
 
+  const filteredPaymentHistory = paymentHistory.filter(payment => {
+    if (!searchQuery) return true
+
+    const query = searchQuery.toLowerCase()
+
+    // Search by transaction ID / Reference ID
+    if (payment.reference_id?.toLowerCase().includes(query)) return true
+
+    // Search by customer name
+    if (payment.customer_name?.toLowerCase().includes(query)) return true
+
+    // Search by description/notes
+    if (payment.description?.toLowerCase().includes(query)) return true
+
+    return false
+  })
+
   const generateExcel = () => {
-    const data = paymentHistory.map(payment => ({
+    const data = filteredPaymentHistory.map(payment => ({
       Tanggal: format(payment.created_at, 'dd/MM/yyyy HH:mm'),
       Pelanggan: payment.customer_name || payment.reference_id?.split('-')[0] || 'Unknown',
       Keterangan: payment.description,
@@ -95,7 +114,7 @@ export function PaymentHistoryTable() {
     }
 
     // Table data
-    const tableData = paymentHistory.map(payment => [
+    const tableData = filteredPaymentHistory.map(payment => [
       format(payment.created_at, 'dd/MM/yyyy HH:mm'),
       payment.description,
       payment.account_name,
@@ -227,7 +246,7 @@ export function PaymentHistoryTable() {
     }
   }
 
-  const total = paymentHistory.reduce((sum, payment) => sum + payment.amount, 0)
+  const total = filteredPaymentHistory.reduce((sum, payment) => sum + payment.amount, 0)
 
   return (
     <div className="space-y-4">
@@ -239,6 +258,17 @@ export function PaymentHistoryTable() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div className="md:col-span-4">
+            <div className="relative w-full">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Cari no. transaksi, nama pelanggan, atau keterangan..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+          </div>
           <div>
             <Label htmlFor="date_from" className="text-xs text-muted-foreground">Tanggal Dari</Label>
             <Input
@@ -281,7 +311,7 @@ export function PaymentHistoryTable() {
               size="sm"
               variant="outline"
               onClick={generateExcel}
-              disabled={paymentHistory.length === 0}
+              disabled={filteredPaymentHistory.length === 0}
               className="border-green-600 text-green-600 hover:bg-green-50"
             >
               <FileSpreadsheet className="h-4 w-4 mr-1" />
@@ -290,7 +320,7 @@ export function PaymentHistoryTable() {
             <Button
               size="sm"
               onClick={generatePDF}
-              disabled={paymentHistory.length === 0}
+              disabled={filteredPaymentHistory.length === 0}
               className="bg-red-600 hover:bg-red-700 text-white"
             >
               <FileText className="h-4 w-4 mr-1" />
@@ -311,7 +341,7 @@ export function PaymentHistoryTable() {
           </div>
           <div className="text-right">
             <p className="text-sm text-blue-600 dark:text-blue-400">Total Transaksi</p>
-            <p className="text-xl font-bold text-blue-800 dark:text-blue-300">{paymentHistory.length}</p>
+            <p className="text-xl font-bold text-blue-800 dark:text-blue-300">{filteredPaymentHistory.length}</p>
           </div>
         </div>
       </div>
@@ -342,14 +372,14 @@ export function PaymentHistoryTable() {
                     Loading...
                   </td>
                 </tr>
-              ) : paymentHistory.length === 0 ? (
+              ) : filteredPaymentHistory.length === 0 ? (
                 <tr>
                   <td className="px-3 py-6 text-center text-slate-500" colSpan={7}>
                     Tidak ada data pembayaran piutang
                   </td>
                 </tr>
               ) : (
-                paymentHistory.map((payment) => (
+                filteredPaymentHistory.map((payment) => (
                   <tr key={payment.id} className="border-t">
                     <td className="px-3 py-2">
                       {format(payment.created_at, 'dd/MM/yyyy HH:mm')}
