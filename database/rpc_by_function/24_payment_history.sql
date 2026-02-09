@@ -1,6 +1,6 @@
 -- =====================================================
 -- 24 PAYMENT HISTORY
--- Generated: 2026-01-09T00:29:07.867Z
+-- Generated: 2026-02-09 (Updated with Filter Support)
 -- Total functions: 4
 -- =====================================================
 
@@ -13,7 +13,7 @@
 -- =====================================================
 -- Function: get_payment_history_rpc
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.get_payment_history_rpc(p_branch_id uuid, p_limit integer DEFAULT 100)
+CREATE OR REPLACE FUNCTION public.get_payment_history_rpc(p_branch_id uuid, p_limit integer DEFAULT 100, p_date_from date DEFAULT NULL, p_date_to date DEFAULT NULL, p_account_id text DEFAULT NULL)
  RETURNS TABLE(id uuid, payment_date timestamp with time zone, amount numeric, transaction_id text, customer_name text, payment_method text, notes text, account_name text, user_name text, created_at timestamp with time zone)
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -36,6 +36,9 @@ BEGIN
     LEFT JOIN accounts a ON ph.account_id = a.id
     LEFT JOIN profiles pr ON ph.recorded_by = pr.id
     WHERE ph.branch_id = p_branch_id
+      AND (p_date_from IS NULL OR DATE(ph.payment_date) >= p_date_from)
+      AND (p_date_to IS NULL OR DATE(ph.payment_date) <= p_date_to)
+      AND (p_account_id IS NULL OR p_account_id = 'all' OR ph.account_id = p_account_id)
     ORDER BY ph.payment_date DESC
     LIMIT p_limit;
 END;
@@ -181,5 +184,3 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $function$
 ;
-
-

@@ -52,9 +52,27 @@ export interface Quotation {
 
 class QuotationService {
   /**
-   * Generate quotation number
+   * Generate quotation number using server-side RPC to ensure uniqueness across branches
    */
   async generateQuotationNumber(branchId: string): Promise<string> {
+    const { data, error } = await supabase.rpc('generate_unique_quotation_number', {
+      p_branch_id: branchId
+    });
+
+    if (error) {
+      console.error('[QuotationService] Error generating quotation number via RPC:', error);
+      // Fallback to client-side generation if RPC fails
+      return this.generateQuotationNumberFallback(branchId);
+    }
+
+    return data;
+  }
+
+  /**
+   * Fallback: Generate quotation number client-side (legacy method)
+   * This may fail with 409 Conflict if RLS hides cross-branch collisions
+   */
+  private async generateQuotationNumberFallback(branchId: string): Promise<string> {
     const today = new Date();
     const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
 
@@ -68,8 +86,45 @@ class QuotationService {
       .eq('branch_id', branchId)
       .gte('created_at', startOfDay.toISOString());
 
-    const sequence = String((count || 0) + 1).padStart(4, '0');
-    return `QT-${dateStr}-${sequence}`;
+    let sequenceNum = (count || 0) + 1;
+    let quotationNumber = '';
+    let isUnique = false;
+    let attempts = 0;
+    const maxAttempts = 20;
+
+    // Retry loop to ensure uniqueness
+    while (!isUnique && attempts < maxAttempts) {
+      const sequence = String(sequenceNum).padStart(4, '0');
+      quotationNumber = `QT-${dateStr}-${sequence}`;
+
+      // Check if this ID already exists
+      const { data, error } = await supabase
+        .from('quotations')
+        .select('id')
+        .eq('id', quotationNumber)
+        .maybeSingle();
+
+      if (error) {
+        console.error('[QuotationService] Error checking uniqueness:', error);
+        break;
+      }
+
+      if (!data) {
+        isUnique = true;
+      } else {
+        console.warn(`[QuotationService] Collision detected for ${quotationNumber}, retrying...`);
+        sequenceNum++; // Increment and try again
+        attempts++;
+      }
+    }
+
+    if (!isUnique) {
+      // Fallback: Use timestamp to force uniqueness if loop failed
+      const timestamp = Date.now().toString().slice(-4);
+      quotationNumber = `QT-${dateStr}-${String(sequenceNum).padStart(4, '0')}-${timestamp}`;
+    }
+
+    return quotationNumber;
   }
 
   /**

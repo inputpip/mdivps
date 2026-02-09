@@ -21,6 +21,23 @@ Semua perubahan penting pada proyek AQUVIT ERP System didokumentasikan di file i
 
 ---
 
+## [v4.8] 2026-02-09 - Payroll Deduction Logic Fix 🐞
+
+### Bug Fixes
+1. **Payroll Advance Deduction Logic**
+   - **Root Cause Fix:** Memperbaiki fungsi `process_payroll_complete` yang gagal memotong saldo panjar karyawan (`employee_advances`). Masalah disebabkan oleh query panjar yang kurang spesifik (missing strict `branch_id` filter) sehingga update saldo terlewati (silent fail).
+   - **Safety Rollback:** Memperbaiki fungsi `void_payroll_record` dengan logika cerdas: sistem hanya akan mengembalikan dana ke saldo panjar **jika saldo tersebut benar-benar berkurang sebelumnya**. Ini mencegah saldo panjar bertambah ganda saat membatalkan transaksi yang sebelumnya *gagal potong*.
+
+2. **Database Consistency**
+   - Script SQL terupdate (`12_payroll_salary.sql`) diterapkan di database **Nabire** (`aquvit_new`) dan **Manokwari** (`mkw_db`).
+
+### File yang Dimodifikasi
+| File | Perubahan |
+|------|-----------|
+| `database/rpc_by_function/12_payroll_salary.sql` | Rewrite logic `process_payroll_complete` & `void_payroll_record` |
+
+---
+
 ## [v4.7] 2026-02-08 - Active Delivery PDF & Quotation Fixes 🚚
 
 ### Features & Improvements
@@ -32,6 +49,7 @@ Semua perubahan penting pada proyek AQUVIT ERP System didokumentasikan di file i
 
 2.  **Quotation System Fixes**
     - **Database Access Fix:** Mengaktifkan Row Level Security (RLS) pada tabel `quotations` di database Nabire (`aquvit_new`) dan memberikan permission `GRANT ALL` ke `authenticated` role. Sebelumnya request ditolak (Unauthorized/Bad Request).
+    - **RLS Isolation:** Memastikan penawaran (quotation) hanya dapat dilihat oleh user di cabang yang sama (atau cabang yang diizinkan). Mencegah kebocoran data antar cabang.
     - **Timestamp Error Fix:** Memperbaiki bug "invalid input syntax for type timestamp" dengan menginisialisasi field `valid_until` sebagai `undefined` (bukan string kosong `""`) pada frontend.
 
 ### File yang Dimodifikasi

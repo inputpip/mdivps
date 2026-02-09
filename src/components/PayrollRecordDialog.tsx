@@ -33,7 +33,15 @@ export function PayrollRecordDialog({
   const { toast } = useToast()
   const { employees } = useEmployees()
   const { accounts } = useAccounts()
-  const { calculatePayroll, createPayrollRecord } = usePayrollRecords()
+  const { calculatePayroll, createPayrollRecord, payrollRecords: existingRecords } = usePayrollRecords({
+    year: selectedYear,
+    month: selectedMonth
+  })
+
+  // Filter employees who already have a payroll record for this period
+  const existingEmployeeIds = new Set(existingRecords?.map(record => record.employeeId) || [])
+  const availableEmployees = employees?.filter(emp => !existingEmployeeIds.has(emp.id))
+
 
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>("")
   const [calculation, setCalculation] = useState<PayrollCalculation | null>(null)
@@ -195,7 +203,7 @@ export function PayrollRecordDialog({
                   <SelectValue placeholder="Pilih karyawan..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {employees?.map((employee) => (
+                  {availableEmployees?.map((employee) => (
                     <SelectItem key={employee.id} value={employee.id}>
                       <div className="flex items-center justify-between w-full">
                         <span>{employee.name}</span>
@@ -203,6 +211,11 @@ export function PayrollRecordDialog({
                       </div>
                     </SelectItem>
                   ))}
+                  {availableEmployees?.length === 0 && (
+                    <SelectItem value="none" disabled>
+                      Semua karyawan sudah digaji bulan ini
+                    </SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>

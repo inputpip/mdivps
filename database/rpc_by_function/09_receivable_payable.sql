@@ -1,6 +1,6 @@
 -- =====================================================
 -- 09 RECEIVABLE PAYABLE
--- Generated: 2026-01-09T00:29:07.861Z
+-- Generated: 2026-02-09 (Added Backdate Support)
 -- Total functions: 8
 -- =====================================================
 
@@ -74,7 +74,16 @@ $function$
 -- =====================================================
 -- Function: pay_receivable_complete_rpc
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.pay_receivable_complete_rpc(p_transaction_id text, p_amount numeric, p_payment_account_id text, p_notes text DEFAULT NULL::text, p_branch_id uuid DEFAULT NULL::uuid, p_user_id uuid DEFAULT NULL::uuid, p_recorded_by_name text DEFAULT NULL::text)
+CREATE OR REPLACE FUNCTION public.pay_receivable_complete_rpc(
+    p_transaction_id text, 
+    p_amount numeric, 
+    p_payment_account_id text, 
+    p_notes text DEFAULT NULL::text, 
+    p_branch_id uuid DEFAULT NULL::uuid, 
+    p_user_id uuid DEFAULT NULL::uuid, 
+    p_recorded_by_name text DEFAULT NULL::text,
+    p_payment_date date DEFAULT CURRENT_DATE
+)
  RETURNS TABLE(success boolean, payment_id uuid, journal_id uuid, error_message text)
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -85,7 +94,11 @@ DECLARE
     v_journal_result RECORD;
     v_new_paid_amount NUMERIC;
     v_new_status TEXT;
+    v_payment_date DATE;
 BEGIN
+    -- Set payment date
+    v_payment_date := COALESCE(p_payment_date, CURRENT_DATE);
+
     -- Get transaction info
     SELECT 
         t.id,
@@ -158,19 +171,21 @@ BEGIN
         (v_transaction.total - v_new_paid_amount),
         'Tunai',
         p_payment_account_id,
-        NOW(),
+        v_payment_date,
         p_notes,
         p_user_id,
         p_recorded_by_name,
-        NOW()
+        NOW() -- CreatedAt remains NOW even for backdated payments
     ) RETURNING id INTO v_payment_id;
 
     -- 3. Create journal entry via RPC
+    -- Note: Ensure create_receivable_payment_journal_rpc accepts date parameter
+    -- Usually it is signature: (p_branch_id, p_transaction_id, p_date, p_amount, p_customer_name, p_account_id)
     SELECT * INTO v_journal_result
     FROM create_receivable_payment_journal_rpc(
         p_branch_id,
         p_transaction_id,
-        CURRENT_DATE,
+        v_payment_date,
         p_amount,
         v_transaction.customer_name,
         p_payment_account_id
@@ -194,7 +209,7 @@ $function$
 
 
 -- =====================================================
--- Function: pay_receivable_complete_rpc
+-- Function: pay_receivable_complete_rpc (OVERLOAD)
 -- =====================================================
 CREATE OR REPLACE FUNCTION public.pay_receivable_complete_rpc(p_branch_id uuid, p_receivable_id uuid, p_amount numeric, p_payment_method text DEFAULT 'cash'::text, p_payment_account_id text DEFAULT NULL::text, p_notes text DEFAULT NULL::text, p_created_by uuid DEFAULT NULL::uuid)
  RETURNS TABLE(success boolean, payment_id uuid, journal_id uuid, error_message text)
@@ -470,5 +485,3 @@ BEGIN
 END;
 $function$
 ;
-
-

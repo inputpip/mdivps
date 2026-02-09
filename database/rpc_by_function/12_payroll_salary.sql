@@ -1,6 +1,6 @@
 -- =====================================================
 -- 12 PAYROLL SALARY
--- Generated: 2026-01-09T00:29:07.863Z
+-- Generated: 2026-02-09 (Fixed Advance Deduction Logic)
 -- Total functions: 8
 -- =====================================================
 
@@ -72,6 +72,12 @@ BEGIN
   v_total_deductions := v_advance_deduction + v_salary_deduction;
   v_gross_salary := v_base_salary + v_commission + v_bonus;
   v_net_salary := v_gross_salary - v_total_deductions;
+  
+  -- Prevent negative net salary (walaupun frontend validasi, backend harus jaga)
+  IF v_net_salary < 0 THEN
+    v_net_salary := 0; -- Atau throw error jika kebijakan tidak membolehkan
+  END IF;
+
   -- ==================== CHECK DUPLICATE ====================
   IF EXISTS (
     SELECT 1 FROM payroll_records
@@ -79,6 +85,7 @@ BEGIN
       AND period_start = v_period_start
       AND period_end = v_period_end
       AND branch_id = p_branch_id
+      AND status != 'voided' -- Validasi tambahan, avoid voided records blocking new ones? usually deleted
   ) THEN
     RETURN QUERY SELECT FALSE, NULL::UUID, 0::NUMERIC,
       format('Payroll untuk karyawan ini periode %s-%s sudah ada', v_period_year, v_period_month)::TEXT;
@@ -234,6 +241,7 @@ BEGIN
       'Payment account ID is required'::TEXT;
     RETURN;
   END IF;
+  
   -- ==================== GET PAYROLL DATA ====================
   SELECT
     pr.*,
@@ -242,6 +250,7 @@ BEGIN
   FROM payroll_records pr
   LEFT JOIN profiles p ON p.id = pr.employee_id
   WHERE pr.id = p_payroll_id AND pr.branch_id = p_branch_id;
+  
   IF v_payroll.id IS NULL THEN
     RETURN QUERY SELECT FALSE, NULL::UUID, 0, 0,
       'Payroll record not found in this branch'::TEXT;
@@ -252,6 +261,7 @@ BEGIN
       'Payroll sudah dibayar'::TEXT;
     RETURN;
   END IF;
+  
   -- ==================== PREPARE DATA ====================
   v_employee_name := COALESCE(v_payroll.employee_name, 'Karyawan');
   v_advance_deduction := COALESCE(v_payroll.advance_deduction, 0);
@@ -263,6 +273,7 @@ BEGIN
                     COALESCE(v_payroll.total_bonus, 0);
   v_period_start := v_payroll.period_start;
   v_period_end := v_payroll.period_end;
+  
   -- ==================== GET ACCOUNT IDS ====================
   -- Beban Gaji (Keyword Search)
   IF p_expense_account_id IS NOT NULL THEN
@@ -277,11 +288,19 @@ BEGIN
   END IF;
 
   -- Panjar Karyawan / Kasbon (Keyword Search)
+  -- PRIORITAS: "Piutang Karyawan" (1120/1220), lalu "Panjar", lalu "Kasbon"
   SELECT id INTO v_panjar_account
   FROM accounts
   WHERE branch_id = p_branch_id 
-    AND (name ILIKE '%Panjar%' OR name ILIKE '%Kasbon%' OR (name ILIKE '%Piutang%' AND name ILIKE '%Karyawan%'))
+    AND (
+      (name ILIKE '%Piutang%' AND name ILIKE '%Karyawan%') 
+      OR name ILIKE '%Panjar%' 
+      OR name ILIKE '%Kasbon%'
+    )
     AND is_active = TRUE
+  ORDER BY 
+    CASE WHEN name ILIKE '%Piutang Karyawan%' THEN 1 ELSE 2 END, -- Prioritaskan 'Piutang Karyawan'
+    code ASC
   LIMIT 1;
 
   IF v_beban_gaji_account IS NULL THEN
@@ -289,6 +308,7 @@ BEGIN
       'Akun Beban Gaji tidak ditemukan (Keyword: Beban Gaji). Mohon periksa nama akun di COA Anda.'::TEXT;
     RETURN;
   END IF;
+  
   -- ==================== BUILD JOURNAL LINES ====================
   -- Debit: Beban Gaji (gross salary)
   v_journal_lines := v_journal_lines || jsonb_build_object(
@@ -300,13 +320,17 @@ BEGIN
       EXTRACT(YEAR FROM v_period_start),
       EXTRACT(MONTH FROM v_period_start))
   );
-  -- Credit: Kas (net salary)
-  v_journal_lines := v_journal_lines || jsonb_build_object(
-    'account_id', p_payment_account_id,
-    'debit_amount', 0,
-    'credit_amount', v_net_salary,
-    'description', format('Pembayaran gaji %s', v_employee_name)
-  );
+  
+  -- Credit: Kas (net salary) - Only if net salary > 0
+  IF v_net_salary > 0 THEN
+    v_journal_lines := v_journal_lines || jsonb_build_object(
+      'account_id', p_payment_account_id,
+      'debit_amount', 0,
+      'credit_amount', v_net_salary,
+      'description', format('Pembayaran gaji %s', v_employee_name)
+    );
+  END IF;
+  
   -- Credit: Panjar Karyawan (if any deductions)
   IF v_advance_deduction > 0 AND v_panjar_account IS NOT NULL THEN
     v_journal_lines := v_journal_lines || jsonb_build_object(
@@ -317,7 +341,7 @@ BEGIN
     );
   END IF;
 
-  -- Credit: Other deductions (salary deduction) - IMPORTANT: MUST BALANCE THE JOURNAL
+  -- Credit: Other deductions (salary deduction)
   IF v_salary_deduction > 0 THEN
     -- Find an adjustment/income account for deductions
     DECLARE
@@ -336,7 +360,7 @@ BEGIN
       );
     END;
   END IF;
-  -- ==================== CREATE JOURNAL ====================
+  
   -- ==================== CREATE JOURNAL ====================
   SELECT c.success, c.journal_id, c.error_message 
   INTO v_journal_success, v_journal_id, v_journal_error
@@ -361,36 +385,50 @@ BEGIN
     RETURN;
   END IF;
 
-
-
   -- ==================== UPDATE PAYROLL STATUS ====================
   UPDATE payroll_records
   SET
     status = 'paid',
     paid_date = p_payment_date,
     payment_account_id = p_payment_account_id,
-    paid_by = auth.uid()::TEXT, -- Capture who paid (if auth context available)
+    paid_by = auth.uid()::TEXT, -- Capture who paid
     updated_at = NOW()
   WHERE id = p_payroll_id;
+  
   -- ==================== UPDATE EMPLOYEE ADVANCES ====================
+  -- FIX: Ensure we query by branch_id and handle multiple advances correctly
   IF v_advance_deduction > 0 AND v_payroll.employee_id IS NOT NULL THEN
     v_remaining_deduction := v_advance_deduction;
+    
     FOR v_advance IN
       SELECT id, remaining_amount
       FROM employee_advances
       WHERE employee_id = v_payroll.employee_id
         AND remaining_amount > 0
+        AND branch_id = p_branch_id -- FILTER BY BRANCH
       ORDER BY date ASC  -- FIFO: oldest first
     LOOP
       EXIT WHEN v_remaining_deduction <= 0;
+      
       v_amount_to_deduct := LEAST(v_remaining_deduction, v_advance.remaining_amount);
+      
+      -- Update advance balance
       UPDATE employee_advances
-      SET remaining_amount = remaining_amount - v_amount_to_deduct
+      SET 
+        remaining_amount = remaining_amount - v_amount_to_deduct,
+        updated_at = NOW(),
+        -- Optional: Update status if fully paid? (Not modifying schema for now)
+        notes = CASE 
+          WHEN remaining_amount - v_amount_to_deduct <= 0 THEN notes || ' (Lunas via Payroll)'
+          ELSE notes
+        END
       WHERE id = v_advance.id;
+      
       v_remaining_deduction := v_remaining_deduction - v_amount_to_deduct;
       v_advances_updated := v_advances_updated + 1;
     END LOOP;
   END IF;
+  
   -- ==================== UPDATE COMMISSION ENTRIES ====================
   IF v_payroll.employee_id IS NOT NULL THEN
     UPDATE commission_entries
@@ -402,6 +440,7 @@ BEGIN
       AND created_at <= v_period_end + INTERVAL '1 day';
     GET DIAGNOSTICS v_commissions_paid = ROW_COUNT;
   END IF;
+  
   -- ==================== SUCCESS ====================
   RETURN QUERY SELECT TRUE, v_journal_id, v_advances_updated, v_commissions_paid, NULL::TEXT;
 EXCEPTION WHEN OTHERS THEN
@@ -595,7 +634,6 @@ $function$
 -- =====================================================
 -- Function: void_payroll_record
 -- =====================================================
--- UPDATED: Added rollback for commissions and advances
 CREATE OR REPLACE FUNCTION public.void_payroll_record(p_payroll_id uuid, p_branch_id uuid, p_reason text DEFAULT 'Cancelled'::text)
  RETURNS TABLE(success boolean, journals_voided integer, commissions_restored integer, advances_restored numeric, error_message text)
  LANGUAGE plpgsql
@@ -607,6 +645,8 @@ DECLARE
   v_commissions_restored INTEGER := 0;
   v_advances_restored NUMERIC := 0;
   v_advance_record RECORD;
+  v_remaining_restore NUMERIC;
+  v_restore_amount NUMERIC;
 BEGIN
   -- ==================== VALIDASI ====================
   IF p_branch_id IS NULL THEN
@@ -626,7 +666,6 @@ BEGIN
 
   -- ==================== ROLLBACK COMMISSIONS ====================
   -- Reset commission status from 'paid' back to 'pending'
-  -- FIX: Use reference_id or check column existence
   UPDATE commission_entries
   SET
     status = 'pending',
@@ -639,29 +678,50 @@ BEGIN
   GET DIAGNOSTICS v_commissions_restored = ROW_COUNT;
 
   -- ==================== ROLLBACK ADVANCE DEDUCTIONS ====================
-  -- If payroll had advance deduction, restore the remaining_amount in employee_advances
+  -- Restore amount to advances (Priority: paid off advances, then active ones)
   IF v_payroll.advance_deduction > 0 THEN
-    -- Find advances that were deducted for this payroll and restore them
-    -- We need to track which advances were deducted - check if there's a reference
-    -- For now, we'll restore to the most recent active advance for this employee
+    v_remaining_restore := v_payroll.advance_deduction;
+    
+    -- Loop through advances for this employee, ordered by UpdatedAt DESC (Recently paid first)
+    -- We include ALL statuses because a Paid advance might have been paid by THIS payroll
     FOR v_advance_record IN
       SELECT ea.id, ea.remaining_amount, ea.amount
       FROM employee_advances ea
       WHERE ea.employee_id = v_payroll.employee_id
         AND ea.branch_id = p_branch_id
-        AND ea.status = 'active'
-      ORDER BY ea.created_at DESC
-      LIMIT 1
+        -- We assume we should restore to advances that are not fully unpaid (remaining < amount)
+        AND ea.remaining_amount < ea.amount 
+      ORDER BY ea.updated_at DESC, ea.date DESC
     LOOP
-      -- Restore the deducted amount back to remaining_amount
-      UPDATE employee_advances
-      SET
-        remaining_amount = remaining_amount + v_payroll.advance_deduction,
-        updated_at = NOW()
-      WHERE id = v_advance_record.id;
-
-      v_advances_restored := v_payroll.advance_deduction;
+      EXIT WHEN v_remaining_restore <= 0;
+      
+      -- Calculate how much "space" this advance has to receive funds back
+      -- Space = Original Amount - Remaining Amount
+      v_restore_amount := LEAST(v_remaining_restore, v_advance_record.amount - v_advance_record.remaining_amount);
+      
+      IF v_restore_amount > 0 THEN
+        UPDATE employee_advances
+        SET
+          remaining_amount = remaining_amount + v_restore_amount,
+          updated_at = NOW(),
+          notes = REPLACE(notes, ' (Lunas via Payroll)', '') -- Remove lunas note if present
+        WHERE id = v_advance_record.id;
+        
+        v_remaining_restore := v_remaining_restore - v_restore_amount;
+        v_advances_restored := v_advances_restored + v_restore_amount;
+      END IF;
     END LOOP;
+    
+    -- If there is still amount left to restore (edge case), stick it to the latest advance
+    IF v_remaining_restore > 0 THEN
+      UPDATE employee_advances
+      SET remaining_amount = remaining_amount + v_remaining_restore
+      WHERE id = (
+        SELECT id FROM employee_advances 
+        WHERE employee_id = v_payroll.employee_id AND branch_id = p_branch_id 
+        ORDER BY date DESC LIMIT 1
+      );
+    END IF;
   END IF;
 
   -- ==================== VOID JOURNALS ====================
@@ -678,7 +738,6 @@ BEGIN
   GET DIAGNOSTICS v_journals_voided = ROW_COUNT;
 
   -- ==================== DELETE PAYROLL RECORD ====================
-  -- Note: This will cascade delete related records if FK is set
   DELETE FROM payroll_records WHERE id = p_payroll_id;
 
   -- ==================== SUCCESS ====================
@@ -689,5 +748,3 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $function$
 ;
-
-

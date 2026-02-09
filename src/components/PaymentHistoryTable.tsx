@@ -10,14 +10,13 @@ import { useBranch } from "@/contexts/BranchContext"
 import { useQueryClient } from "@tanstack/react-query"
 import { supabase } from "@/integrations/supabase/client"
 import { format } from 'date-fns'
-import { FileText, Download, Filter, Trash2 } from "lucide-react"
+import { FileText, Download, Filter, Trash2, FileSpreadsheet } from "lucide-react"
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import * as XLSX from 'xlsx'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { useToast } from "@/components/ui/use-toast"
 import { usePermissions } from "@/hooks/usePermissions"
-
-// No need for type declaration when using direct import
 
 export function PaymentHistoryTable() {
   const { accounts } = useAccounts()
@@ -44,6 +43,34 @@ export function PaymentHistoryTable() {
       date_to: '',
       account_id: 'all'
     })
+  }
+
+  const generateExcel = () => {
+    const data = paymentHistory.map(payment => ({
+      Tanggal: format(payment.created_at, 'dd/MM/yyyy HH:mm'),
+      Pelanggan: payment.customer_name || payment.reference_id?.split('-')[0] || 'Unknown',
+      Keterangan: payment.description,
+      Akun: payment.account_name,
+      Jumlah: payment.amount,
+      'Dicatat Oleh': payment.user_name
+    }))
+
+    const ws = XLSX.utils.json_to_sheet(data)
+
+    // Auto-width columns
+    const wscols = [
+      { wch: 20 }, // Tanggal
+      { wch: 30 }, // Pelanggan
+      { wch: 40 }, // Keterangan
+      { wch: 20 }, // Akun
+      { wch: 15 }, // Jumlah
+      { wch: 20 }  // User
+    ]
+    ws['!cols'] = wscols
+
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, "History Pembayaran")
+    XLSX.writeFile(wb, `history-pembayaran-piutang-${format(new Date(), 'yyyy-MM-dd')}.xlsx`)
   }
 
   const generatePDF = () => {
@@ -252,6 +279,16 @@ export function PaymentHistoryTable() {
             </Button>
             <Button
               size="sm"
+              variant="outline"
+              onClick={generateExcel}
+              disabled={paymentHistory.length === 0}
+              className="border-green-600 text-green-600 hover:bg-green-50"
+            >
+              <FileSpreadsheet className="h-4 w-4 mr-1" />
+              Excel
+            </Button>
+            <Button
+              size="sm"
               onClick={generatePDF}
               disabled={paymentHistory.length === 0}
               className="bg-red-600 hover:bg-red-700 text-white"
@@ -301,13 +338,13 @@ export function PaymentHistoryTable() {
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td className="px-3 py-6 text-center text-slate-500" colSpan={5}>
+                  <td className="px-3 py-6 text-center text-slate-500" colSpan={7}>
                     Loading...
                   </td>
                 </tr>
               ) : paymentHistory.length === 0 ? (
                 <tr>
-                  <td className="px-3 py-6 text-center text-slate-500" colSpan={5}>
+                  <td className="px-3 py-6 text-center text-slate-500" colSpan={7}>
                     Tidak ada data pembayaran piutang
                   </td>
                 </tr>
