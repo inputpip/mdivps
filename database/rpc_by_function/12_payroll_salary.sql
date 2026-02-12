@@ -396,28 +396,42 @@ BEGIN
   WHERE id = p_payroll_id;
   
   -- ==================== UPDATE EMPLOYEE ADVANCES ====================
-  -- FIX: Ensure we query by branch_id and handle multiple advances correctly
+  -- NEW: Correctly record repayment in advance_repayments table for audit trail and consistency
   IF v_advance_deduction > 0 AND v_payroll.employee_id IS NOT NULL THEN
     v_remaining_deduction := v_advance_deduction;
     
     FOR v_advance IN
-      SELECT id, remaining_amount
+      SELECT id, remaining_amount, amount
       FROM employee_advances
       WHERE employee_id = v_payroll.employee_id
         AND remaining_amount > 0
-        AND branch_id = p_branch_id -- FILTER BY BRANCH
+        AND branch_id = p_branch_id
       ORDER BY date ASC  -- FIFO: oldest first
     LOOP
       EXIT WHEN v_remaining_deduction <= 0;
       
       v_amount_to_deduct := LEAST(v_remaining_deduction, v_advance.remaining_amount);
       
-      -- Update advance balance
+      -- 1. Insert into advance_repayments (This is what get_outstanding_advances uses!)
+      INSERT INTO advance_repayments (
+        id,
+        advance_id,
+        amount,
+        date,
+        recorded_by
+      ) VALUES (
+        'PAY-' || p_payroll_id || '-' || v_advance.id,
+        v_advance.id,
+        v_amount_to_deduct,
+        p_payment_date,
+        auth.uid()::TEXT
+      );
+
+      -- 2. Update advance balance and status
       UPDATE employee_advances
       SET 
         remaining_amount = remaining_amount - v_amount_to_deduct,
-        updated_at = NOW(),
-        -- Optional: Update status if fully paid? (Not modifying schema for now)
+        status = CASE WHEN remaining_amount - v_amount_to_deduct <= 0 THEN 'paid' ELSE 'active' END,
         notes = CASE 
           WHEN remaining_amount - v_amount_to_deduct <= 0 THEN notes || ' (Lunas via Payroll)'
           ELSE notes
@@ -678,50 +692,30 @@ BEGIN
   GET DIAGNOSTICS v_commissions_restored = ROW_COUNT;
 
   -- ==================== ROLLBACK ADVANCE DEDUCTIONS ====================
-  -- Restore amount to advances (Priority: paid off advances, then active ones)
+  -- NEW: Remove repayment records and restore balance
   IF v_payroll.advance_deduction > 0 THEN
-    v_remaining_restore := v_payroll.advance_deduction;
+    -- First, identify all repayments made by this payroll
+    -- We use the naming convention 'PAY-' || p_payroll_id || '-' || v_advance.id
+    -- to safely identify them
     
-    -- Loop through advances for this employee, ordered by UpdatedAt DESC (Recently paid first)
-    -- We include ALL statuses because a Paid advance might have been paid by THIS payroll
     FOR v_advance_record IN
-      SELECT ea.id, ea.remaining_amount, ea.amount
-      FROM employee_advances ea
-      WHERE ea.employee_id = v_payroll.employee_id
-        AND ea.branch_id = p_branch_id
-        -- We assume we should restore to advances that are not fully unpaid (remaining < amount)
-        AND ea.remaining_amount < ea.amount 
-      ORDER BY ea.updated_at DESC, ea.date DESC
+      SELECT ar.advance_id, ar.amount, ar.id as repayment_id
+      FROM advance_repayments ar
+      WHERE ar.id LIKE 'PAY-' || p_payroll_id || '%'
     LOOP
-      EXIT WHEN v_remaining_restore <= 0;
+      -- 1. Restore the balance in employee_advances
+      UPDATE employee_advances
+      SET
+        remaining_amount = remaining_amount + v_advance_record.amount,
+        status = 'active', -- Reactivate if it was paid
+        notes = REPLACE(notes, ' (Lunas via Payroll)', '')
+      WHERE id = v_advance_record.advance_id;
       
-      -- Calculate how much "space" this advance has to receive funds back
-      -- Space = Original Amount - Remaining Amount
-      v_restore_amount := LEAST(v_remaining_restore, v_advance_record.amount - v_advance_record.remaining_amount);
-      
-      IF v_restore_amount > 0 THEN
-        UPDATE employee_advances
-        SET
-          remaining_amount = remaining_amount + v_restore_amount,
-          updated_at = NOW(),
-          notes = REPLACE(notes, ' (Lunas via Payroll)', '') -- Remove lunas note if present
-        WHERE id = v_advance_record.id;
-        
-        v_remaining_restore := v_remaining_restore - v_restore_amount;
-        v_advances_restored := v_advances_restored + v_restore_amount;
-      END IF;
+      v_advances_restored := v_advances_restored + v_advance_record.amount;
     END LOOP;
     
-    -- If there is still amount left to restore (edge case), stick it to the latest advance
-    IF v_remaining_restore > 0 THEN
-      UPDATE employee_advances
-      SET remaining_amount = remaining_amount + v_remaining_restore
-      WHERE id = (
-        SELECT id FROM employee_advances 
-        WHERE employee_id = v_payroll.employee_id AND branch_id = p_branch_id 
-        ORDER BY date DESC LIMIT 1
-      );
-    END IF;
+    -- 2. Delete the repayment records
+    DELETE FROM advance_repayments WHERE id LIKE 'PAY-' || p_payroll_id || '%';
   END IF;
 
   -- ==================== VOID JOURNALS ====================

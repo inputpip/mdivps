@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/components/ui/use-toast"
 import { Badge } from "@/components/ui/badge"
 import { format } from "date-fns"
+import { Check, ChevronsUpDown, Search, User } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { TransactionDeliveryInfo, DeliveryFormData, Delivery } from "@/types/delivery"
 import { useDeliveries, useDeliveryEmployees } from "@/hooks/useDeliveries"
 import { compressImage, isImageFile } from "@/utils/imageCompression"
@@ -18,6 +20,8 @@ import { Capacitor } from "@capacitor/core"
 import { useTimezone } from "@/contexts/TimezoneContext"
 import { getOfficeTime } from "@/utils/officeTime"
 import { PhotoUploadService } from "@/services/photoUploadService"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 
 interface DeliveryFormContentProps {
   transaction: TransactionDeliveryInfo;
@@ -48,6 +52,10 @@ export function DeliveryFormContent({ transaction, onSuccess, onDeliveryCreated 
   const { user } = useAuthContext()
   const { timezone } = useTimezone()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [driverSearch, setDriverSearch] = useState("")
+  const [helperSearch, setHelperSearch] = useState("")
+  const [openDriver, setOpenDriver] = useState(false)
+  const [openHelper, setOpenHelper] = useState(false)
 
   // Check if driver is optional (web view + allowed role)
   const isWebView = !isCapacitorApp()
@@ -58,6 +66,7 @@ export function DeliveryFormContent({ transaction, onSuccess, onDeliveryCreated 
     deliveryDate: format(getOfficeTime(timezone), "yyyy-MM-dd'T'HH:mm"),
     notes: "",
     driverId: "",
+    manualDriverName: "",
     helperId: "",
     items: transaction.deliverySummary.map((item, index) => ({
       itemId: `${item.productId}-${index}`, // Unique identifier per row
@@ -224,12 +233,12 @@ export function DeliveryFormContent({ transaction, onSuccess, onDeliveryCreated 
       return
     }
 
-    // Validate driver (required unless driverOptional is true)
-    if (!formData.driverId && !driverOptional) {
+    // Validate driver (required unless driverOptional is true OR manual name provided)
+    if (!formData.driverId && !formData.manualDriverName && !driverOptional) {
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Supir wajib dipilih"
+        description: "Supir wajib dipilih atau diisi namanya"
       })
       return
     }
@@ -307,7 +316,8 @@ export function DeliveryFormContent({ transaction, onSuccess, onDeliveryCreated 
         transactionId: formData.transactionId,
         deliveryDate: new Date(formData.deliveryDate), // Use user's selected delivery date and time
         notes: formData.notes,
-        driverId: formData.driverId || undefined,  // Empty string -> undefined for optional UUID
+        driverId: formData.driverId || undefined,  // Empty string -> undefined for UUID
+        driverName: formData.manualDriverName || undefined, // Send manual name if provided
         helperId: formData.helperId || undefined,
         items: deliveryItems,
         photoUrl: photoUrl, // Send photoUrl instead of photo
@@ -338,7 +348,7 @@ export function DeliveryFormContent({ transaction, onSuccess, onDeliveryCreated 
           deliveryNumber: (result as any).delivery_number,
           deliveryDate: new Date(formData.deliveryDate),
           driverId: formData.driverId || undefined,
-          driverName: employees?.find(e => e.id === formData.driverId)?.name,
+          driverName: formData.manualDriverName || employees?.find(e => e.id === formData.driverId)?.name,
           helperId: formData.helperId || undefined,
           helperName: employees?.find(e => e.id === formData.helperId)?.name,
           notes: formData.notes || undefined,
@@ -388,42 +398,164 @@ export function DeliveryFormContent({ transaction, onSuccess, onDeliveryCreated 
         </div>
         <div className="space-y-1">
           <Label className="text-sm">Supir {driverOptional ? '(Opsional)' : '*'}</Label>
-          <Select
-            value={formData.driverId || "no-driver"}
-            onValueChange={(value) => setFormData(prev => ({ ...prev, driverId: value === "no-driver" ? "" : value }))}
-          >
-            <SelectTrigger className="h-9">
-              <SelectValue placeholder="Pilih Supir" />
-            </SelectTrigger>
-            <SelectContent>
-              {driverOptional && <SelectItem value="no-driver">Tanpa Supir</SelectItem>}
-              {employees?.filter(emp => ['supir', 'helper'].includes(emp.role?.toLowerCase())).map((emp) => (
-                <SelectItem key={emp.id} value={emp.id}>
-                  {emp.name}{emp.role?.toLowerCase() === 'helper' ? ' (Helper)' : ''}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Popover open={openDriver} onOpenChange={setOpenDriver}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                role="combobox"
+                aria-expanded={openDriver}
+                className="w-full h-9 justify-between text-left font-normal px-3"
+              >
+                <div className="flex items-center gap-2 truncate">
+                  <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  <span className="truncate">
+                    {formData.driverId
+                      ? employees?.find((emp) => emp.id === formData.driverId)?.name
+                      : (formData.manualDriverName || "Pilih Supir")}
+                  </span>
+                </div>
+                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+              <Command shouldFilter={false}>
+                <CommandInput
+                  placeholder="Cari supir..."
+                  value={driverSearch}
+                  onValueChange={setDriverSearch}
+                />
+                <CommandList>
+                  <CommandEmpty className="p-2">
+                    <p className="text-xs text-muted-foreground mb-2">Supir tidak ditemukan</p>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="w-full text-xs h-8"
+                      onClick={() => {
+                        setFormData(prev => ({
+                          ...prev,
+                          driverId: "",
+                          manualDriverName: driverSearch
+                        }))
+                        setOpenDriver(false)
+                      }}
+                    >
+                      Gunakan "{driverSearch}"
+                    </Button>
+                  </CommandEmpty>
+                  <CommandGroup>
+                    {employees?.filter(emp =>
+                      ['supir', 'helper', 'driver'].includes(emp.role?.toLowerCase()) &&
+                      (emp.name.toLowerCase().includes(driverSearch.toLowerCase()))
+                    ).map((emp) => (
+                      <CommandItem
+                        key={emp.id}
+                        value={emp.id}
+                        onSelect={(currentValue) => {
+                          setFormData(prev => ({
+                            ...prev,
+                            driverId: currentValue,
+                            manualDriverName: ""
+                          }))
+                          setOpenDriver(false)
+                          setDriverSearch("")
+                        }}
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4",
+                            formData.driverId === emp.id ? "opacity-100" : "opacity-0"
+                          )}
+                        />
+                        {emp.name}{emp.role?.toLowerCase() === 'helper' ? ' (Helper)' : ''}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
           {isLoadingEmployees && <div className="text-xs text-muted-foreground">Loading...</div>}
         </div>
         <div className="space-y-1">
           <Label className="text-sm">Helper (Opsional)</Label>
-          <Select
-            value={formData.helperId || "no-helper"}
-            onValueChange={(value) => setFormData(prev => ({ ...prev, helperId: value === "no-helper" ? "" : value }))}
-          >
-            <SelectTrigger className="h-9">
-              <SelectValue placeholder="Pilih Helper" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="no-helper">Tidak ada</SelectItem>
-              {employees?.filter(emp => ['helper', 'supir'].includes(emp.role?.toLowerCase())).map((helper) => (
-                <SelectItem key={helper.id} value={helper.id}>
-                  {helper.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Popover open={openHelper} onOpenChange={setOpenHelper}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                role="combobox"
+                aria-expanded={openHelper}
+                className="w-full h-9 justify-between text-left font-normal px-3"
+              >
+                <div className="flex items-center gap-2 truncate">
+                  <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  <span className="truncate">
+                    {formData.helperId
+                      ? employees?.find((emp) => emp.id === formData.helperId)?.name
+                      : "Pilih Helper"}
+                  </span>
+                </div>
+                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+              <Command shouldFilter={false}>
+                <CommandInput
+                  placeholder="Cari helper..."
+                  value={helperSearch}
+                  onValueChange={setHelperSearch}
+                />
+                <CommandList>
+                  <CommandEmpty className="p-2">
+                    <p className="text-xs text-muted-foreground">Tidak ada helper</p>
+                  </CommandEmpty>
+                  <CommandGroup>
+                    <CommandItem
+                      value="no-helper"
+                      onSelect={() => {
+                        setFormData(prev => ({ ...prev, helperId: "" }))
+                        setOpenHelper(false)
+                        setHelperSearch("")
+                      }}
+                    >
+                      <Check
+                        className={cn(
+                          "mr-2 h-4 w-4",
+                          formData.helperId === "" ? "opacity-100" : "opacity-0"
+                        )}
+                      />
+                      Tidak ada
+                    </CommandItem>
+                    {employees?.filter(emp =>
+                      ['helper', 'supir'].includes(emp.role?.toLowerCase()) &&
+                      (emp.name.toLowerCase().includes(helperSearch.toLowerCase()))
+                    ).map((emp) => (
+                      <CommandItem
+                        key={emp.id}
+                        value={emp.id}
+                        onSelect={(currentValue) => {
+                          setFormData(prev => ({
+                            ...prev,
+                            helperId: currentValue === "no-helper" ? "" : currentValue
+                          }))
+                          setOpenHelper(false)
+                          setHelperSearch("")
+                        }}
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4",
+                            formData.helperId === emp.id ? "opacity-100" : "opacity-0"
+                          )}
+                        />
+                        {emp.name}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
 

@@ -71,6 +71,17 @@ const FinancialReportsPage = () => {
   const [periodFrom, setPeriodFrom] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
   const [periodTo, setPeriodTo] = useState(format(endOfMonth(new Date()), 'yyyy-MM-dd'));
 
+  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+
+  const handleMonthYearChange = (month: number, year: number) => {
+    const date = new Date(year, month, 1);
+    const fromDate = format(startOfMonth(date), 'yyyy-MM-dd');
+    const toDate = format(endOfMonth(date), 'yyyy-MM-dd');
+    setPeriodFrom(fromDate);
+    setPeriodTo(toDate);
+  };
+
   const { toast } = useToast();
 
   // Auth context for printer info
@@ -199,6 +210,12 @@ const FinancialReportsPage = () => {
     const startDate = subMonths(startOfMonth(endDate), months - 1);
     setPeriodFrom(format(startDate, 'yyyy-MM-dd'));
     setPeriodTo(format(endOfMonth(endDate), 'yyyy-MM-dd'));
+
+    // If selecting single month (Bulan Ini), update the month/year pickers too
+    if (months === 1) {
+      setSelectedMonth(endDate.getMonth());
+      setSelectedYear(endDate.getFullYear());
+    }
   };
 
   // Closing Entry handlers
@@ -300,28 +317,81 @@ const FinancialReportsPage = () => {
               </p>
             </div>
           </div>
-          
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" onClick={() => loadPresetPeriod(1)}>
-              Bulan Ini
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => loadPresetPeriod(3)}>
-              3 Bulan
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => loadPresetPeriod(6)}>
-              6 Bulan
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => loadPresetPeriod(12)}>
-              1 Tahun
-            </Button>
+
+          <div className="flex flex-wrap items-center gap-6">
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" onClick={() => loadPresetPeriod(1)}>
+                Bulan Ini
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => loadPresetPeriod(3)}>
+                3 Bulan
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => loadPresetPeriod(6)}>
+                6 Bulan
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => loadPresetPeriod(12)}>
+                1 Tahun
+              </Button>
+            </div>
+
+            <div className="flex items-center gap-2 border-l pl-6">
+              <Label className="text-sm font-medium whitespace-nowrap flex items-center gap-2">
+                <Calendar className="w-4 h-4" />
+                Lompat ke Bulan:
+              </Label>
+              <div className="flex gap-2">
+                <Select
+                  value={String(selectedMonth)}
+                  onValueChange={(val) => {
+                    const m = parseInt(val);
+                    setSelectedMonth(m);
+                    handleMonthYearChange(m, selectedYear);
+                  }}
+                >
+                  <SelectTrigger className="w-[140px] h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 12 }, (_, i) => (
+                      <SelectItem key={i} value={String(i)}>
+                        {format(new Date(2000, i, 1), 'MMMM', { locale: id })}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select
+                  value={String(selectedYear)}
+                  onValueChange={(val) => {
+                    const y = parseInt(val);
+                    setSelectedYear(y);
+                    handleMonthYearChange(selectedMonth, y);
+                  }}
+                >
+                  <SelectTrigger className="w-[100px] h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 5 }, (_, i) => {
+                      const y = new Date().getFullYear() - 2 + i;
+                      return (
+                        <SelectItem key={y} value={String(y)}>
+                          {y}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
 
       {/* Generate Buttons */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Button 
-          size="lg" 
+        <Button
+          size="lg"
           className="h-16 gap-2"
           onClick={handleGenerateBalanceSheet}
           disabled={loading.balanceSheet}
@@ -333,9 +403,9 @@ const FinancialReportsPage = () => {
           )}
           Generate Neraca
         </Button>
-        
-        <Button 
-          size="lg" 
+
+        <Button
+          size="lg"
           className="h-16 gap-2"
           onClick={handleGenerateIncomeStatement}
           disabled={loading.incomeStatement}
@@ -347,9 +417,9 @@ const FinancialReportsPage = () => {
           )}
           Generate Laba Rugi
         </Button>
-        
-        <Button 
-          size="lg" 
+
+        <Button
+          size="lg"
           className="h-16 gap-2"
           onClick={handleGenerateCashFlow}
           disabled={loading.cashFlow}
@@ -431,7 +501,7 @@ const FinancialReportsPage = () => {
                   {/* Assets */}
                   <div className="space-y-4">
                     <h3 className="text-lg font-semibold text-blue-700 border-b pb-2">ASET</h3>
-                    
+
                     {/* Current Assets */}
                     <div className="space-y-2">
                       <h4 className="font-medium text-gray-700">Aset Lancar:</h4>
@@ -806,9 +876,8 @@ const FinancialReportsPage = () => {
                       <span className="font-mono">{formatCurrency(incomeStatement.operatingIncome)}</span>
                     </div>
 
-                    <div className={`flex justify-between font-bold text-xl p-4 rounded ${
-                      incomeStatement.netIncome >= 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                    }`}>
+                    <div className={`flex justify-between font-bold text-xl p-4 rounded ${incomeStatement.netIncome >= 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                      }`}>
                       <span>LABA BERSIH</span>
                       <div className="text-right">
                         <span className="font-mono">{formatCurrency(incomeStatement.netIncome)}</span>
@@ -821,7 +890,7 @@ const FinancialReportsPage = () => {
                 </div>
 
                 <div className="text-xs text-muted-foreground text-center pt-4 border-t">
-                  Dibuat pada: {format(incomeStatement.generatedAt, 'dd MMM yyyy HH:mm', { locale: id })} • 
+                  Dibuat pada: {format(incomeStatement.generatedAt, 'dd MMM yyyy HH:mm', { locale: id })} •
                   Data dari: Transactions, Cash History, Commission Entries
                 </div>
               </CardContent>
@@ -893,27 +962,27 @@ const FinancialReportsPage = () => {
                       {/* Fallback to summary if no detail */}
                       {(!cashFlowStatement.operatingActivities.cashReceipts?.byAccount ||
                         cashFlowStatement.operatingActivities.cashReceipts.byAccount.length === 0) && (
-                        <>
-                          <div className="flex justify-between pl-4">
-                            <span>Pelanggan</span>
-                            <span className="font-mono">{formatCurrency(cashFlowStatement.operatingActivities.cashReceipts?.fromCustomers || 0)}</span>
-                          </div>
-                          <div className="flex justify-between pl-4">
-                            <span>Pembayaran piutang</span>
-                            <span className="font-mono">{formatCurrency(cashFlowStatement.operatingActivities.cashReceipts?.fromReceivablePayments || 0)}</span>
-                          </div>
-                          {cashFlowStatement.operatingActivities.cashReceipts?.fromAdvanceRepayment > 0 && (
+                          <>
                             <div className="flex justify-between pl-4">
-                              <span>Pelunasan panjar karyawan</span>
-                              <span className="font-mono">{formatCurrency(cashFlowStatement.operatingActivities.cashReceipts?.fromAdvanceRepayment || 0)}</span>
+                              <span>Pelanggan</span>
+                              <span className="font-mono">{formatCurrency(cashFlowStatement.operatingActivities.cashReceipts?.fromCustomers || 0)}</span>
                             </div>
-                          )}
-                          <div className="flex justify-between pl-4">
-                            <span>Penerimaan operasi lain</span>
-                            <span className="font-mono">{formatCurrency(cashFlowStatement.operatingActivities.cashReceipts?.fromOtherOperating || 0)}</span>
-                          </div>
-                        </>
-                      )}
+                            <div className="flex justify-between pl-4">
+                              <span>Pembayaran piutang</span>
+                              <span className="font-mono">{formatCurrency(cashFlowStatement.operatingActivities.cashReceipts?.fromReceivablePayments || 0)}</span>
+                            </div>
+                            {cashFlowStatement.operatingActivities.cashReceipts?.fromAdvanceRepayment > 0 && (
+                              <div className="flex justify-between pl-4">
+                                <span>Pelunasan panjar karyawan</span>
+                                <span className="font-mono">{formatCurrency(cashFlowStatement.operatingActivities.cashReceipts?.fromAdvanceRepayment || 0)}</span>
+                              </div>
+                            )}
+                            <div className="flex justify-between pl-4">
+                              <span>Penerimaan operasi lain</span>
+                              <span className="font-mono">{formatCurrency(cashFlowStatement.operatingActivities.cashReceipts?.fromOtherOperating || 0)}</span>
+                            </div>
+                          </>
+                        )}
                       <div className="flex justify-between font-medium text-green-600 border-b pb-1">
                         <span className="pl-4">Total penerimaan kas</span>
                         <span className="font-mono">{formatCurrency(cashFlowStatement.operatingActivities.cashReceipts?.total || 0)}</span>
@@ -933,47 +1002,47 @@ const FinancialReportsPage = () => {
                       {/* Fallback to summary if no detail */}
                       {(!cashFlowStatement.operatingActivities.cashPayments?.byAccount ||
                         cashFlowStatement.operatingActivities.cashPayments.byAccount.length === 0) && (
-                        <>
-                          <div className="flex justify-between pl-4">
-                            <span>Pembayaran ke supplier</span>
-                            <span className="font-mono">({formatCurrency(cashFlowStatement.operatingActivities.cashPayments?.forRawMaterials || 0)})</span>
-                          </div>
-                          {cashFlowStatement.operatingActivities.cashPayments?.forPayablePayments > 0 && (
+                          <>
                             <div className="flex justify-between pl-4">
-                              <span>Pembayaran hutang usaha lainnya</span>
-                              <span className="font-mono">({formatCurrency(cashFlowStatement.operatingActivities.cashPayments?.forPayablePayments || 0)})</span>
+                              <span>Pembayaran ke supplier</span>
+                              <span className="font-mono">({formatCurrency(cashFlowStatement.operatingActivities.cashPayments?.forRawMaterials || 0)})</span>
                             </div>
-                          )}
-                          <div className="flex justify-between pl-4">
-                            <span>Hutang Bunga Atas Hutang Bank</span>
-                            <span className="font-mono">({formatCurrency(cashFlowStatement.operatingActivities.cashPayments?.forInterestExpense || 0)})</span>
-                          </div>
-                          <div className="flex justify-between pl-4">
-                            <span>Upah tenaga kerja langsung</span>
-                            <span className="font-mono">({formatCurrency(cashFlowStatement.operatingActivities.cashPayments?.forDirectLabor || 0)})</span>
-                          </div>
-                          {cashFlowStatement.operatingActivities.cashPayments?.forEmployeeAdvances > 0 && (
+                            {cashFlowStatement.operatingActivities.cashPayments?.forPayablePayments > 0 && (
+                              <div className="flex justify-between pl-4">
+                                <span>Pembayaran hutang usaha lainnya</span>
+                                <span className="font-mono">({formatCurrency(cashFlowStatement.operatingActivities.cashPayments?.forPayablePayments || 0)})</span>
+                              </div>
+                            )}
                             <div className="flex justify-between pl-4">
-                              <span>Pemberian panjar karyawan</span>
-                              <span className="font-mono">({formatCurrency(cashFlowStatement.operatingActivities.cashPayments?.forEmployeeAdvances || 0)})</span>
+                              <span>Hutang Bunga Atas Hutang Bank</span>
+                              <span className="font-mono">({formatCurrency(cashFlowStatement.operatingActivities.cashPayments?.forInterestExpense || 0)})</span>
                             </div>
-                          )}
-                          <div className="flex justify-between pl-4">
-                            <span>Biaya overhead pabrik</span>
-                            <span className="font-mono">({formatCurrency(cashFlowStatement.operatingActivities.cashPayments?.forManufacturingOverhead || 0)})</span>
-                          </div>
-                          <div className="flex justify-between pl-4">
-                            <span>Beban operasi lainnya</span>
-                            <span className="font-mono">({formatCurrency(cashFlowStatement.operatingActivities.cashPayments?.forOperatingExpenses || 0)})</span>
-                          </div>
-                          {cashFlowStatement.operatingActivities.cashPayments?.forTaxes > 0 && (
                             <div className="flex justify-between pl-4">
-                              <span>Pajak penghasilan</span>
-                              <span className="font-mono">({formatCurrency(cashFlowStatement.operatingActivities.cashPayments.forTaxes)})</span>
+                              <span>Upah tenaga kerja langsung</span>
+                              <span className="font-mono">({formatCurrency(cashFlowStatement.operatingActivities.cashPayments?.forDirectLabor || 0)})</span>
                             </div>
-                          )}
-                        </>
-                      )}
+                            {cashFlowStatement.operatingActivities.cashPayments?.forEmployeeAdvances > 0 && (
+                              <div className="flex justify-between pl-4">
+                                <span>Pemberian panjar karyawan</span>
+                                <span className="font-mono">({formatCurrency(cashFlowStatement.operatingActivities.cashPayments?.forEmployeeAdvances || 0)})</span>
+                              </div>
+                            )}
+                            <div className="flex justify-between pl-4">
+                              <span>Biaya overhead pabrik</span>
+                              <span className="font-mono">({formatCurrency(cashFlowStatement.operatingActivities.cashPayments?.forManufacturingOverhead || 0)})</span>
+                            </div>
+                            <div className="flex justify-between pl-4">
+                              <span>Beban operasi lainnya</span>
+                              <span className="font-mono">({formatCurrency(cashFlowStatement.operatingActivities.cashPayments?.forOperatingExpenses || 0)})</span>
+                            </div>
+                            {cashFlowStatement.operatingActivities.cashPayments?.forTaxes > 0 && (
+                              <div className="flex justify-between pl-4">
+                                <span>Pajak penghasilan</span>
+                                <span className="font-mono">({formatCurrency(cashFlowStatement.operatingActivities.cashPayments.forTaxes)})</span>
+                              </div>
+                            )}
+                          </>
+                        )}
                       <div className="flex justify-between font-medium text-red-600 border-b pb-1">
                         <span className="pl-4">Total pembayaran kas</span>
                         <span className="font-mono">({formatCurrency(cashFlowStatement.operatingActivities.cashPayments?.total || 0)})</span>
@@ -1037,13 +1106,13 @@ const FinancialReportsPage = () => {
 
                     {/* Show "no activity" if all arrays are empty */}
                     {cashFlowStatement.financingActivities.ownerInvestments.length === 0 &&
-                     cashFlowStatement.financingActivities.ownerWithdrawals.length === 0 &&
-                     cashFlowStatement.financingActivities.loans.length === 0 && (
-                      <div className="flex justify-between text-muted-foreground">
-                        <span>Tidak ada aktivitas pendanaan</span>
-                        <span className="font-mono">-</span>
-                      </div>
-                    )}
+                      cashFlowStatement.financingActivities.ownerWithdrawals.length === 0 &&
+                      cashFlowStatement.financingActivities.loans.length === 0 && (
+                        <div className="flex justify-between text-muted-foreground">
+                          <span>Tidak ada aktivitas pendanaan</span>
+                          <span className="font-mono">-</span>
+                        </div>
+                      )}
 
                     <div className="flex justify-between font-medium border-t pt-2">
                       <span>Kas Bersih dari Aktivitas Pendanaan</span>
@@ -1053,9 +1122,8 @@ const FinancialReportsPage = () => {
 
                   {/* Net Cash Flow */}
                   <div className="space-y-3">
-                    <div className={`flex justify-between font-semibold text-lg p-3 rounded ${
-                      cashFlowStatement.netCashFlow >= 0 ? 'bg-green-50' : 'bg-red-50'
-                    }`}>
+                    <div className={`flex justify-between font-semibold text-lg p-3 rounded ${cashFlowStatement.netCashFlow >= 0 ? 'bg-green-50' : 'bg-red-50'
+                      }`}>
                       <span>KENAIKAN (PENURUNAN) KAS BERSIH</span>
                       <span className="font-mono">{formatCurrency(cashFlowStatement.netCashFlow)}</span>
                     </div>
@@ -1074,7 +1142,7 @@ const FinancialReportsPage = () => {
                 </div>
 
                 <div className="text-xs text-muted-foreground text-center pt-4 border-t">
-                  Dibuat pada: {format(cashFlowStatement.generatedAt, 'dd MMM yyyy HH:mm', { locale: id })} • 
+                  Dibuat pada: {format(cashFlowStatement.generatedAt, 'dd MMM yyyy HH:mm', { locale: id })} •
                   Data dari: Cash History, Account Balances
                 </div>
               </CardContent>

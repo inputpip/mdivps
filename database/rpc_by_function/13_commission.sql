@@ -136,9 +136,10 @@ DECLARE
   v_employee_name TEXT;
   v_kas_account_id UUID;
   v_beban_komisi_id UUID;
-  v_entry_number TEXT;
   v_commissions_paid INTEGER := 0;
   v_total_pending NUMERIC;
+  v_journal_res RECORD;
+  v_journal_lines JSONB;
 BEGIN
   -- ==================== VALIDASI ====================
   IF p_branch_id IS NULL THEN
@@ -257,58 +258,38 @@ BEGIN
     NOW()
   );
   -- ==================== CREATE JOURNAL ENTRY ====================
-  -- Generate entry number (Global across all branches)
-  SELECT 'JE-' || TO_CHAR(p_payment_date, 'YYYYMMDD') || '-' || LPAD(
-    (COALESCE(
-      (SELECT MAX(CAST(SUBSTRING(entry_number FROM '-(\d+)$') AS INTEGER))
-       FROM journal_entries
-       WHERE DATE(entry_date) = p_payment_date),
-      0
-    ) + 1)::TEXT, 4, '0')
-  INTO v_entry_number;
-  INSERT INTO journal_entries (
-    id,
-    branch_id,
-    entry_number,
-    entry_date,
-    description,
-    reference_type,
-    reference_id,
-    status,
-    is_voided,
-    created_at,
-    updated_at
-  ) VALUES (
-    gen_random_uuid(),
+
+  v_journal_lines := jsonb_build_array(
+    jsonb_build_object(
+      'account_id', v_beban_komisi_id,
+      'debit_amount', p_amount,
+      'credit_amount', 0,
+      'description', 'Bevan komisi ' || v_employee_name
+    ),
+    jsonb_build_object(
+      'account_id', v_kas_account_id,
+      'debit_amount', 0,
+      'credit_amount', p_amount,
+      'description', 'Pengeluaran kas untuk komisi'
+    )
+  );
+
+  SELECT * INTO v_journal_res FROM public.create_journal_atomic(
     p_branch_id,
-    v_entry_number,
-    p_payment_date,
     'Pembayaran Komisi - ' || v_employee_name,
     'commission_payment',
     v_payment_id::TEXT,
-    'posted',
-    FALSE,
-    NOW(),
-    NOW()
-  ) RETURNING id INTO v_journal_id;
-  -- Dr. Beban Komisi
-  INSERT INTO journal_entry_lines (
-    journal_entry_id, account_id, account_name,
-    debit_amount, credit_amount, description, line_number
-  ) VALUES (
-    v_journal_id, v_beban_komisi_id,
-    (SELECT name FROM accounts WHERE id = v_beban_komisi_id),
-    p_amount, 0, 'Beban komisi ' || v_employee_name, 1
+    v_journal_lines,
+    p_payment_date,
+    TRUE -- auto_post
   );
-  -- Cr. Kas
-  INSERT INTO journal_entry_lines (
-    journal_entry_id, account_id, account_name,
-    debit_amount, credit_amount, description, line_number
-  ) VALUES (
-    v_journal_id, v_kas_account_id,
-    (SELECT name FROM accounts WHERE id = v_kas_account_id),
-    0, p_amount, 'Pengeluaran kas untuk komisi', 2
-  );
+
+  IF NOT v_journal_res.success THEN
+    RETURN QUERY SELECT FALSE, NULL::UUID, NULL::UUID, 0, v_journal_res.error_message;
+    RETURN;
+  END IF;
+
+  v_journal_id := v_journal_res.journal_id;
   -- ==================== SUCCESS ====================
   RETURN QUERY SELECT TRUE, v_payment_id, v_journal_id, v_commissions_paid, NULL::TEXT;
 EXCEPTION WHEN OTHERS THEN

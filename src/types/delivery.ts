@@ -87,6 +87,7 @@ export interface DeliveryFormData {
   deliveryDate: string;
   notes: string;
   driverId: string;
+  manualDriverName: string;
   helperId: string;
   items: {
     itemId: string; // Unique identifier per item row
@@ -111,6 +112,7 @@ export interface DeliveryInput {
   deliveryDate: Date;
   notes?: string;
   driverId?: string | null;
+  driverName?: string;
   helperId?: string;
   photoUrl?: string;
   items: {

@@ -21,6 +21,27 @@ Semua perubahan penting pada proyek AQUVIT ERP System didokumentasikan di file i
 
 ---
 
+## [v4.10] 2026-02-10 - RPC Cleanup & Commission Fix 🧹
+
+### Improvements
+1. **Retasi RPC Cleanup**
+   - **Action:** Menghapus fungsi `process_retasi_atomic` yang merupakan *dead code* (tidak digunakan di aplikasi) dan mengandung logika akuntansi yang tidak sesuai dengan alur sistem saat ini.
+   - **Impact:** Mengurangi kebingungan developer dan membersihkan skema database.
+
+### Bug Fixes
+1. **Commission Payment Journal Match**
+   - **Action:** Memperbarui fungsi `pay_commission_atomic` agar menggunakan standar `create_journal_atomic` (Loop logic).
+   - **Reason:** Mencegah error duplikasi nomor jurnal saat pembayaran komisi dilakukan secara bersamaan.
+
+## [v4.9] 2026-02-10 - Employee Advance Journal Logic Fix 🏦
+
+### Bug Fixes
+1. **Employee Advance Journal Duplication**
+   - **Root Cause:** Menghapus logika pembuatan nomor jurnal manual (`MAX+1`) di modul panjar yang sering menyebabkan error *duplicate key* saat beberapa user input bersamaan.
+   - **Solution:** Mengalihkan pembuatan jurnal ke fungsi standar `create_journal_atomic` yang memiliki logika proteksi looping untuk menjamin keunikan nomor jurnal `JE-YYYYMMDD-XXXX`.
+   - **Coverage:** Memperbaiki fungsi `create_employee_advance_atomic` dan `repay_employee_advance_atomic`.
+
+
 ## [v4.8] 2026-02-09 - Payroll Deduction Logic Fix 🐞
 
 ### Bug Fixes

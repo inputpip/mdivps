@@ -37,19 +37,29 @@ async function calculateAccountBalancesFromJournal(
 ): Promise<Account[]> {
   // Get all journal_entry_lines for the branch
   // Note: PostgREST doesn't support !inner syntax, so we filter on client side
-  const { data: journalLines, error: journalError } = await supabase
+  // Get journal_entry_lines for the branch with server-side filtering
+  let query = supabase
     .from('journal_entry_lines')
     .select(`
       account_id,
       debit_amount,
       credit_amount,
-      journal_entries (
+      journal_entries!inner (
         branch_id,
         status,
         is_voided,
         entry_date
       )
-    `);
+    `)
+    .eq('journal_entries.branch_id', branchId)
+    .eq('journal_entries.status', 'posted')
+    .eq('journal_entries.is_voided', false);
+
+  if (asOfDate) {
+    query = query.lte('journal_entries.entry_date', asOfDate.toISOString().split('T')[0]);
+  }
+
+  const { data: journalLines, error: journalError } = await query;
 
   if (journalError) {
     console.warn('Error fetching journal_entry_lines for balance calculation:', journalError.message);
@@ -106,17 +116,7 @@ async function calculateAccountBalancesFromJournal(
   // Example: A stock adjustment journal in Branch A might credit Modal Disetor from Branch B.
   // If we filter by journal.branch_id, we would miss transactions affecting accounts in other branches.
   // The correct approach: only process lines where account_id is in our accountBalanceMap (i.e., belongs to this branch).
-  const filteredJournalLines = (journalLines || []).filter((line: any) => {
-    const journal = line.journal_entries;
-    if (!journal) return false;
-
-    // Check if account belongs to this branch (it's in our map)
-    const accountBelongsToBranch = accountBalanceMap.has(line.account_id);
-    const matchesStatus = journal.status === 'posted' && journal.is_voided === false;
-    const matchesDate = !asOfDateStr || journal.entry_date <= asOfDateStr;
-
-    return accountBelongsToBranch && matchesStatus && matchesDate;
-  });
+  const filteredJournalLines = journalLines || [];
 
   // Calculate balance per account
   filteredJournalLines.forEach((line: any) => {
@@ -737,10 +737,10 @@ export async function generateBalanceSheet(asOfDate?: Date, branchId?: string): 
     if (!assetsByAccountId[accountId]) {
       assetsByAccountId[accountId] = {
         name: asset.category === 'building' ? 'Bangunan' :
-              asset.category === 'vehicle' ? 'Kendaraan' :
-              asset.category === 'equipment' ? 'Peralatan' :
+          asset.category === 'vehicle' ? 'Kendaraan' :
+            asset.category === 'equipment' ? 'Peralatan' :
               asset.category === 'computer' ? 'Komputer' :
-              asset.category === 'furniture' ? 'Furniture' : 'Aset Lainnya',
+                asset.category === 'furniture' ? 'Furniture' : 'Aset Lainnya',
         totalValue: 0,
         category: asset.category || 'other'
       };
@@ -768,13 +768,13 @@ export async function generateBalanceSheet(asOfDate?: Date, branchId?: string): 
     }
     // Include berdasarkan nama
     return (nameLower.includes('kendaraan') ||
-            nameLower.includes('peralatan') ||
-            nameLower.includes('mesin') ||
-            nameLower.includes('bangunan') ||
-            nameLower.includes('tanah') ||
-            nameLower.includes('komputer') ||
-            nameLower.includes('furniture') ||
-            nameLower.includes('gedung'));
+      nameLower.includes('peralatan') ||
+      nameLower.includes('mesin') ||
+      nameLower.includes('bangunan') ||
+      nameLower.includes('tanah') ||
+      nameLower.includes('komputer') ||
+      nameLower.includes('furniture') ||
+      nameLower.includes('gedung'));
   };
 
   // KENDARAAN - akun dengan nama mengandung "kendaraan" atau "vehicle"
@@ -782,8 +782,8 @@ export async function generateBalanceSheet(asOfDate?: Date, branchId?: string): 
     .filter(acc => {
       const nameLower = acc.name.toLowerCase();
       return (nameLower.includes('kendaraan') || nameLower.includes('vehicle')) &&
-             !nameLower.includes('akumulasi') &&
-             !acc.isHeader;
+        !nameLower.includes('akumulasi') &&
+        !acc.isHeader;
     })
     .filter(acc => (acc.balance || 0) !== 0)
     .map(acc => ({
@@ -799,12 +799,12 @@ export async function generateBalanceSheet(asOfDate?: Date, branchId?: string): 
     .filter(acc => {
       const nameLower = acc.name.toLowerCase();
       return (nameLower.includes('peralatan') ||
-              nameLower.includes('alat') ||
-              nameLower.includes('mesin') ||
-              nameLower.includes('equipment')) &&
-             !nameLower.includes('akumulasi') &&
-             !nameLower.includes('kendaraan') &&
-             !acc.isHeader;
+        nameLower.includes('alat') ||
+        nameLower.includes('mesin') ||
+        nameLower.includes('equipment')) &&
+        !nameLower.includes('akumulasi') &&
+        !nameLower.includes('kendaraan') &&
+        !acc.isHeader;
     })
     .filter(acc => (acc.balance || 0) !== 0)
     .map(acc => ({
@@ -1135,7 +1135,7 @@ export async function generateIncomeStatement(
       debit_amount,
       credit_amount,
       description,
-      journal_entries (
+      journal_entries!inner (
         id,
         entry_number,
         entry_date,
@@ -1144,18 +1144,15 @@ export async function generateIncomeStatement(
         is_voided,
         branch_id
       )
-    `);
+    `)
+    .eq('journal_entries.status', 'posted')
+    .eq('journal_entries.is_voided', false)
+    .gte('journal_entries.entry_date', fromDateStr)
+    .lte('journal_entries.entry_date', toDateStr)
+    .eq('journal_entries.branch_id', branchId || '');
 
-  // Filter on client side since PostgREST doesn't support nested filtering with !inner
-  const journalLines = (rawJournalLines || []).filter((line: any) => {
-    const journal = line.journal_entries;
-    if (!journal) return false;
-    const entryDate = journal.entry_date;
-    const matchesDate = entryDate >= fromDateStr && entryDate <= toDateStr;
-    const matchesStatus = journal.status === 'posted' && journal.is_voided === false;
-    const matchesBranch = !branchId || journal.branch_id === branchId;
-    return matchesDate && matchesStatus && matchesBranch;
-  });
+  // Since we already filtered in the query, no need for complex client-side filter
+  const journalLines = rawJournalLines || [];
 
   if (journalError) {
     console.error('Error fetching journal lines:', journalError);
@@ -1253,9 +1250,9 @@ export async function generateIncomeStatement(
     const type = acc.accountType?.toLowerCase() || '';
     // Check type or code prefix (supports: 4xxx, 4-xxx, 4.xxx formats)
     return type === 'pendapatan' ||
-           code.startsWith('4') ||
-           code.startsWith('4-') ||
-           code.startsWith('4.');
+      code.startsWith('4') ||
+      code.startsWith('4-') ||
+      code.startsWith('4.');
   });
 
   const penjualan: IncomeStatementItem[] = revenueAccounts
@@ -1316,7 +1313,7 @@ export async function generateIncomeStatement(
     const code = acc.accountCode || '';
     const type = acc.accountType?.toLowerCase() || '';
     const isExpense = type === 'beban' ||
-                      code.startsWith('6') || code.startsWith('6-') || code.startsWith('6.');
+      code.startsWith('6') || code.startsWith('6-') || code.startsWith('6.');
     // Exclude COGS accounts (already counted)
     const isCOGS = code.startsWith('5') || code.startsWith('5-') || code.startsWith('5.');
     return isExpense && !isCOGS;
@@ -1545,60 +1542,93 @@ export async function generateCashFlowStatement(
       const name = acc.name.toLowerCase();
 
       return code.startsWith('1-1') ||
-             code.startsWith('11') ||
-             name.includes('kas') ||
-             name.includes('bank');
+        code.startsWith('11') ||
+        name.includes('kas') ||
+        name.includes('bank');
     })
     .map(acc => acc.id);
 
-  // Fetch journal entries that involve cash/bank accounts
-  let journalQuery = supabase
-    .from('journal_entries')
+  // Fetch journal lines directly with inner join on entries for specific date range and branch
+  const { data: journalLinesWithEntries, error: journalError } = await supabase
+    .from('journal_entry_lines')
     .select(`
       id,
-      entry_number,
-      entry_date,
+      account_id,
+      account_code,
+      account_name,
+      debit_amount,
+      credit_amount,
       description,
-      reference_type,
-      reference_id,
-      status,
-      is_voided,
-      branch_id
+      journal_entry_id,
+      journal_entries!inner (
+        id,
+        entry_number,
+        entry_date,
+        description,
+        reference_type,
+        reference_id,
+        status,
+        is_voided,
+        branch_id,
+        created_at,
+        created_by
+      )
     `)
-    .gte('entry_date', fromDateStr)
-    .lte('entry_date', toDateStr)
-    .eq('status', 'posted')
-    .eq('is_voided', false);
-
-  if (branchId) {
-    journalQuery = journalQuery.eq('branch_id', branchId);
-  }
-
-  const { data: journalEntries, error: journalError } = await journalQuery;
+    .in('account_id', cashAccountIds)
+    .gte('journal_entries.entry_date', fromDateStr)
+    .lte('journal_entries.entry_date', toDateStr)
+    .eq('journal_entries.status', 'posted')
+    .eq('journal_entries.is_voided', false)
+    .eq('journal_entries.branch_id', branchId || '');
 
   if (journalError) {
-    console.error('Error fetching journal entries:', journalError);
+    console.error('Error fetching journal lines for cash flow:', journalError);
   }
 
-  // Fetch all journal lines for these entries
-  const journalIds = journalEntries?.map(j => j.id) || [];
-
-  let journalLinesData: any[] = [];
-  if (journalIds.length > 0) {
-    const { data: lines } = await supabase
-      .from('journal_entry_lines')
-      .select('*')
-      .in('journal_entry_id', journalIds);
-    journalLinesData = lines || [];
-  }
-
-  // Group lines by journal entry
+  // Group lines by journal entry for processing
   const linesByJournal: Record<string, any[]> = {};
-  journalLinesData.forEach(line => {
-    if (!linesByJournal[line.journal_entry_id]) {
-      linesByJournal[line.journal_entry_id] = [];
+  const journalEntries: any[] = [];
+  const processedJournalIds = new Set<string>();
+
+  (journalLinesWithEntries || []).forEach((line: any) => {
+    const journalId = line.journal_entry_id;
+    if (!linesByJournal[journalId]) {
+      linesByJournal[journalId] = [];
     }
-    linesByJournal[line.journal_entry_id].push(line);
+    // Only add to journalEntries if not already added
+    if (!processedJournalIds.has(journalId)) {
+      journalEntries.push(line.journal_entries);
+      processedJournalIds.add(journalId);
+    }
+
+    // We need all lines for these journals to find counterparts
+    // BUT we only have cash lines here. To find counterparts, we need to fetch 
+    // ALL lines for the journals we just discovered.
+  });
+
+  // Fetch ALL journal lines for these specific journals to identify counterparts
+  const journalIds = Array.from(processedJournalIds);
+  let allJournalLinesData: any[] = [];
+  if (journalIds.length > 0) {
+    // Process in chunks to avoid URL length issues or large response limits
+    const chunkSize = 100;
+    for (let i = 0; i < journalIds.length; i += chunkSize) {
+      const chunk = journalIds.slice(i, i + chunkSize);
+      const { data: lines } = await supabase
+        .from('journal_entry_lines')
+        .select('*')
+        .in('journal_entry_id', chunk);
+      if (lines) allJournalLinesData = [...allJournalLinesData, ...lines];
+    }
+  }
+
+  // Re-group ALL lines by journal entry
+  const allLinesByJournal: Record<string, any[]> = {};
+  allJournalLinesData.forEach(line => {
+    if (!allLinesByJournal[line.journal_entry_id]) {
+      allLinesByJournal[line.journal_entry_id] = [];
+    }
+    allLinesByJournal[line.journal_entry_id].push(line);
   });
 
   // Get beginning and ending cash balances
@@ -1636,7 +1666,7 @@ export async function generateCashFlowStatement(
   const cashFlowEntries: CashFlowEntry[] = [];
 
   journalEntries?.forEach(journal => {
-    const lines = linesByJournal[journal.id] || [];
+    const lines = allLinesByJournal[journal.id] || [];
 
     // Find cash account lines and counterpart lines
     const cashLines = lines.filter(l => cashAccountIds.includes(l.account_id));
@@ -1703,10 +1733,10 @@ export async function generateCashFlowStatement(
             code: code,
             name: counterpart.account_name || `Akun ${code}`,
             type: code.startsWith('1') ? 'Aset' :
-                  code.startsWith('2') ? 'Kewajiban' :
-                  code.startsWith('3') ? 'Modal' :
+              code.startsWith('2') ? 'Kewajiban' :
+                code.startsWith('3') ? 'Modal' :
                   code.startsWith('4') ? 'Pendapatan' :
-                  code.startsWith('5') || code.startsWith('6') ? 'Beban' : 'Unknown'
+                    code.startsWith('5') || code.startsWith('6') ? 'Beban' : 'Unknown'
           };
         }
       }
@@ -1720,12 +1750,12 @@ export async function generateCashFlowStatement(
 
         // INVESTASI: Aset Tetap (14xx, 15xx, 16xx)
         if (code.startsWith('14') || code.startsWith('15') || code.startsWith('16') ||
-            code.startsWith('1-4') || code.startsWith('1-5') || code.startsWith('1-6')) {
+          code.startsWith('1-4') || code.startsWith('1-5') || code.startsWith('1-6')) {
           category = 'investing';
         }
         // PENDANAAN: Modal (3xxx) atau Hutang Bank (22xx)
         else if (code.startsWith('3') || code.startsWith('22') || code.startsWith('2-2') ||
-                 type === 'modal') {
+          type === 'modal') {
           category = 'financing';
         }
         // OPERASI: Pendapatan, Beban, Piutang, Hutang Usaha, Persediaan
@@ -1787,7 +1817,7 @@ export async function generateCashFlowStatement(
       const name = e.counterpartAccount?.name?.toLowerCase() || '';
       // Piutang Karyawan/Panjar (1220, 122x) - NOT 13xx which is Persediaan
       return code.startsWith('122') || code.startsWith('1-22') ||
-             name.includes('panjar') || name.includes('piutang karyawan');
+        name.includes('panjar') || name.includes('piutang karyawan');
     })
     .reduce((sum, e) => sum + e.amount, 0);
 
@@ -1806,7 +1836,7 @@ export async function generateCashFlowStatement(
       const name = e.counterpartAccount?.name?.toLowerCase() || '';
       // Persediaan (131x, 132x) atau Hutang Usaha (21xx) - NOT 122x which is Piutang Karyawan
       const isPersediaan = (code.startsWith('131') || code.startsWith('132') || code.startsWith('1-31') || code.startsWith('1-32') ||
-                          name.includes('persediaan') || name.includes('bahan'));
+        name.includes('persediaan') || name.includes('bahan'));
       const isHutangUsaha = code.startsWith('211') || code.startsWith('2-11') || name.includes('hutang usaha');
       return isPersediaan || isHutangUsaha;
     })
@@ -1835,7 +1865,7 @@ export async function generateCashFlowStatement(
       const name = e.counterpartAccount?.name?.toLowerCase() || '';
       // Piutang Karyawan/Panjar (1220, 122x) - NOT 13xx which is Persediaan
       return code.startsWith('122') || code.startsWith('1-22') ||
-             name.includes('panjar') || name.includes('piutang karyawan');
+        name.includes('panjar') || name.includes('piutang karyawan');
     })
     .reduce((sum, e) => sum + e.amount, 0));
 
@@ -2187,8 +2217,8 @@ export async function generateCashFlowStatement(
       .filter(item => item.accountCode.startsWith('1'))
       .reduce((sum, item) => sum + item.amount, 0) -
       paymentsByAccountList
-      .filter(item => item.accountCode.startsWith('1'))
-      .reduce((sum, item) => sum + item.amount, 0),
+        .filter(item => item.accountCode.startsWith('1'))
+        .reduce((sum, item) => sum + item.amount, 0),
     kewajiban: paymentsByAccountList
       .filter(item => item.accountCode.startsWith('2'))
       .reduce((sum, item) => sum + item.amount, 0),
