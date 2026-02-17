@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { PlusCircle, Trash2, Search, UserPlus, Wallet, FileText, Check, ChevronsUpDown, ShoppingCart, Calculator, User as UserIcon, Plus, Minus, Printer, Eye, ArrowRight, X } from 'lucide-react'
+import { PlusCircle, Trash2, Search, UserPlus, Wallet, FileText, Check, ChevronsUpDown, ShoppingCart, Calculator, User as UserIcon, Plus, Minus, Printer, Eye, ArrowRight, X, Edit } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
 import { useToast } from '@/components/ui/use-toast'
@@ -33,6 +33,7 @@ import { useSalesEmployees } from '@/hooks/useSalesCommission'
 import { PricingService } from '@/services/pricingService'
 import { useTimezone } from '@/contexts/TimezoneContext'
 import { getOfficeTime } from '@/utils/officeTime'
+import { usePermissions, PERMISSIONS } from '@/hooks/usePermissions'
 
 interface FormTransactionItem {
   id: number;
@@ -44,6 +45,7 @@ interface FormTransactionItem {
   designFileName?: string;
   isBonus?: boolean;
   bonusDescription?: string;
+  isManualPrice?: boolean;
 }
 
 export const MobilePosForm = () => {
@@ -58,6 +60,8 @@ export const MobilePosForm = () => {
   const { addTransaction } = useTransactions();
   const { customers } = useCustomers();
   const { data: salesEmployees } = useSalesEmployees();
+  const { hasPermission } = usePermissions();
+  const canEditPrice = true; // Default to true for all roles in mobile view as requested
 
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [selectedSales, setSelectedSales] = useState<string>('none')
@@ -75,11 +79,12 @@ export const MobilePosForm = () => {
   const [savedTransaction, setSavedTransaction] = useState<Transaction | null>(null)
   const [isSuccessSheetOpen, setIsSuccessSheetOpen] = useState(false)
   const [lastTransactionTotal, setLastTransactionTotal] = useState<number>(0) // Store total before reset
-  const [openProductDropdowns, setOpenProductDropdowns] = useState<{[key: number]: boolean}>({});
+  const [openProductDropdowns, setOpenProductDropdowns] = useState<{ [key: number]: boolean }>({});
   const [isPaymentSheetOpen, setIsPaymentSheetOpen] = useState(false);
   const [isProductSheetOpen, setIsProductSheetOpen] = useState(false);
   const [productSearch, setProductSearch] = useState('');
   const productSearchRef = useRef<HTMLInputElement>(null);
+  const [editingPriceId, setEditingPriceId] = useState<number | null>(null);
 
   // Local cache for product pricing to avoid repeated DB calls
   const pricingCacheRef = useRef<Map<string, any>>(new Map());
@@ -150,7 +155,11 @@ export const MobilePosForm = () => {
       newItems[index].harga = selectedProduct.basePrice || 0;
       newItems[index].unit = selectedProduct.unit || 'pcs';
     }
-    
+
+    if (field === 'harga') {
+      newItems[index].isManualPrice = true;
+    }
+
     setItems(newItems);
   };
 
@@ -406,10 +415,14 @@ export const MobilePosForm = () => {
 
         console.log('[POS] Calculation result:', calculation);
 
-        // Update main item qty and price
+        // Update main item qty and price (only update price if not manual)
         let newItems = prevItems.map(item =>
           item.id === existing.id
-            ? { ...item, qty: newQty, harga: calculation?.finalPrice || item.harga }
+            ? {
+              ...item,
+              qty: newQty,
+              harga: item.isManualPrice ? item.harga : (calculation?.finalPrice || item.harga)
+            }
             : item
         );
 
@@ -522,10 +535,14 @@ export const MobilePosForm = () => {
         productPricing.bonusPricings || []
       ) : null;
 
-      // Update main item qty and price
+      // Update main item qty and price (only update price if not manual)
       let newItems = prevItems.map((i, idx) =>
         idx === index
-          ? { ...i, qty: newQty, harga: calculation?.finalPrice || i.harga }
+          ? {
+            ...i,
+            qty: newQty,
+            harga: i.isManualPrice ? i.harga : (calculation?.finalPrice || i.harga)
+          }
           : i
       );
 
@@ -725,7 +742,7 @@ export const MobilePosForm = () => {
           </div>
         </SheetContent>
       </Sheet>
-      
+
       {/* Header */}
       <Card className="dark:bg-gray-800 dark:border-gray-700">
         <CardHeader className="pb-3">
@@ -969,9 +986,34 @@ export const MobilePosForm = () => {
                     ) : (
                       <>
                         <p className="font-medium text-sm truncate dark:text-white">{item.product?.name || 'Produk'}</p>
-                        <p className="text-xs text-muted-foreground dark:text-gray-400">
-                          @ {new Intl.NumberFormat("id-ID").format(item.harga)}
-                        </p>
+                        <div className="flex items-center gap-1.5">
+                          {editingPriceId === item.id ? (
+                            <div className="flex items-center gap-1 mt-1">
+                              <span className="text-xs text-muted-foreground">Rp</span>
+                              <Input
+                                type="number"
+                                value={item.harga}
+                                onChange={(e) => handleItemChange(index, 'harga', parseInt(e.target.value) || 0)}
+                                className="h-7 w-24 text-xs p-1"
+                                onBlur={() => setEditingPriceId(null)}
+                                autoFocus
+                              />
+                            </div>
+                          ) : (
+                            <div
+                              className={cn(
+                                "flex items-center gap-1 mt-0.5",
+                                canEditPrice && "cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/30 px-1 rounded transition-colors"
+                              )}
+                              onClick={() => canEditPrice && setEditingPriceId(item.id)}
+                            >
+                              <p className="text-xs text-muted-foreground dark:text-gray-400">
+                                @ {new Intl.NumberFormat("id-ID").format(item.harga)}
+                              </p>
+                              {canEditPrice && <Edit className="h-3 w-3 text-blue-500" />}
+                            </div>
+                          )}
+                        </div>
                       </>
                     )}
                   </div>

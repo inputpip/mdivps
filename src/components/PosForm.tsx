@@ -1204,7 +1204,7 @@ export const PosForm = () => {
                                     min={0}
                                     decimalPlaces={2}
                                     className="w-20 md:w-32 text-right text-xs"
-                                    disabled={retasiBlocked || loadingPrices[item.id] || currentUser?.role?.toLowerCase() === 'supir' || currentUser?.role?.toLowerCase() === 'helper'}
+                                    disabled={retasiBlocked || loadingPrices[item.id] || !hasGranularPermission('pos_edit_price')}
                                   />
                                   {loadingPrices[item.id] && (
                                     <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-70">

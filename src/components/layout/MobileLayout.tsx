@@ -3,7 +3,7 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { ShoppingCart, Clock, User, LogOut, Menu, X, List, Truck, Package, Users, ArrowLeft, Home, Sun, Moon, Building2, Check, ChevronsUpDown, Factory, Warehouse, Navigation, Coins, MapPin, FileText, RefreshCw } from 'lucide-react'
+import { ShoppingCart, Clock, User, LogOut, Menu, X, List, Truck, Package, Users, ArrowLeft, Home, Sun, Moon, Building2, Check, ChevronsUpDown, Factory, Warehouse, Navigation, Coins, MapPin, FileText, RefreshCw, Receipt } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useCompanySettings } from '@/hooks/useCompanySettings'
 import { cn } from '@/lib/utils'
@@ -95,6 +95,7 @@ const MobileLayout = () => {
   const canAccessCustomerMap = hasGranularPermission('customer_map_access') || hasGranularPermission('customers_view')
   const canAccessQuotations = hasGranularPermission('quotations_view') || hasGranularPermission('quotations_create')
   const canViewDelivery = hasGranularPermission('delivery_view') || hasGranularPermission('delivery_create')
+  const canAccessExpenses = hasGranularPermission('expenses_view') || hasGranularPermission('expenses_create')
 
   // Helper gets limited menu: POS Supir, Pelanggan Terdekat, Komisi Saya
   const helperMenuItems = [
@@ -160,6 +161,15 @@ const MobileLayout = () => {
       path: '/transactions',
       description: 'Lihat riwayat transaksi & cetak',
       color: 'bg-purple-500 hover:bg-purple-600',
+      textColor: 'text-white'
+    }] : []),
+    // Pengeluaran - controlled by expenses_view permission
+    ...(canAccessExpenses ? [{
+      title: 'Pengeluaran',
+      icon: Receipt,
+      path: '/expenses',
+      description: 'Catat & kelola pengeluaran',
+      color: 'bg-red-500 hover:bg-red-600',
       textColor: 'text-white'
     }] : []),
     // Data Pelanggan - controlled by customers_view permission
@@ -296,6 +306,8 @@ const MobileLayout = () => {
         return 'Penawaran'
       case '/delivery':
         return 'Pengantaran'
+      case '/expenses':
+        return 'Pengeluaran'
       default:
         return 'ERP System'
     }

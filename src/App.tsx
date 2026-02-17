@@ -283,7 +283,7 @@ function WebApp() {
                       <Route path="/delivery" element={<DeliveryPage />} />
                       <Route path="/sold-items" element={<MobileSoldItemsPage />} />
                       <Route path="/my-commission" element={<MobileCommissionPage />} />
-                      <Route path="/mobile/expenses" element={<MobileExpensePage />} />
+                      <Route path="/expenses" element={<MobileExpensePage />} />
                       <Route path="/quotations" element={<QuotationsPage />} />
                       <Route path="/quotations/new" element={<QuotationsPage />} />
                       <Route path="/journal" element={<JournalPage />} />

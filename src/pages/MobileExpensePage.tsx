@@ -187,7 +187,16 @@ export default function MobileExpensePage() {
 
     // Filter Recent Expenses (Today)
     const todayStr = getOfficeDateString(timezone);
-    const todaysExpenses = expenses?.filter(e => e.date.startsWith(todayStr)) || [];
+    const todaysExpenses = expenses?.filter(e => {
+        const expenseDate = e.date instanceof Date ? e.date : new Date(e.date);
+        const expenseDateStr = new Intl.DateTimeFormat('en-CA', {
+            timeZone: timezone,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+        }).format(expenseDate);
+        return expenseDateStr === todayStr;
+    }) || [];
     const todaysTotal = todaysExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
 
 

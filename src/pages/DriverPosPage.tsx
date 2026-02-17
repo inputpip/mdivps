@@ -549,11 +549,10 @@ export default function DriverPosPage() {
                 <button
                   key={product.id}
                   onClick={() => quickAddProduct(product)}
-                  className={`p-4 rounded-xl border-2 text-left transition-all active:scale-95 ${
-                    inCart
-                      ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-400 dark:border-blue-500 shadow-md'
-                      : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 hover:border-gray-300'
-                  }`}
+                  className={`p-4 rounded-xl border-2 text-left transition-all active:scale-95 ${inCart
+                    ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-400 dark:border-blue-500 shadow-md'
+                    : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 hover:border-gray-300'
+                    }`}
                 >
                   <div className="font-bold text-base truncate text-gray-900 dark:text-white">{product.name}</div>
                   <div className="flex justify-between items-center mt-2">
@@ -607,9 +606,8 @@ export default function DriverPosPage() {
             {items.map((item, index) => (
               <div
                 key={index}
-                className={`flex items-center justify-between rounded-xl p-3 ${
-                  item.isBonus ? 'bg-green-50 dark:bg-green-900/30 border-2 border-green-300 dark:border-green-700' : 'bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600'
-                }`}
+                className={`flex items-center justify-between rounded-xl p-3 ${item.isBonus ? 'bg-green-50 dark:bg-green-900/30 border-2 border-green-300 dark:border-green-700' : 'bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600'
+                  }`}
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -627,7 +625,28 @@ export default function DriverPosPage() {
                     {item.isBonus ? (
                       <span className="text-green-600 font-medium">{item.bonusDescription || 'Gratis'}</span>
                     ) : (
-                      <span className="font-medium">{new Intl.NumberFormat("id-ID").format(item.price)} × {item.quantity}</span>
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{new Intl.NumberFormat("id-ID").format(item.price)} × {item.quantity}</span>
+                          {true && ( /* price editing allowed for all roles in mobile view */
+                            <div className="flex items-center gap-1">
+                              <Input
+                                type="number"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                value={item.price}
+                                onChange={(e) => {
+                                  const newPrice = parseInt(e.target.value) || 0
+                                  setItems(prev => prev.map((i, idx) =>
+                                    idx === index ? { ...i, price: newPrice, isManualPrice: true } : i
+                                  ))
+                                }}
+                                className="w-24 h-7 text-xs px-1 bg-white dark:bg-gray-800"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     )}
                   </div>
                 </div>
