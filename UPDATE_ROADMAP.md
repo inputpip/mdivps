@@ -11,8 +11,7 @@ Dokumen ini merangkum daftar modul yang masih memiliki celah keamanan (risiko no
 ## 🛠 Daftar Modul yang Harus Diperbarui
 
 ### 1. Modul Produksi (`04_production.sql`)
-*   **Target Fungsi:** `create_production_record_atomic` (atau fungsi utama produksi).
-*   **Masalah:** Menggunakan `MAX(entry_number)` manual. Jika produksi dicatat bersamaan, salah satu akan gagal (Duplicate Key).
+ *   **Masalah:** Menggunakan `MAX(entry_number)` manual. Jika produksi dicatat bersamaan, salah satu akan gagal (Duplicate Key).
 *   **Langkah Update:**
     *   Hapus logika `v_entry_number` manual.
     *   Siapkan variabel `v_journal_lines` dalam format JSONB.
@@ -60,6 +59,17 @@ Untuk setiap fungsi di atas, ikuti pola berikut:
        RETURN;
     END IF;
     ```
+
+---
+
+---
+
+## 📱 Pengembangan Fitur Mobile (Selesai Tahap 1)
+- [x] **Layout Mobile:** Penambahan menu Maintenance Aset & Laporan Sales.
+- [x] **Modul Maintenance:** Input perbaikan aset + Lampiran Foto.
+- [x] **Modul Sales Report:** Laporan kunjungan toko, penagihan piutang terintegrasi, & GPS Tracking.
+- [x] **Sinkronisasi Kas:** Biaya maintenance & penagihan sales report terhubung ke `expenses` & `transactions` secara atomic (via RPC).
+- [x] **Deployment:** Skema & RLS telah diterapkan di kedu database (Nabire `aquvit_new` & Manokwari `mkw_db`).
 
 ---
 

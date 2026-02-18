@@ -54,13 +54,16 @@ type PaymentFormData = {
   notes?: string;
 }
 
+import { Account } from "@/types/account"
+
 interface PayReceivableDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   transaction: Transaction | null
+  defaultPaymentAccount?: Account
 }
 
-export function PayReceivableDialog({ open, onOpenChange, transaction }: PayReceivableDialogProps) {
+export function PayReceivableDialog({ open, onOpenChange, transaction, defaultPaymentAccount }: PayReceivableDialogProps) {
   const { toast } = useToast()
   const { user } = useAuth()
   const { timezone } = useTimezone()
@@ -93,16 +96,24 @@ export function PayReceivableDialog({ open, onOpenChange, transaction }: PayRece
     }
   }, [remainingAmount, watchedAmount, trigger]);
 
-  // Auto-select payment account based on logged-in user's assigned cash account
+  // Auto-select payment account from props or logged-in user's assigned cash account
   React.useEffect(() => {
-    if (open && user?.id && accounts && accounts.length > 0) {
-      const employeeCashAccount = getEmployeeCashAccount(user.id);
-      if (employeeCashAccount) {
-        setValue("paymentAccountId", employeeCashAccount.id);
-        console.log(`[PayReceivable] Auto-selected cash account "${employeeCashAccount.name}" for user ${user.name}`);
+    if (open) {
+      if (defaultPaymentAccount) {
+        setValue("paymentAccountId", defaultPaymentAccount.id);
+        console.log(`[PayReceivable] Auto-selected from props: "${defaultPaymentAccount.name}"`);
+        return;
+      }
+
+      if (user?.id && accounts && accounts.length > 0) {
+        const employeeCashAccount = getEmployeeCashAccount(user.id);
+        if (employeeCashAccount) {
+          setValue("paymentAccountId", employeeCashAccount.id);
+          console.log(`[PayReceivable] Auto-selected cash account "${employeeCashAccount.name}" for user ${user.name}`);
+        }
       }
     }
-  }, [open, user?.id, accounts, setValue, getEmployeeCashAccount]);
+  }, [open, user?.id, accounts, setValue, getEmployeeCashAccount, defaultPaymentAccount]);
 
   const onSubmit = async (data: PaymentFormData) => {
     if (!transaction || !user) return;

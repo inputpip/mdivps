@@ -3,7 +3,7 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { ShoppingCart, Clock, User, LogOut, Menu, X, List, Truck, Package, Users, ArrowLeft, Home, Sun, Moon, Building2, Check, ChevronsUpDown, Factory, Warehouse, Navigation, Coins, MapPin, FileText, RefreshCw, Receipt } from 'lucide-react'
+import { ShoppingCart, Clock, User, LogOut, Menu, X, List, Truck, Package, Users, ArrowLeft, Home, Sun, Moon, Building2, Check, ChevronsUpDown, Factory, Warehouse, Navigation, Coins, MapPin, FileText, RefreshCw, Receipt, Wrench } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useCompanySettings } from '@/hooks/useCompanySettings'
 import { cn } from '@/lib/utils'
@@ -252,7 +252,25 @@ const MobileLayout = () => {
       description: 'Clock In / Clock Out',
       color: 'bg-green-500 hover:bg-green-600',
       textColor: 'text-white'
-    }] : [])
+    }] : []),
+    // Maintenance Aset
+    {
+      title: 'Maintenance Aset',
+      icon: Wrench,
+      path: '/mobile-maintenance',
+      description: 'Laporan perbaikan aset',
+      color: 'bg-zinc-600 hover:bg-zinc-700',
+      textColor: 'text-white'
+    },
+    // Laporan Sales
+    {
+      title: 'Laporan Sales',
+      icon: MapPin,
+      path: '/mobile-sales-report',
+      description: 'Kunjungan & Penagihan',
+      color: 'bg-indigo-600 hover:bg-indigo-700',
+      textColor: 'text-white'
+    }
   ]
 
   // Use helper menu if user is helper, otherwise use regular menu

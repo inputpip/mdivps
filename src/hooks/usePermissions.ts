@@ -7,6 +7,7 @@ export const PERMISSIONS = {
   // Core Data Access
   PRODUCTS: 'products',
   PRODUCTS_MANAGE: 'products_manage',
+  POS_EDIT_PRICE: 'pos_edit_price',
   MATERIALS: 'materials',
   MATERIALS_MANAGE: 'materials_manage',
   TRANSACTIONS: 'transactions',
@@ -87,6 +88,8 @@ const mapGranularToSimplified = (granularPerms: Record<string, boolean>): Record
 
     // Roles - need role management permission
     roles: granularPerms.role_management === true,
+
+    pos_edit_price: granularPerms.pos_edit_price === true,
   };
 };
 

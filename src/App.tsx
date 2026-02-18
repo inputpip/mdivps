@@ -75,6 +75,9 @@ const MobileRetasiPage = lazy(() => import("@/pages/MobileRetasiPage"));
 const MobileSoldItemsPage = lazy(() => import("@/pages/MobileSoldItemsPage"));
 const MobileCommissionPage = lazy(() => import("@/pages/MobileCommissionPage"));
 const MobileExpensePage = lazy(() => import("@/pages/MobileExpensePage"));
+const MobileMaintenancePage = lazy(() => import("@/pages/MobileMaintenancePage"));
+const MobileSalesReportPage = lazy(() => import("@/pages/MobileSalesReportPage"));
+const SalesReportPage = lazy(() => import("@/pages/SalesReportPage"));
 
 
 const QuotationsPage = lazy(() => import("@/pages/QuotationsPage"));
@@ -284,6 +287,8 @@ function WebApp() {
                       <Route path="/sold-items" element={<MobileSoldItemsPage />} />
                       <Route path="/my-commission" element={<MobileCommissionPage />} />
                       <Route path="/expenses" element={<MobileExpensePage />} />
+                      <Route path="/mobile-maintenance" element={<MobileMaintenancePage />} />
+                      <Route path="/mobile-sales-report" element={<MobileSalesReportPage />} />
                       <Route path="/quotations" element={<QuotationsPage />} />
                       <Route path="/quotations/new" element={<QuotationsPage />} />
                       <Route path="/journal" element={<JournalPage />} />
@@ -341,6 +346,7 @@ function WebApp() {
                       <Route path="/customer-map" element={<CustomerMapPage />} />
                       <Route path="/quotations" element={<QuotationsPage />} />
                       <Route path="/quotations/new" element={<QuotationsPage />} />
+                      <Route path="/sales-reports" element={<SalesReportPage />} />
 
                       <Route path="*" element={<NotFound />} />
                     </Route>

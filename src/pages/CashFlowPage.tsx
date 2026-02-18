@@ -141,27 +141,14 @@ export function CashFlowPage() {
         />
       </div>
 
-      {/* Tabs for Cash Flow and General Ledger */}
-      <Tabs defaultValue="cash-flow" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-2 max-w-md">
-          <TabsTrigger value="cash-flow" className="flex items-center gap-2">
-            <Wallet className="h-4 w-4" />
-            Mutasi Kas
-          </TabsTrigger>
-          <TabsTrigger value="general-ledger" className="flex items-center gap-2">
-            <BookOpen className="h-4 w-4" />
-            Buku Besar
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="cash-flow">
-          <CashFlowTable data={cashHistory || []} isLoading={isLoading} />
-        </TabsContent>
-
-        <TabsContent value="general-ledger">
-          <GeneralLedgerTable />
-        </TabsContent>
-      </Tabs>
+      {/* Cash Flow Table Only */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 mb-4">
+          <Wallet className="h-4 w-4" />
+          <h2 className="text-lg font-semibold">Mutasi Kas</h2>
+        </div>
+        <CashFlowTable data={cashHistory || []} isLoading={isLoading} />
+      </div>
     </div>
   );
 }

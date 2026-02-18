@@ -368,11 +368,15 @@ export function CashFlowTable({ data, isLoading }: CashFlowTableProps) {
   // Calculate totals for summary cards
   const totals = React.useMemo(() => {
     const totalIncome = displayData
-      .filter(item => isIncomeType(item) && item.source_type !== 'transfer_masuk')
+      .filter(item => isIncomeType(item) &&
+        item.source_type !== 'transfer_masuk' &&
+        item.type !== 'transfer_masuk')
       .reduce((sum, item) => sum + item.amount, 0);
 
     const totalExpense = displayData
-      .filter(item => isExpenseType(item) && item.source_type !== 'transfer_keluar')
+      .filter(item => isExpenseType(item) &&
+        item.source_type !== 'transfer_keluar' &&
+        item.type !== 'transfer_keluar')
       .reduce((sum, item) => sum + item.amount, 0);
 
     const netFlow = totalIncome - totalExpense;
@@ -479,7 +483,7 @@ export function CashFlowTable({ data, isLoading }: CashFlowTableProps) {
         const item = row.original;
         const refNumber = item.reference_number || item.reference_name || item.reference_id || '-';
         return (
-          <div className="max-w-[100px] text-xs font-mono truncate" title={refNumber}>
+          <div className="max-w-[150px] text-xs font-mono truncate" title={refNumber}>
             {refNumber}
           </div>
         );
@@ -515,7 +519,7 @@ export function CashFlowTable({ data, isLoading }: CashFlowTableProps) {
       cell: ({ row }) => {
         const description = row.getValue("description") as string;
         return (
-          <div className="max-w-[120px] text-xs truncate" title={description}>
+          <div className="max-w-[250px] text-xs truncate" title={description}>
             {description}
           </div>
         );

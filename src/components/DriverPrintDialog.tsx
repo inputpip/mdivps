@@ -83,6 +83,9 @@ export function DriverPrintDialog({
     doc.setFontSize(10).setFont("helvetica", "normal");
     doc.text(companyInfo?.address || 'Company Address', margin + logoWidth + 10, 32);
     doc.text(companyInfo?.phone || 'Company Phone', margin + logoWidth + 10, 37);
+    if (companyInfo?.npwp && transaction.ppnEnabled) {
+      doc.text(`NPWP: ${companyInfo.npwp}`, margin + logoWidth + 10, 42);
+    }
 
     // Faktur Penjualan title and info in white
     doc.setFontSize(24).setFont("helvetica", "bold").setTextColor(255, 255, 255);
@@ -238,7 +241,7 @@ export function DriverPrintDialog({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={() => {}}>
+      <Dialog open={open} onOpenChange={() => { }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-green-600">
@@ -301,7 +304,7 @@ export function DriverPrintDialog({
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <Button 
+                <Button
                   onClick={handlePrintReceipt}
                   className="w-full justify-start"
                   variant="outline"

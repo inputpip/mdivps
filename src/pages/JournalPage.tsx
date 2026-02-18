@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Plus, BookOpen, Filter, RefreshCw, List, FileText, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { Plus, BookOpen, Filter, RefreshCw, List, FileText, ChevronLeft, ChevronRight, X, Search } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -44,6 +45,7 @@ export function JournalPage() {
   const [linesPage, setLinesPage] = useState(1);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Fetch accounts for filter - filtered by branch
   useEffect(() => {
@@ -92,6 +94,7 @@ export function JournalPage() {
   // Reset filter when branch changes
   useEffect(() => {
     setSelectedAccountId('all');
+    setSearchQuery('');
     setEntriesPage(1);
     setLinesPage(1);
   }, [currentBranch?.id]);
@@ -123,7 +126,26 @@ export function JournalPage() {
 
   // Filter entries by status AND account
   const filteredEntries = useMemo(() => {
-    return (journalEntries || []).filter(entry => {
+    let result = journalEntries || [];
+
+    // Filter by Search Query
+    if (searchQuery) {
+      const lowerQuery = searchQuery.toLowerCase();
+      result = result.filter(entry => {
+        const matchesJournal = entry.description?.toLowerCase().includes(lowerQuery) ||
+          entry.entryNumber?.toLowerCase().includes(lowerQuery);
+
+        const matchesLines = entry.lines?.some(line =>
+          line.accountName?.toLowerCase().includes(lowerQuery) ||
+          line.accountCode?.toLowerCase().includes(lowerQuery) ||
+          line.description?.toLowerCase().includes(lowerQuery)
+        );
+
+        return matchesJournal || matchesLines;
+      });
+    }
+
+    return result.filter(entry => {
       // Status filter
       if (statusFilter === 'voided' && !entry.isVoided) return false;
       if (statusFilter !== 'all' && statusFilter !== 'voided') {
@@ -138,15 +160,29 @@ export function JournalPage() {
 
       return true;
     });
-  }, [journalEntries, statusFilter, selectedAccountId]);
+  }, [journalEntries, statusFilter, selectedAccountId, searchQuery]);
 
   // Filter journal lines by account
   const filteredJournalLines = useMemo(() => {
-    if (selectedAccountId === 'all') {
-      return allJournalLines || [];
+    let result = allJournalLines || [];
+
+    // Filter by Search Query
+    if (searchQuery) {
+      const lowerQuery = searchQuery.toLowerCase();
+      result = result.filter(line =>
+        line.accountName?.toLowerCase().includes(lowerQuery) ||
+        line.accountCode?.toLowerCase().includes(lowerQuery) ||
+        line.description?.toLowerCase().includes(lowerQuery) ||
+        line.journalDescription?.toLowerCase().includes(lowerQuery) ||
+        line.entryNumber?.toLowerCase().includes(lowerQuery)
+      );
     }
-    return (allJournalLines || []).filter(line => line.accountId === selectedAccountId);
-  }, [allJournalLines, selectedAccountId]);
+
+    if (selectedAccountId === 'all') {
+      return result;
+    }
+    return result.filter(line => line.accountId === selectedAccountId);
+  }, [allJournalLines, selectedAccountId, searchQuery]);
 
   // Reset to page 1 when filter changes
   const handleStatusFilterChange = (value: string) => {
@@ -250,35 +286,69 @@ export function JournalPage() {
 
           {/* Filter & List Section */}
           <div className="space-y-4">
-            {/* Account Filter */}
-            <div className="flex items-center gap-4 flex-wrap">
-              <div className="flex items-center gap-2">
-                <Filter className="h-4 w-4 text-muted-foreground" />
-                <Select value={selectedAccountId} onValueChange={handleAccountFilterChange}>
-                  <SelectTrigger className="w-[300px]">
-                    <SelectValue placeholder="Filter berdasarkan Akun" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Semua Akun</SelectItem>
-                    {accounts.map(account => (
-                      <SelectItem key={account.id} value={account.id}>
-                        {account.code} - {account.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {selectedAccountId !== 'all' && (
-                  <Button variant="ghost" size="sm" onClick={clearAccountFilter}>
+            {/* Filter & Search Bar */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-center gap-4 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <Filter className="h-4 w-4 text-muted-foreground" />
+                  <Select value={selectedAccountId} onValueChange={handleAccountFilterChange}>
+                    <SelectTrigger className="w-[300px]">
+                      <SelectValue placeholder="Filter berdasarkan Akun" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Semua Akun</SelectItem>
+                      {accounts.map(account => (
+                        <SelectItem key={account.id} value={account.id}>
+                          {account.code} - {account.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {selectedAccountId !== 'all' && (
+                    <Button variant="ghost" size="sm" onClick={clearAccountFilter}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              <div className="relative w-full md:w-80">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Cari akun atau keterangan..."
+                  className="pl-9"
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setEntriesPage(1);
+                    setLinesPage(1);
+                  }}
+                />
+                {searchQuery && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                    onClick={() => {
+                      setSearchQuery('');
+                      setEntriesPage(1);
+                      setLinesPage(1);
+                    }}
+                  >
                     <X className="h-4 w-4" />
                   </Button>
                 )}
               </div>
-              {selectedAccountId !== 'all' && (
-                <Badge variant="secondary">
-                  Filter: {accounts.find(a => a.id === selectedAccountId)?.code} - {accounts.find(a => a.id === selectedAccountId)?.name}
-                </Badge>
-              )}
             </div>
+
+            {/* Selected Account Badge */}
+            {selectedAccountId !== 'all' && (
+              <div className="flex items-center">
+                <Badge variant="secondary">
+                  Account: {accounts.find(a => a.id === selectedAccountId)?.code} - {accounts.find(a => a.id === selectedAccountId)?.name}
+                </Badge>
+              </div>
+            )}
 
             {/* Tabs for quick filter */}
             <Tabs value={statusFilter} onValueChange={handleStatusFilterChange}>
@@ -397,35 +467,69 @@ export function JournalPage() {
         {/* Tab: Journal Entry Lines */}
         <TabsContent value="lines">
           <div className="space-y-4">
-            {/* Account Filter for Lines */}
-            <div className="flex items-center gap-4 flex-wrap">
-              <div className="flex items-center gap-2">
-                <Filter className="h-4 w-4 text-muted-foreground" />
-                <Select value={selectedAccountId} onValueChange={handleAccountFilterChange}>
-                  <SelectTrigger className="w-[300px]">
-                    <SelectValue placeholder="Filter berdasarkan Akun" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Semua Akun</SelectItem>
-                    {accounts.map(account => (
-                      <SelectItem key={account.id} value={account.id}>
-                        {account.code} - {account.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {selectedAccountId !== 'all' && (
-                  <Button variant="ghost" size="sm" onClick={clearAccountFilter}>
+            {/* Account Filter & Search Bar for Lines */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-center gap-4 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <Filter className="h-4 w-4 text-muted-foreground" />
+                  <Select value={selectedAccountId} onValueChange={handleAccountFilterChange}>
+                    <SelectTrigger className="w-[300px]">
+                      <SelectValue placeholder="Filter berdasarkan Akun" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Semua Akun</SelectItem>
+                      {accounts.map(account => (
+                        <SelectItem key={account.id} value={account.id}>
+                          {account.code} - {account.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {selectedAccountId !== 'all' && (
+                    <Button variant="ghost" size="sm" onClick={clearAccountFilter}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              <div className="relative w-full md:w-80">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Cari akun atau keterangan..."
+                  className="pl-9"
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setEntriesPage(1);
+                    setLinesPage(1);
+                  }}
+                />
+                {searchQuery && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                    onClick={() => {
+                      setSearchQuery('');
+                      setEntriesPage(1);
+                      setLinesPage(1);
+                    }}
+                  >
                     <X className="h-4 w-4" />
                   </Button>
                 )}
               </div>
-              {selectedAccountId !== 'all' && (
-                <Badge variant="secondary">
-                  Filter: {accounts.find(a => a.id === selectedAccountId)?.code} - {accounts.find(a => a.id === selectedAccountId)?.name}
-                </Badge>
-              )}
             </div>
+
+            {/* Selected Account Badge */}
+            {selectedAccountId !== 'all' && (
+              <div className="flex items-center">
+                <Badge variant="secondary">
+                  Account: {accounts.find(a => a.id === selectedAccountId)?.code} - {accounts.find(a => a.id === selectedAccountId)?.name}
+                </Badge>
+              </div>
+            )}
 
             {/* Summary */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

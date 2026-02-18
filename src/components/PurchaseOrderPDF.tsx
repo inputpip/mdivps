@@ -179,6 +179,11 @@ export function PurchaseOrderPDF({ purchaseOrder }: PurchaseOrderPDFProps) {
                 <p className="text-sm text-gray-600">
                   Telp: {settings?.phone || '-'} | Email: {settings?.email || '-'}
                 </p>
+                {settings?.npwp && purchaseOrder.includePpn && (
+                  <p className="text-sm text-gray-600">
+                    NPWP: {settings.npwp}
+                  </p>
+                )}
               </div>
             </div>
             <div className="text-right">

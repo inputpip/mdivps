@@ -156,7 +156,7 @@ BEGIN
     p_initial_balance,
     0, -- Start at 0. Do NOT double count.
     p_is_payment_account,
-    p_parent_id::UUID,
+    p_parent_id, -- Removed ::UUID cast to support legacy text IDs
     p_level,
     p_is_header,
     p_sort_order,

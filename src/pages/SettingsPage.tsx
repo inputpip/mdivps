@@ -41,6 +41,7 @@ export default function SettingsPage() {
     bankAccountName3: '',
     salesPhone: '',
     thermalPrinterWidth: '58mm' as '58mm' | '80mm',
+    npwp: '',
   });
 
   useEffect(() => {
@@ -62,6 +63,7 @@ export default function SettingsPage() {
         bankAccountName3: settings.bankAccountName3 || '',
         salesPhone: settings.salesPhone || '',
         thermalPrinterWidth: settings.thermalPrinterWidth || '58mm',
+        npwp: settings.npwp || '',
       });
     }
   }, [settings]);
@@ -146,167 +148,171 @@ export default function SettingsPage() {
           <TabsTrigger value="telegram">Telegram</TabsTrigger>
           <TabsTrigger value="integrations">Integrations</TabsTrigger>
         </TabsList>
-        
+
         <TabsContent value="company">
           <form onSubmit={handleSubmit}>
             <Card>
-        <CardHeader>
-          <CardTitle>Pengaturan Perusahaan</CardTitle>
-          <CardDescription>
-            Atur informasi, logo, dan lokasi kantor untuk fitur absensi.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid md:grid-cols-3 gap-6">
-            {/* Kolom 1: Info Dasar */}
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Nama Perusahaan</Label>
-                <Input id="name" value={localInfo.name} onChange={handleInputChange} placeholder="Contoh: Percetakan Maju Jaya" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="address">Alamat</Label>
-                <Textarea id="address" value={localInfo.address} onChange={handleInputChange} placeholder="Contoh: Jl. Pahlawan No. 123" rows={2} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="phone">Nomor Telepon Kantor</Label>
-                <Input id="phone" value={localInfo.phone} onChange={handleInputChange} placeholder="0812-3456-7890" noFormat />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="salesPhone">Nomor HP Sales</Label>
-                <Input id="salesPhone" value={localInfo.salesPhone} onChange={handleInputChange} placeholder="0813-4470-7573" noFormat />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="timezone">Zona Waktu</Label>
-                <Select value={localInfo.timezone} onValueChange={(value) => setLocalInfo(prev => ({ ...prev, timezone: value }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Pilih zona waktu" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {INDONESIA_TIMEZONES.map((tz) => (
-                      <SelectItem key={tz.value} value={tz.value}>
-                        {tz.label} ({tz.offset})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Kolom 2: Rekening Bank */}
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="bankAccount1">Rekening 1</Label>
-                <Input id="bankAccount1" value={localInfo.bankAccount1} onChange={handleInputChange} placeholder="MANDIRI-1540020855197" noFormat />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="bankAccountName1">A.N Rekening 1</Label>
-                <Input id="bankAccountName1" value={localInfo.bankAccountName1} onChange={handleInputChange} placeholder="CV. PERSADA INTIM PUSAKA" noFormat />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="bankAccount2">Rekening 2</Label>
-                <Input id="bankAccount2" value={localInfo.bankAccount2} onChange={handleInputChange} placeholder="BNI-2990213245" noFormat />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="bankAccountName2">A.N Rekening 2</Label>
-                <Input id="bankAccountName2" value={localInfo.bankAccountName2} onChange={handleInputChange} placeholder="CV. PERSADA INTIM PUSAKA" noFormat />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="bankAccount3">Rekening 3</Label>
-                <Input id="bankAccount3" value={localInfo.bankAccount3} onChange={handleInputChange} placeholder="BRI-777201000033304" noFormat />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="bankAccountName3">A.N Rekening 3</Label>
-                <Input id="bankAccountName3" value={localInfo.bankAccountName3} onChange={handleInputChange} placeholder="CV. PERSADA INTIM PUSAKA" noFormat />
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                Rekening ini akan tampil di faktur cetak (PDF, Dot Matrix, Thermal)
-              </p>
-            </div>
-
-            {/* Kolom 3: Logo */}
-            <div className="space-y-2">
-              <Label>Logo Perusahaan</Label>
-              <div className="border-2 border-dashed rounded-lg p-4 flex flex-col items-center justify-center text-center">
-                {localInfo.logo ? (
-                  <img src={localInfo.logo} alt="Logo Preview" className="max-h-20 mb-2" />
-                ) : (
-                  <div className="mb-2 text-muted-foreground">
-                    <ImageIcon className="mx-auto h-8 w-8" />
-                    <p className="text-xs">Belum ada logo</p>
+              <CardHeader>
+                <CardTitle>Pengaturan Perusahaan</CardTitle>
+                <CardDescription>
+                  Atur informasi, logo, dan lokasi kantor untuk fitur absensi.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid md:grid-cols-3 gap-6">
+                  {/* Kolom 1: Info Dasar */}
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="name">Nama Perusahaan</Label>
+                      <Input id="name" value={localInfo.name} onChange={handleInputChange} placeholder="Contoh: Percetakan Maju Jaya" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="address">Alamat</Label>
+                      <Textarea id="address" value={localInfo.address} onChange={handleInputChange} placeholder="Contoh: Jl. Pahlawan No. 123" rows={2} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="phone">Nomor Telepon Kantor</Label>
+                      <Input id="phone" value={localInfo.phone} onChange={handleInputChange} placeholder="0812-3456-7890" noFormat />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="salesPhone">Nomor HP Sales</Label>
+                      <Input id="salesPhone" value={localInfo.salesPhone} onChange={handleInputChange} placeholder="0813-4470-7573" noFormat />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="npwp">NPWP (Jika ada)</Label>
+                      <Input id="npwp" value={localInfo.npwp} onChange={handleInputChange} placeholder="XX.XXX.XXX.X-XXX.XXX" noFormat />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="timezone">Zona Waktu</Label>
+                      <Select value={localInfo.timezone} onValueChange={(value) => setLocalInfo(prev => ({ ...prev, timezone: value }))}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Pilih zona waktu" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {INDONESIA_TIMEZONES.map((tz) => (
+                            <SelectItem key={tz.value} value={tz.value}>
+                              {tz.label} ({tz.offset})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
-                )}
-                <Button asChild variant="outline" size="sm">
-                  <label htmlFor="logo-upload" className="cursor-pointer">
-                    <Upload className="mr-2 h-3 w-3" />
-                    {localInfo.logo ? 'Ganti' : 'Unggah'}
-                    <input id="logo-upload" type="file" className="sr-only" accept="image/*" onChange={handleLogoUpload} />
-                  </label>
-                </Button>
-                <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF</p>
-              </div>
-            </div>
-          </div>
 
-          <div className="pt-6 border-t">
-            <CardTitle className="text-lg mb-2">Pengaturan Absensi Lokasi</CardTitle>
-            <CardDescription className="mb-4">
-              Tetapkan titik koordinat pusat dan radius toleransi untuk lokasi kantor yang dianggap sah untuk absensi.
-            </CardDescription>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="latitude">Latitude</Label>
-                <Input id="latitude" type="number" step="any" value={localInfo.latitude ?? ''} onChange={handleNumberInputChange} placeholder="-6.200000" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="longitude">Longitude</Label>
-                <Input id="longitude" type="number" step="any" value={localInfo.longitude ?? ''} onChange={handleNumberInputChange} placeholder="106.816666" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="attendanceRadius">Radius Toleransi (meter)</Label>
-                <Input id="attendanceRadius" type="number" value={localInfo.attendanceRadius ?? ''} onChange={handleNumberInputChange} placeholder="50" />
-              </div>
-            </div>
-            <Button type="button" variant="secondary" onClick={handleGetCurrentLocation} className="mt-4">
-              <MapPin className="mr-2 h-4 w-4" /> Gunakan Lokasi Saat Ini
-            </Button>
-          </div>
+                  {/* Kolom 2: Rekening Bank */}
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="bankAccount1">Rekening 1</Label>
+                      <Input id="bankAccount1" value={localInfo.bankAccount1} onChange={handleInputChange} placeholder="MANDIRI-1540020855197" noFormat />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="bankAccountName1">A.N Rekening 1</Label>
+                      <Input id="bankAccountName1" value={localInfo.bankAccountName1} onChange={handleInputChange} placeholder="CV. PERSADA INTIM PUSAKA" noFormat />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="bankAccount2">Rekening 2</Label>
+                      <Input id="bankAccount2" value={localInfo.bankAccount2} onChange={handleInputChange} placeholder="BNI-2990213245" noFormat />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="bankAccountName2">A.N Rekening 2</Label>
+                      <Input id="bankAccountName2" value={localInfo.bankAccountName2} onChange={handleInputChange} placeholder="CV. PERSADA INTIM PUSAKA" noFormat />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="bankAccount3">Rekening 3</Label>
+                      <Input id="bankAccount3" value={localInfo.bankAccount3} onChange={handleInputChange} placeholder="BRI-777201000033304" noFormat />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="bankAccountName3">A.N Rekening 3</Label>
+                      <Input id="bankAccountName3" value={localInfo.bankAccountName3} onChange={handleInputChange} placeholder="CV. PERSADA INTIM PUSAKA" noFormat />
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Rekening ini akan tampil di faktur cetak (PDF, Dot Matrix, Thermal)
+                    </p>
+                  </div>
 
-          <div className="pt-6 border-t">
-            <CardTitle className="text-lg mb-2 flex items-center gap-2">
-              <Printer className="h-5 w-5" /> Pengaturan Printer Thermal
-            </CardTitle>
-            <CardDescription className="mb-4">
-              Atur ukuran kertas thermal untuk cetak struk via RawBT atau printer thermal lainnya.
-            </CardDescription>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="thermalPrinterWidth">Ukuran Kertas Thermal</Label>
-                <Select
-                  value={localInfo.thermalPrinterWidth}
-                  onValueChange={(value: '58mm' | '80mm') => setLocalInfo(prev => ({ ...prev, thermalPrinterWidth: value }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Pilih ukuran kertas" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="58mm">58mm (Kecil/Mobile)</SelectItem>
-                    <SelectItem value="80mm">80mm (Standar Kasir)</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  58mm = 32 karakter/baris, 80mm = 48 karakter/baris
-                </p>
-              </div>
-            </div>
-          </div>
+                  {/* Kolom 3: Logo */}
+                  <div className="space-y-2">
+                    <Label>Logo Perusahaan</Label>
+                    <div className="border-2 border-dashed rounded-lg p-4 flex flex-col items-center justify-center text-center">
+                      {localInfo.logo ? (
+                        <img src={localInfo.logo} alt="Logo Preview" className="max-h-20 mb-2" />
+                      ) : (
+                        <div className="mb-2 text-muted-foreground">
+                          <ImageIcon className="mx-auto h-8 w-8" />
+                          <p className="text-xs">Belum ada logo</p>
+                        </div>
+                      )}
+                      <Button asChild variant="outline" size="sm">
+                        <label htmlFor="logo-upload" className="cursor-pointer">
+                          <Upload className="mr-2 h-3 w-3" />
+                          {localInfo.logo ? 'Ganti' : 'Unggah'}
+                          <input id="logo-upload" type="file" className="sr-only" accept="image/*" onChange={handleLogoUpload} />
+                        </label>
+                      </Button>
+                      <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF</p>
+                    </div>
+                  </div>
+                </div>
 
-          <div className="flex justify-end pt-6 border-t">
-            <Button type="submit" disabled={updateSettings.isPending}>
-              {updateSettings.isPending ? "Menyimpan..." : "Simpan Semua Perubahan"}
-            </Button>
-          </div>
-        </CardContent>
+                <div className="pt-6 border-t">
+                  <CardTitle className="text-lg mb-2">Pengaturan Absensi Lokasi</CardTitle>
+                  <CardDescription className="mb-4">
+                    Tetapkan titik koordinat pusat dan radius toleransi untuk lokasi kantor yang dianggap sah untuk absensi.
+                  </CardDescription>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="latitude">Latitude</Label>
+                      <Input id="latitude" type="number" step="any" value={localInfo.latitude ?? ''} onChange={handleNumberInputChange} placeholder="-6.200000" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="longitude">Longitude</Label>
+                      <Input id="longitude" type="number" step="any" value={localInfo.longitude ?? ''} onChange={handleNumberInputChange} placeholder="106.816666" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="attendanceRadius">Radius Toleransi (meter)</Label>
+                      <Input id="attendanceRadius" type="number" value={localInfo.attendanceRadius ?? ''} onChange={handleNumberInputChange} placeholder="50" />
+                    </div>
+                  </div>
+                  <Button type="button" variant="secondary" onClick={handleGetCurrentLocation} className="mt-4">
+                    <MapPin className="mr-2 h-4 w-4" /> Gunakan Lokasi Saat Ini
+                  </Button>
+                </div>
+
+                <div className="pt-6 border-t">
+                  <CardTitle className="text-lg mb-2 flex items-center gap-2">
+                    <Printer className="h-5 w-5" /> Pengaturan Printer Thermal
+                  </CardTitle>
+                  <CardDescription className="mb-4">
+                    Atur ukuran kertas thermal untuk cetak struk via RawBT atau printer thermal lainnya.
+                  </CardDescription>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="thermalPrinterWidth">Ukuran Kertas Thermal</Label>
+                      <Select
+                        value={localInfo.thermalPrinterWidth}
+                        onValueChange={(value: '58mm' | '80mm') => setLocalInfo(prev => ({ ...prev, thermalPrinterWidth: value }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Pilih ukuran kertas" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="58mm">58mm (Kecil/Mobile)</SelectItem>
+                          <SelectItem value="80mm">80mm (Standar Kasir)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        58mm = 32 karakter/baris, 80mm = 48 karakter/baris
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-6 border-t">
+                  <Button type="submit" disabled={updateSettings.isPending}>
+                    {updateSettings.isPending ? "Menyimpan..." : "Simpan Semua Perubahan"}
+                  </Button>
+                </div>
+              </CardContent>
             </Card>
           </form>
         </TabsContent>

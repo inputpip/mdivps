@@ -164,7 +164,13 @@ export default function TransactionDetailPage() {
     // Company info
     doc.setFontSize(18).setFont("helvetica", "bold").text(companyInfo?.name || '', margin, 32);
     doc.setFontSize(10).setFont("helvetica", "normal").text(companyInfo?.address || '', margin, 38).text(companyInfo?.phone || '', margin, 43);
-    doc.setDrawColor(200).line(margin, 48, pageWidth - margin, 48);
+
+    if (companyInfo?.npwp && transaction.ppnEnabled) {
+      doc.text(`NPWP: ${companyInfo.npwp}`, margin, 48);
+      doc.setDrawColor(200).line(margin, 52, pageWidth - margin, 52);
+    } else {
+      doc.setDrawColor(200).line(margin, 48, pageWidth - margin, 48);
+    }
 
     // Faktur Penjualan header
     doc.setFontSize(18).setFont("helvetica", "bold").setTextColor(150).text("FAKTUR PENJUALAN", pageWidth - margin, 32, { align: 'right' });

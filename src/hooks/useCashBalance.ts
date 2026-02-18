@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useBranch } from '@/contexts/BranchContext';
-import { useAccounts } from '@/hooks/useAccounts';
+import { useTimezone } from '@/contexts/TimezoneContext';
+import { getOfficeDateString } from '@/utils/officeTime';
 
 interface CashBalance {
   currentBalance: number;
@@ -12,6 +13,7 @@ interface CashBalance {
   accountBalances: Array<{
     accountId: string;
     accountName: string;
+    accountCode: string;
     currentBalance: number;
     previousBalance: number;
     todayIncome: number;
@@ -22,220 +24,83 @@ interface CashBalance {
 }
 
 /**
- * useCashBalance - Menghitung saldo kas dari JOURNAL ENTRIES
- *
- * ARSITEKTUR BARU:
- * - Saldo akun dihitung dari journal_entry_lines (di useAccounts.ts)
- * - Kas masuk/keluar hari ini dihitung dari journal_entry_lines untuk akun kas/bank
- * - TIDAK LAGI menggunakan cash_history table
- *
- * Prinsip: Journal entries adalah SUMBER KEBENARAN untuk semua perhitungan keuangan
+ * useCashBalance - Menghitung saldo kas dari JOURNAL ENTRIES via RPC
+ * 
+ * ARSITEKTUR BARU (Feb 2026):
+ * - Menggunakan function SQL `get_cash_balance_summary`
+ * - Prinsip: MAJU (Forward Calculation)
+ * - Saldo Awal = SUM(Transaksi < Hari Ini) -> Dihitung oleh DB
+ * - Mutasi Hari Ini = SUM(Transaksi = Hari Ini) -> Dihitung oleh DB
+ * - Saldo Akhir = Saldo Awal + Mutasi Hari Ini
  */
 export const useCashBalance = () => {
   const { currentBranch } = useBranch();
-  const { accounts } = useAccounts(); // Get accounts with calculated balances per branch
+  const { timezone } = useTimezone();
 
   const { data: cashBalance, isLoading, error } = useQuery<CashBalance>({
-    queryKey: ['cashBalance', currentBranch?.id, accounts?.length],
+    queryKey: ['cashBalance', currentBranch?.id, timezone],
     queryFn: async () => {
-      // Get today's date range (in local timezone)
-      const today = new Date();
-      const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD format
+      if (!currentBranch?.id) throw new Error('Branch required');
 
-      // Use accounts from useAccounts (already filtered and calculated per branch)
-      const paymentAccounts = (accounts || []).filter(acc => acc.isPaymentAccount);
+      // Get today's date in office timezone (YYYY-MM-DD)
+      const todayStr = getOfficeDateString(timezone);
 
-      // Initialize tracking variables
-      let todayIncome = 0;
-      let todayExpense = 0;
-      let totalBalance = 0;
-      const accountBalancesMap = new Map();
-
-      // Initialize account data with calculated balances from useAccounts
-      paymentAccounts.forEach(account => {
-        accountBalancesMap.set(account.id, {
-          accountId: account.id,
-          accountName: account.name,
-          accountCode: account.code,
-          currentBalance: account.balance || 0,
-          previousBalance: 0,
-          todayIncome: 0,
-          todayExpense: 0,
-          todayNet: 0,
-          todayChange: 0
-        });
-        totalBalance += account.balance || 0;
+      // Call the RPC function
+      // It returns: opening_balance (< today), today_income, today_expense, today_net, current_balance
+      const { data, error } = await supabase.rpc('get_cash_balance_summary', {
+        p_branch_id: currentBranch.id,
+        p_date: todayStr
       });
 
-      // ============================================================================
-      // CALCULATE TODAY'S CASH MOVEMENT FROM JOURNAL_ENTRY_LINES
-      // ============================================================================
-      // PERBAIKAN: Saldo sebelumnya dihitung dari jurnal SEBELUM hari ini
-      // 1. Ambil semua journal_entry_lines untuk akun kas/bank SEBELUM hari ini
-      // 2. Ambil semua journal_entry_lines untuk akun kas/bank HARI INI
-      // 3. Debit = kas masuk, Credit = kas keluar (untuk akun Aset)
-      // ============================================================================
-
-      const paymentAccountIds = paymentAccounts.map(acc => acc.id);
-
-      if (paymentAccountIds.length === 0) {
-        console.log('💰 No payment accounts found');
-        return {
-          currentBalance: totalBalance,
-          todayIncome: 0,
-          todayExpense: 0,
-          todayNet: 0,
-          previousBalance: totalBalance,
-          accountBalances: Array.from(accountBalancesMap.values())
-        };
+      if (error) {
+        console.error('Error fetching cash balance:', error);
+        throw error;
       }
 
-      // ============================================================================
-      // 1. HITUNG SALDO SEBELUMNYA (sebelum hari ini) dari jurnal
-      // ============================================================================
-      const { data: beforeTodayLines, error: beforeError } = await supabase
-        .from('journal_entry_lines')
-        .select(`
-          account_id,
-          debit_amount,
-          credit_amount,
-          journal_entries!inner (
-            entry_date,
-            branch_id,
-            status,
-            is_voided
-          )
-        `)
-        .in('account_id', paymentAccountIds)
-        .lt('journal_entries.entry_date', todayStr);
-
-      if (beforeError) {
-        console.error('❌ Failed to fetch before-today journal lines:', beforeError);
-      }
-
-      // Calculate previous balance per account from journal entries before today
+      // Map response format
+      let totalCurrentBalance = 0;
       let totalPreviousBalance = 0;
-      (beforeTodayLines || []).forEach((line: any) => {
-        const journal = line.journal_entries;
-        if (!journal || journal.status !== 'posted' || journal.is_voided === true) return;
-        if (journal.branch_id !== currentBranch?.id) return;
+      let totalTodayIncome = 0;
+      let totalTodayExpense = 0;
 
-        const accountId = line.account_id;
-        const debitAmount = Number(line.debit_amount) || 0;
-        const creditAmount = Number(line.credit_amount) || 0;
+      const accountBalances = (data || []).map((row: any) => {
+        const currentBal = Number(row.current_balance) || 0;
+        const prevBal = Number(row.opening_balance) || 0;
+        const income = Number(row.today_income) || 0;
+        const expense = Number(row.today_expense) || 0;
+        const net = Number(row.today_net) || 0;
 
-        if (accountBalancesMap.has(accountId)) {
-          const accountData = accountBalancesMap.get(accountId);
-          accountData.previousBalance += (debitAmount - creditAmount);
-        }
-      });
+        totalCurrentBalance += currentBal;
+        totalPreviousBalance += prevBal;
+        totalTodayIncome += income;
+        totalTodayExpense += expense;
 
-      // Sum up total previous balance
-      accountBalancesMap.forEach(account => {
-        totalPreviousBalance += account.previousBalance;
-      });
-
-      // ============================================================================
-      // 2. HITUNG TRANSAKSI HARI INI
-      // ============================================================================
-      const { data: todayJournalLines, error: journalError } = await supabase
-        .from('journal_entry_lines')
-        .select(`
-          account_id,
-          debit_amount,
-          credit_amount,
-          journal_entries!inner (
-            entry_date,
-            branch_id,
-            status,
-            is_voided,
-            reference_type,
-            description
-          )
-        `)
-        .in('account_id', paymentAccountIds)
-        .eq('journal_entries.entry_date', todayStr);
-
-      if (journalError) {
-        console.error('❌ Failed to fetch today journal lines for cash balance:', journalError);
-        // Return balance from previous calculation
         return {
-          currentBalance: totalPreviousBalance,
-          todayIncome: 0,
-          todayExpense: 0,
-          todayNet: 0,
-          previousBalance: totalPreviousBalance,
-          accountBalances: Array.from(accountBalancesMap.values())
+          accountId: row.account_id,
+          accountName: row.account_name,
+          accountCode: row.account_code,
+          currentBalance: currentBal,
+          previousBalance: prevBal,
+          todayIncome: income,
+          todayExpense: expense,
+          todayNet: net,
+          todayChange: net
         };
-      }
-
-      // Filter for current branch, posted, not voided
-      const todayLines = (todayJournalLines || []).filter((line: any) => {
-        const journal = line.journal_entries;
-        if (!journal) return false;
-        return journal.status === 'posted' &&
-               journal.is_voided === false &&
-               journal.branch_id === currentBranch?.id;
       });
-
-      console.log('💰 Today journal lines for payment accounts:', todayLines.length);
-
-      // Calculate today's income and expense per account
-      // For Asset accounts (Kas/Bank): Debit = income (masuk), Credit = expense (keluar)
-      todayLines.forEach((line: any) => {
-        const accountId = line.account_id;
-        const debitAmount = Number(line.debit_amount) || 0;
-        const creditAmount = Number(line.credit_amount) || 0;
-
-        // Update global totals
-        todayIncome += debitAmount;
-        todayExpense += creditAmount;
-
-        // Update per-account data
-        if (accountBalancesMap.has(accountId)) {
-          const accountData = accountBalancesMap.get(accountId);
-          accountData.todayIncome += debitAmount;
-          accountData.todayExpense += creditAmount;
-          accountData.todayNet = accountData.todayIncome - accountData.todayExpense;
-          accountData.todayChange = accountData.todayNet;
-        }
-      });
-
-      // Calculate totals
-      const todayNet = todayIncome - todayExpense;
-      // Current balance = previous balance + today's net
-      totalBalance = totalPreviousBalance + todayNet;
-
-      // Update current balance for each account
-      accountBalancesMap.forEach(account => {
-        account.currentBalance = account.previousBalance + account.todayNet;
-      });
-
-      // Debug summary
-      console.log('📊 Cash Balance Summary (from Journal):');
-      console.log(`📅 Saldo Sebelumnya (Before Today): Rp ${totalPreviousBalance.toLocaleString('id-ID')}`);
-      console.log(`💰 Today Income (Debit to Kas/Bank): Rp ${todayIncome.toLocaleString('id-ID')}`);
-      console.log(`💸 Today Expense (Credit from Kas/Bank): Rp ${todayExpense.toLocaleString('id-ID')}`);
-      console.log(`📈 Today Net: Rp ${todayNet.toLocaleString('id-ID')}`);
-      console.log(`🏦 Current Balance: Rp ${totalBalance.toLocaleString('id-ID')}`);
 
       return {
-        currentBalance: totalBalance,
-        todayIncome,
-        todayExpense,
-        todayNet,
+        currentBalance: totalCurrentBalance,
         previousBalance: totalPreviousBalance,
-        accountBalances: Array.from(accountBalancesMap.values())
+        todayIncome: totalTodayIncome,
+        todayExpense: totalTodayExpense,
+        todayNet: totalTodayIncome - totalTodayExpense,
+        accountBalances
       };
     },
-    enabled: !!currentBranch && !!accounts, // Only run when branch and accounts are loaded
-    staleTime: 1000 * 60 * 5, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes cache
+    enabled: !!currentBranch,
+    staleTime: 1000 * 30, // 30 seconds cache
     refetchOnMount: true,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-    retry: 1,
-    retryDelay: 1000,
+    refetchOnWindowFocus: true,
   });
 
   return {

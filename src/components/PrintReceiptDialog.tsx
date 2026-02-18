@@ -88,7 +88,7 @@ const ReceiptTemplate = ({ transaction, companyInfo }: { transaction: Transactio
             <span>Metode:</span>
             <span className="font-semibold">
               {transaction.paymentStatus === 'Lunas' ? 'Tunai' :
-               transaction.paymentStatus === 'Kredit' ? 'Kredit' : 'Kredit'}
+                transaction.paymentStatus === 'Kredit' ? 'Kredit' : 'Kredit'}
             </span>
           </div>
           {transaction.paymentStatus !== 'Lunas' && transaction.dueDate && (
@@ -119,10 +119,10 @@ const InvoiceTemplate = ({ transaction, companyInfo }: { transaction: Transactio
       <header className="flex justify-between items-start mb-12 pb-6 border-b-2 border-blue-600">
         <div className="flex items-start gap-6">
           {companyInfo?.logo && (
-            <img 
-              src={companyInfo.logo} 
-              alt="Company Logo" 
-              className="max-h-24 w-auto object-contain" 
+            <img
+              src={companyInfo.logo}
+              alt="Company Logo"
+              className="max-h-24 w-auto object-contain"
             />
           )}
           <div>
@@ -142,6 +142,14 @@ const InvoiceTemplate = ({ transaction, companyInfo }: { transaction: Transactio
                 </span>
                 {companyInfo?.phone || 'Company Phone'}
               </p>
+              {companyInfo?.npwp && transaction.ppnEnabled && (
+                <p className="flex items-center gap-2">
+                  <span className="w-4 h-4 bg-blue-100 rounded-full flex items-center justify-center text-[10px]">
+                    🆔
+                  </span>
+                  NPWP: {companyInfo.npwp}
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -149,11 +157,11 @@ const InvoiceTemplate = ({ transaction, companyInfo }: { transaction: Transactio
           <h2 className="text-5xl font-bold text-blue-800 mb-4">FAKTUR PENJUALAN</h2>
           <div className="space-y-2">
             <p className="text-sm text-gray-700">
-              <span className="font-semibold text-blue-800">No Faktur Penjualan:</span><br/>
+              <span className="font-semibold text-blue-800">No Faktur Penjualan:</span><br />
               <span className="text-lg font-mono font-bold text-blue-900">{transaction.id}</span>
             </p>
             <p className="text-sm text-gray-700">
-              <span className="font-semibold text-blue-800">Tanggal:</span><br/>
+              <span className="font-semibold text-blue-800">Tanggal:</span><br />
               <span className="font-medium">{safeFormatDate(orderDate, "d MMMM yyyy")}</span>
             </p>
           </div>
@@ -325,7 +333,7 @@ export function PrintReceiptDialog({ open, onOpenChange, transaction, template, 
     // Modern header with blue accent
     doc.setFillColor(59, 130, 246); // Blue color
     doc.rect(0, 0, pageWidth, 50, 'F');
-    
+
     // Company logo and info
     const logoWidth = 35;
     const logoHeight = 14;
@@ -334,14 +342,17 @@ export function PrintReceiptDialog({ open, onOpenChange, transaction, template, 
         doc.addImage(companyInfo.logo, 'PNG', margin, 15, logoWidth, logoHeight, undefined, 'FAST');
       } catch (e) { console.error(e); }
     }
-    
+
     // Company name in white
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(20).setFont("helvetica", "bold").text(companyInfo?.name || 'PT. COMPANY NAME', margin + logoWidth + 10, 25);
     doc.setFontSize(10).setFont("helvetica", "normal");
     doc.text(companyInfo?.address || 'Company Address', margin + logoWidth + 10, 32);
     doc.text(companyInfo?.phone || 'Company Phone', margin + logoWidth + 10, 37);
-    
+    if (companyInfo?.npwp && transaction.ppnEnabled) {
+      doc.text(`NPWP: ${companyInfo.npwp}`, margin + logoWidth + 10, 42);
+    }
+
     // Faktur Penjualan title and info in white
     doc.setFontSize(24).setFont("helvetica", "bold").setTextColor(255, 255, 255);
     doc.text("FAKTUR PENJUALAN", pageWidth - margin, 25, { align: 'right' });
@@ -354,7 +365,7 @@ export function PrintReceiptDialog({ open, onOpenChange, transaction, template, 
     doc.setTextColor(0, 0, 0);
     doc.setFillColor(245, 247, 250);
     doc.roundedRect(margin, y, pageWidth - 2 * margin, 20, 3, 3, 'F');
-    
+
     doc.setFontSize(10).setFont("helvetica", "bold").setTextColor(59, 130, 246);
     doc.text("DITAGIHKAN KEPADA:", margin + 5, y + 8);
     doc.setFontSize(14).setFont("helvetica", "bold").setTextColor(0, 0, 0);
@@ -367,28 +378,28 @@ export function PrintReceiptDialog({ open, onOpenChange, transaction, template, 
       head: [['Deskripsi Produk', 'Qty', 'Harga Satuan', 'Total']],
       body: tableData,
       theme: 'striped',
-      headStyles: { 
-        fillColor: [59, 130, 246], 
-        textColor: [255, 255, 255], 
-        fontStyle: 'bold', 
+      headStyles: {
+        fillColor: [59, 130, 246],
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
         fontSize: 11,
         halign: 'center'
       },
-      bodyStyles: { 
+      bodyStyles: {
         fontSize: 10,
         cellPadding: 6
       },
       alternateRowStyles: {
         fillColor: [248, 250, 252]
       },
-      columnStyles: { 
-        0: { cellWidth: 70, halign: 'left' }, 
-        1: { cellWidth: 25, halign: 'center' }, 
-        2: { cellWidth: 40, halign: 'right' }, 
-        3: { cellWidth: 45, halign: 'right', fontStyle: 'bold' } 
+      columnStyles: {
+        0: { cellWidth: 70, halign: 'left' },
+        1: { cellWidth: 25, halign: 'center' },
+        2: { cellWidth: 40, halign: 'right' },
+        3: { cellWidth: 45, halign: 'right', fontStyle: 'bold' }
       },
       margin: { left: margin, right: margin },
-      didDrawPage: (data) => { 
+      didDrawPage: (data) => {
         doc.setFontSize(8).setTextColor(150);
         doc.text(`Halaman ${data.pageNumber}`, pageWidth / 2, pageHeight - 10, { align: 'center' });
       }
@@ -396,24 +407,24 @@ export function PrintReceiptDialog({ open, onOpenChange, transaction, template, 
     // Modern summary section with background
     const finalY = (doc as any).lastAutoTable.finalY;
     let summaryY = finalY + 15;
-    
+
     // Summary background
     const summaryWidth = 80;
     const summaryX = pageWidth - margin - summaryWidth;
     doc.setFillColor(248, 250, 252);
     doc.roundedRect(summaryX, summaryY - 5, summaryWidth, 35, 3, 3, 'F');
-    
+
     doc.setFontSize(11).setFont("helvetica", "normal").setTextColor(0, 0, 0);
     doc.text("Subtotal:", summaryX + 5, summaryY + 3);
     doc.text(new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(transaction.subtotal), pageWidth - margin - 5, summaryY + 3, { align: 'right' });
     summaryY += 7;
-    
+
     if (transaction.ppnEnabled) {
       doc.text(`PPN (${transaction.ppnPercentage}%):`, summaryX + 5, summaryY);
       doc.text(new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(transaction.ppnAmount), pageWidth - margin - 5, summaryY, { align: 'right' });
       summaryY += 7;
     }
-    
+
     // Total with blue background
     doc.setFillColor(59, 130, 246);
     doc.roundedRect(summaryX, summaryY, summaryWidth, 12, 3, 3, 'F');
@@ -421,7 +432,7 @@ export function PrintReceiptDialog({ open, onOpenChange, transaction, template, 
     doc.text("TOTAL TAGIHAN:", summaryX + 5, summaryY + 8);
     doc.text(new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(transaction.total), pageWidth - margin - 5, summaryY + 8, { align: 'right' });
     summaryY += 15;
-    
+
     // Payment status section
     summaryY += 8;
     const isLunas = transaction.paymentStatus === 'Lunas';
@@ -672,6 +683,7 @@ export function PrintReceiptDialog({ open, onOpenChange, transaction, template, 
               <div style="font-size: 10.5pt; line-height: 1.5;">
                 ${companyInfo?.address || ''}<br/>
                 ${companyInfo?.phone ? `Telp: ${companyInfo.phone}` : ''}${companyInfo?.email ? ` | Email: ${companyInfo.email}` : ''}
+                ${companyInfo?.npwp && transaction.ppnEnabled ? `<br/>NPWP: ${companyInfo.npwp}` : ''}
               </div>
             </td>
             <td style="width: 40%; vertical-align: top; text-align: right;">
@@ -1041,7 +1053,7 @@ export function PrintReceiptDialog({ open, onOpenChange, transaction, template, 
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
     doc.text(companyInfo?.name || 'Nota Transaksi', 40, 10, { align: 'center' });
-    
+
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
     if (companyInfo?.address) {

@@ -106,7 +106,7 @@ export function DriverDeliveryDialog({
   const handleQuantityChange = (itemKey: string, quantity: number) => {
     const item = transaction.items.find((item, index) => item.product?.id && `${item.product.id}_${index}` === itemKey)
     const maxQuantity = item?.quantity || 0
-    
+
     setItemQuantities(prev => ({
       ...prev,
       [itemKey]: Math.max(0, Math.min(quantity, maxQuantity))
@@ -194,7 +194,7 @@ export function DriverDeliveryDialog({
     if (!hasItemsToDeliver) {
       toast({
         variant: "destructive",
-        title: "Error", 
+        title: "Error",
         description: "Minimal satu item harus diantar"
       })
       return
@@ -280,7 +280,7 @@ export function DriverDeliveryDialog({
   const totalItemsToDeliver = Object.values(itemQuantities).reduce((sum, qty) => sum + qty, 0)
 
   return (
-    <Dialog open={open} onOpenChange={() => {}}>
+    <Dialog open={open} onOpenChange={() => { }}>
       <DialogContent
         className="max-w-md max-h-[90vh] overflow-y-auto"
         hideCloseButton
@@ -433,7 +433,7 @@ export function DriverDeliveryDialog({
                 )
               })}
             </div>
-            
+
             {/* Delivery Summary */}
             <div className="bg-blue-50 p-3 rounded-lg mt-3">
               <div className="flex justify-between text-sm">
@@ -464,7 +464,7 @@ export function DriverDeliveryDialog({
               <Camera className="h-4 w-4" />
               Foto Pengantaran *
             </Label>
-            
+
             {!photoPreview ? (
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
                 <Camera className="h-12 w-12 mx-auto text-gray-400 mb-4" />
@@ -477,9 +477,9 @@ export function DriverDeliveryDialog({
                   className="hidden"
                   id="photo-upload"
                 />
-                <Button 
+                <Button
                   type="button"
-                  variant="outline" 
+                  variant="outline"
                   onClick={() => document.getElementById('photo-upload')?.click()}
                   className="w-full"
                 >
@@ -505,9 +505,9 @@ export function DriverDeliveryDialog({
                     ✕
                   </Button>
                 </div>
-                <Button 
+                <Button
                   type="button"
-                  variant="outline" 
+                  variant="outline"
                   onClick={() => document.getElementById('photo-upload')?.click()}
                   className="w-full"
                 >
