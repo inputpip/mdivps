@@ -129,26 +129,38 @@ export function useCashFlow() {
       }
 
       // Fetch employee advance details
+      // Filter hanya UUID valid (ada ID lama format 'adv-XXXXXX' yang bukan UUID)
       if (refIdsByType['advance']?.length) {
-        const { data: advances } = await supabase
-          .from('employee_advances')
-          .select('id, full_name')
-          .in('id', refIdsByType['advance']);
-        advances?.forEach((a: any) => {
-          refNumberMap[a.id] = a.id;
-          refDetailMap[a.id] = { description: `Panjar karyawan: ${a.full_name}` };
-        });
+        const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        const validAdvanceIds = refIdsByType['advance'].filter(id => UUID_REGEX.test(id));
+        if (validAdvanceIds.length > 0) {
+          const { data: advances } = await supabase
+            .from('employee_advances')
+            .select('id, employee_name')
+            .in('id', validAdvanceIds);
+          advances?.forEach((a: any) => {
+            refNumberMap[a.id] = a.id;
+            refDetailMap[a.id] = { description: `Panjar karyawan: ${a.employee_name || 'Tidak diketahui'}` };
+          });
+        }
       }
 
       // Fetch payroll details
+      // Dibungkus try-catch karena tabel payroll_periods tidak ada di semua database (mkw_db)
       if (refIdsByType['payroll']?.length) {
-        const { data: payrolls } = await supabase
-          .from('payroll_periods')
-          .select('id, name')
-          .in('id', refIdsByType['payroll']);
-        payrolls?.forEach((p: any) => {
-          refNumberMap[p.id] = p.name || p.id;
-        });
+        try {
+          const { data: payrolls, error: payrollError } = await supabase
+            .from('payroll_periods')
+            .select('id, name')
+            .in('id', refIdsByType['payroll']);
+          if (!payrollError) {
+            payrolls?.forEach((p: any) => {
+              refNumberMap[p.id] = p.name || p.id;
+            });
+          }
+        } catch {
+          // Tabel payroll_periods tidak ada di database ini (e.g. mkw_db) — skip
+        }
       }
 
       // Fetch payable details

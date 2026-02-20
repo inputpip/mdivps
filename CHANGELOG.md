@@ -21,9 +21,15 @@ Semua perubahan penting pada proyek AQUVIT ERP System didokumentasikan di file i
 
 ---
 
-## [v4.10] 2026-02-10 - RPC Cleanup & Commission Fix 🧹
+## [v4.11] 2026-02-21 - Journal RPC Ambiguation Fix 💡
 
-### Improvements
+### Bug Fixes
+1. **Journal Entry PGRST203 Error on Client-side**
+    - **Issue:** Gagalnya pembuatan jurnal secara manual di React akibat parameter RPC PostgREST (Supabase) menjadi ambigu karena adanya parameter tambahan `p_created_by` pada database tanpa di-pass oleh frontend. Supabase kesulitan memilih *overload version* yang mana dari `create_journal_atomic`.
+    - **Fix:** Menambahkan parameter eksplisit `p_created_by: user?.id` pada hook `createJournalEntry` di `useJournalEntries.ts`.
+    - **Extra:** Menambahkan perbaikan mapping profil user dengan melakuan bulk fetch di hook agar tampilan _"Dibuat Oleh: ..."_ tidak hilang karena kegagalan resolusi explicit relation table *(foreign key)*. 
+
+## [v4.10] 2026-02-10 - RPC Cleanup & Commission Fix 🧹
 1. **Retasi RPC Cleanup**
    - **Action:** Menghapus fungsi `process_retasi_atomic` yang merupakan *dead code* (tidak digunakan di aplikasi) dan mengandung logika akuntansi yang tidak sesuai dengan alur sistem saat ini.
    - **Impact:** Mengurangi kebingungan developer dan membersihkan skema database.

@@ -87,6 +87,29 @@ export const useJournalEntries = () => {
 
       if (error) throw error;
 
+      // Extract unique profile IDs needed 
+      const profileIds = new Set<string>();
+      (data || []).forEach((entry: any) => {
+        if (entry.created_by) profileIds.add(entry.created_by);
+        if (entry.voided_by) profileIds.add(entry.voided_by);
+        if (entry.approved_by) profileIds.add(entry.approved_by);
+      });
+
+      // Fetch profiles mapping
+      const profileMap: Record<string, string> = {};
+      if (profileIds.size > 0) {
+        const { data: profilesData, error: profilesError } = await supabase
+          .from('profiles')
+          .select('id, full_name')
+          .in('id', Array.from(profileIds));
+
+        if (!profilesError && profilesData) {
+          profilesData.forEach((p: any) => {
+            profileMap[p.id] = p.full_name;
+          });
+        }
+      }
+
       // Transform to app format - lines are already included with account fallback
       const entries: JournalEntry[] = (data || []).map((entry: any) => {
         const lines = (entry.journal_entry_lines || [])
@@ -97,7 +120,20 @@ export const useJournalEntries = () => {
             account_code: line.account_code || line.accounts?.code || '',
             account_name: line.account_name || line.accounts?.name || ''
           }));
-        return fromDbToApp(entry as DbJournalEntry, lines as DbJournalEntryLine[]);
+
+        // Use joined profiles to populate names if the generic db columns are empty
+        const createdByName = entry.created_by_name || (entry.created_by ? profileMap[entry.created_by] : '') || 'System';
+        const voidedByName = entry.voided_by_name || (entry.voided_by ? profileMap[entry.voided_by] : '');
+        const approvedByName = entry.approved_by_name || (entry.approved_by ? profileMap[entry.approved_by] : '');
+
+        const dbEntryWithNames = {
+          ...entry,
+          created_by_name: createdByName,
+          voided_by_name: voidedByName,
+          approved_by_name: approvedByName
+        };
+
+        return fromDbToApp(dbEntryWithNames as DbJournalEntry, lines as DbJournalEntryLine[]);
       });
 
       console.log(`[useJournalEntries] Loaded ${entries.length} journal entries`);
@@ -150,6 +186,7 @@ export const useJournalEntries = () => {
           p_reference_id: formData.referenceId || null,
           p_lines: rpcLines,
           p_auto_post: false, // Manual journals start as draft
+          p_created_by: user?.id, // Menambahkan p_created_by agar tidak ambigu dengan overload funct yg lain
         });
 
       if (rpcError) {

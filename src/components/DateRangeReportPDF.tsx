@@ -16,6 +16,7 @@ import {
 import { cn } from "@/lib/utils"
 import { CashHistory } from "@/types/cashFlow"
 import { supabase } from "@/integrations/supabase/client"
+import { useBranch } from "@/contexts/BranchContext"
 
 interface DateRangeReportPDFProps {
   cashHistory: CashHistory[];
@@ -30,7 +31,7 @@ const isIncomeType = (item: CashHistory) => {
   if (item.source_type === 'transfer_keluar') {
     return false;
   }
-  
+
   if (item.type) {
     return ['orderan', 'kas_masuk_manual', 'panjar_pelunasan', 'pembayaran_piutang'].includes(item.type);
   }
@@ -64,7 +65,7 @@ const getTypeLabel = (item: CashHistory) => {
     };
     return labels[item.type as keyof typeof labels] || item.type;
   }
-  
+
   if (item.source_type) {
     switch (item.source_type) {
       case 'receivables_payment': return 'Pembayaran Piutang';
@@ -78,17 +79,18 @@ const getTypeLabel = (item: CashHistory) => {
       default: return item.source_type;
     }
   }
-  
+
   if (item.transaction_type) {
     return item.transaction_type === 'income' ? 'Kas Masuk' : 'Kas Keluar';
   }
-  
+
   return 'Tidak Diketahui';
 };
 
 export function DateRangeReportPDF({ cashHistory }: DateRangeReportPDFProps) {
   const [selectedDate, setSelectedDate] = React.useState<Date>(new Date());
   const [isCalendarOpen, setIsCalendarOpen] = React.useState(false);
+  const { currentBranch } = useBranch();
 
   // Calculate data for selected date using JOURNAL ENTRIES for accurate period balances
   // ============================================================================
@@ -99,12 +101,19 @@ export function DateRangeReportPDF({ cashHistory }: DateRangeReportPDFProps) {
   const calculateDataForDate = async (targetDate: Date) => {
     const dateStr = targetDate.toISOString().split('T')[0]; // YYYY-MM-DD format
 
-    // Get payment accounts (kas/bank) with is_payment_account = true
-    const { data: accounts, error: accountsError } = await supabase
+    // Get payment accounts (kas/bank) — filter by branch agar tidak duplikat lintas cabang
+    const accountsQuery = supabase
       .from('accounts')
       .select('id, name, code, is_payment_account')
       .eq('is_payment_account', true)
+      .eq('is_header', false)
       .order('name');
+
+    if (currentBranch?.id) {
+      accountsQuery.eq('branch_id', currentBranch.id);
+    }
+
+    const { data: accounts, error: accountsError } = await accountsQuery;
 
     if (accountsError) {
       throw new Error(`Failed to fetch accounts: ${accountsError.message}`);
@@ -128,7 +137,7 @@ export function DateRangeReportPDF({ cashHistory }: DateRangeReportPDFProps) {
     // 1. HITUNG SALDO AWAL PERIODE (sebelum tanggal yang dipilih)
     // Untuk akun Aset: Saldo = Total Debit - Total Credit
     // ============================================================================
-    const { data: beforeDateLines, error: beforeError } = await supabase
+    const beforeQuery = supabase
       .from('journal_entry_lines')
       .select(`
         account_id,
@@ -137,11 +146,18 @@ export function DateRangeReportPDF({ cashHistory }: DateRangeReportPDFProps) {
         journal_entries!inner (
           entry_date,
           status,
-          is_voided
+          is_voided,
+          branch_id
         )
       `)
       .in('account_id', paymentAccountIds)
       .lt('journal_entries.entry_date', dateStr);
+
+    if (currentBranch?.id) {
+      beforeQuery.eq('journal_entries.branch_id', currentBranch.id);
+    }
+
+    const { data: beforeDateLines, error: beforeError } = await beforeQuery;
 
     if (beforeError) {
       console.error('Error fetching before-date journal lines:', beforeError);
@@ -187,7 +203,7 @@ export function DateRangeReportPDF({ cashHistory }: DateRangeReportPDFProps) {
     // ============================================================================
     // 2. HITUNG TRANSAKSI PADA TANGGAL YANG DIPILIH
     // ============================================================================
-    const { data: dateLines, error: dateError } = await supabase
+    const dateQuery = supabase
       .from('journal_entry_lines')
       .select(`
         account_id,
@@ -197,12 +213,19 @@ export function DateRangeReportPDF({ cashHistory }: DateRangeReportPDFProps) {
           entry_date,
           status,
           is_voided,
+          branch_id,
           description,
           reference_type
         )
       `)
       .in('account_id', paymentAccountIds)
       .eq('journal_entries.entry_date', dateStr);
+
+    if (currentBranch?.id) {
+      dateQuery.eq('journal_entries.branch_id', currentBranch.id);
+    }
+
+    const { data: dateLines, error: dateError } = await dateQuery;
 
     if (dateError) {
       console.error('Error fetching date journal lines:', dateError);
@@ -242,14 +265,20 @@ export function DateRangeReportPDF({ cashHistory }: DateRangeReportPDFProps) {
     const totalCurrentBalance = totalPreviousBalance + dateNet;
 
     // ============================================================================
-    // 3. FILTER CASH HISTORY UNTUK DETAIL TRANSAKSI
+    // 3. FILTER CASH HISTORY UNTUK DETAIL TRANSAKSI (HANYA CABANG AKTIF)
     // ============================================================================
     const dateStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
     const dateEnd = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate() + 1);
 
+    // Pastikan kita juga memfilter berdasarkan branch agar transaksi dari cabang lain tidak masuk ke laporan
+    // jika secara tidak sengaja data cashHistory mengandung campuran.
+    const currentBranchAccounts = new Set(paymentAccountIds);
+
     const dateTransactions = cashHistory.filter(item => {
       const itemDate = new Date(item.date || item.created_at);
-      return itemDate >= dateStart && itemDate < dateEnd;
+      const isDateValid = itemDate >= dateStart && itemDate < dateEnd;
+      const isBranchValid = currentBranchAccounts.has(item.account_id);
+      return isDateValid && isBranchValid;
     });
 
     console.log(`📊 Cash Flow Report for ${dateStr}:`);
@@ -273,20 +302,20 @@ export function DateRangeReportPDF({ cashHistory }: DateRangeReportPDFProps) {
     try {
       const data = await calculateDataForDate(selectedDate);
       const doc = new jsPDF('p', 'mm', 'a4');
-    
+
       // Company header
       doc.setFontSize(20);
       doc.setFont('helvetica', 'bold');
       doc.text('LAPORAN KEUANGAN HARIAN', 105, 20, { align: 'center' });
-      
+
       doc.setFontSize(14);
       doc.setFont('helvetica', 'normal');
       doc.text(`Tanggal: ${format(selectedDate, 'dd MMMM yyyy', { locale: id })}`, 105, 30, { align: 'center' });
-      
+
       // Add line separator
       doc.setLineWidth(0.5);
       doc.line(20, 35, 190, 35);
-      
+
       let currentY = 45;
 
       // Summary Section
@@ -378,27 +407,32 @@ export function DateRangeReportPDF({ cashHistory }: DateRangeReportPDFProps) {
           doc.text('KAS MASUK', 20, currentY);
           currentY += 7;
 
-          const incomeData = incomeTransactions.map(item => [
-            format(new Date(item.created_at), 'HH:mm', { locale: id }),
-            item.account_name || '-',
-            getTypeLabel(item),
-            item.description || '-',
-            formatCurrency(item.amount)
-          ]);
+          const incomeData = incomeTransactions.map(item => {
+            const refNumber = item.reference_number || item.reference_name || item.reference_id || '-';
+            return [
+              format(new Date(item.created_at), 'HH:mm', { locale: id }),
+              refNumber.length > 20 ? refNumber.substring(0, 20) + '...' : refNumber,
+              item.account_name || '-',
+              getTypeLabel(item),
+              item.description || '-',
+              formatCurrency(item.amount)
+            ];
+          });
 
           autoTable(doc, {
             startY: currentY,
-            head: [['Waktu', 'Akun', 'Jenis', 'Deskripsi', 'Jumlah']],
+            head: [['Waktu', 'No. Ref', 'Akun', 'Jenis', 'Deskripsi', 'Jumlah']],
             body: incomeData,
             theme: 'striped',
             headStyles: { fillColor: [34, 197, 94], textColor: [255, 255, 255] },
-            styles: { fontSize: 9 },
+            styles: { fontSize: 8, cellPadding: 2 },
             columnStyles: {
-              0: { cellWidth: 20 },
+              0: { cellWidth: 15 },
               1: { cellWidth: 35 },
-              2: { cellWidth: 35 },
-              3: { cellWidth: 70 },
-              4: { cellWidth: 30, halign: 'right' }
+              2: { cellWidth: 30 },
+              3: { cellWidth: 25 },
+              4: { cellWidth: 60 },
+              5: { cellWidth: 25, halign: 'right' }
             }
           });
 
@@ -417,27 +451,32 @@ export function DateRangeReportPDF({ cashHistory }: DateRangeReportPDFProps) {
           doc.text('KAS KELUAR', 20, currentY);
           currentY += 7;
 
-          const expenseData = expenseTransactions.map(item => [
-            format(new Date(item.created_at), 'HH:mm', { locale: id }),
-            item.account_name || '-',
-            getTypeLabel(item),
-            item.description || '-',
-            formatCurrency(item.amount)
-          ]);
+          const expenseData = expenseTransactions.map(item => {
+            const refNumber = item.reference_number || item.reference_name || item.reference_id || '-';
+            return [
+              format(new Date(item.created_at), 'HH:mm', { locale: id }),
+              refNumber.length > 20 ? refNumber.substring(0, 20) + '...' : refNumber,
+              item.account_name || '-',
+              getTypeLabel(item),
+              item.description || '-',
+              formatCurrency(item.amount)
+            ];
+          });
 
           autoTable(doc, {
             startY: currentY,
-            head: [['Waktu', 'Akun', 'Jenis', 'Deskripsi', 'Jumlah']],
+            head: [['Waktu', 'No. Ref', 'Akun', 'Jenis', 'Deskripsi', 'Jumlah']],
             body: expenseData,
             theme: 'striped',
             headStyles: { fillColor: [239, 68, 68], textColor: [255, 255, 255] },
-            styles: { fontSize: 9 },
+            styles: { fontSize: 8, cellPadding: 2 },
             columnStyles: {
-              0: { cellWidth: 20 },
+              0: { cellWidth: 15 },
               1: { cellWidth: 35 },
-              2: { cellWidth: 35 },
-              3: { cellWidth: 70 },
-              4: { cellWidth: 30, halign: 'right' }
+              2: { cellWidth: 30 },
+              3: { cellWidth: 25 },
+              4: { cellWidth: 60 },
+              5: { cellWidth: 25, halign: 'right' }
             }
           });
         }
