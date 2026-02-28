@@ -561,12 +561,12 @@ export default function TransactionDetailPage() {
         </tr>
 
         <!-- Table Header -->
-        <tr style="border-top: 1px solid #000; border-bottom: 1px solid #000;">
-          <th style="padding: 1mm; text-align: left; width: 5%; font-size: 11pt;">No</th>
-          <th style="padding: 1mm; text-align: left; width: 45%; font-size: 11pt;">Nama Item</th>
-          <th style="padding: 1mm; text-align: center; width: 15%; font-size: 11pt;">Jml</th>
-          <th style="padding: 1mm; text-align: right; width: 17%; font-size: 11pt;">Harga</th>
-          <th style="padding: 1mm; text-align: right; width: 18%; font-size: 11pt;">Total</th>
+        <tr style="border-top: 1.5pt solid #000; border-bottom: 1.5pt solid #000;">
+          <th style="padding: 1mm; text-align: left; width: 5%; font-size: 11pt; border-bottom: 1.5pt solid #000;">No</th>
+          <th style="padding: 1mm; text-align: left; width: 45%; font-size: 11pt; border-bottom: 1.5pt solid #000;">Nama Item</th>
+          <th style="padding: 1mm; text-align: center; width: 15%; font-size: 11pt; border-bottom: 1.5pt solid #000;">Jml</th>
+          <th style="padding: 1mm; text-align: right; width: 17%; font-size: 11pt; border-bottom: 1.5pt solid #000;">Harga</th>
+          <th style="padding: 1mm; text-align: right; width: 18%; font-size: 11pt; border-bottom: 1.5pt solid #000;">Total</th>
         </tr>
 
         <!-- Items -->
@@ -587,7 +587,7 @@ export default function TransactionDetailPage() {
 
         <!-- Footer -->
         <tr>
-          <td colspan="5" style="border-top: 1px solid #000; padding-top: 2mm;">
+          <td colspan="5" style="border-top: 1.5pt solid #000; padding-top: 2mm;">
             <table style="width: 100%;">
               <tr>
                 <td style="width: 55%; vertical-align: top;">

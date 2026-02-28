@@ -320,29 +320,30 @@ export function DeliveryNotePDF({ delivery, transactionInfo, children }: Deliver
         </tr>
 
         <!-- Table Header -->
-        <tr style="border-top: 1px solid #000; border-bottom: 1px solid #000;">
-          <th style="padding: 1mm; text-align: left; width: 5%; font-size: 11pt;">No</th>
-          <th style="padding: 1mm; text-align: left; width: 40%; font-size: 11pt;">Nama Item</th>
-          <th style="padding: 1mm; text-align: center; width: 20%; font-size: 11pt;">Jml Antar</th>
-          <th style="padding: 1mm; text-align: center; width: 17%; font-size: 11pt;">Total Antar</th>
-          <th style="padding: 1mm; text-align: center; width: 18%; font-size: 11pt;">Sisa</th>
+        <tr style="border-top: 1.5pt solid #000; border-bottom: 1.5pt solid #000;">
+          <th style="padding: 1mm; text-align: left; width: 5%; font-size: 11pt; border-bottom: 1.5pt solid #000;">No</th>
+          <th style="padding: 1mm; text-align: left; width: 40%; font-size: 11pt; border-bottom: 1.5pt solid #000;">Nama Item</th>
+          <th style="padding: 1mm; text-align: center; width: 20%; font-size: 11pt; border-bottom: 1.5pt solid #000;">Jml Antar</th>
+          <th style="padding: 1mm; text-align: center; width: 17%; font-size: 11pt; border-bottom: 1.5pt solid #000;">Total Antar</th>
+          <th style="padding: 1mm; text-align: center; width: 18%; font-size: 11pt; border-bottom: 1.5pt solid #000;">Sisa</th>
         </tr>
 
         <!-- Items -->
         ${delivery.items.map((item, index) => {
-      // Flexible matching: try productId first, then match by product name
+      // Flexible matching: check product identity and bonus status separately
       const itemProductId = item.productId || item.product_id
       const itemProductName = item.productName || item.product_name || ''
+      const itemIsBonus = !!(item.productName || '').toLowerCase().includes('bonus')
 
       const deliverySummaryItem = transaction?.deliverySummary?.find(ds =>
-        ds.productId === itemProductId ||
-        ds.productName?.toLowerCase() === itemProductName.toLowerCase()
+        (ds.productId === itemProductId || ds.productName?.toLowerCase() === itemProductName.toLowerCase()) &&
+        (!!(ds.productName || '').toLowerCase().includes('bonus') === itemIsBonus)
       )
 
       const orderedQuantity = item.orderedQuantity || deliverySummaryItem?.orderedQuantity || item.quantityDelivered
       const deliveryCreatedAt = delivery.createdAt ? new Date(delivery.createdAt).getTime() : Date.now()
 
-      // Calculate cumulative delivered up to this delivery point
+      // Calculate cumulative delivered up to this delivery point, matching bonus status
       const cumulativeDeliveredAtThisPoint = transaction?.deliveries
         ? transaction.deliveries
           .filter(d => {
@@ -350,11 +351,13 @@ export function DeliveryNotePDF({ delivery, transactionInfo, children }: Deliver
             return !isNaN(dCreatedAt) && !isNaN(deliveryCreatedAt) && dCreatedAt <= deliveryCreatedAt
           })
           .reduce((sum, d) => {
-            // Flexible matching for delivery items too
-            const productItem = d.items.find(di =>
-              di.productId === itemProductId ||
-              di.productName?.toLowerCase() === itemProductName.toLowerCase()
-            )
+            // Find item in history with same identity and bonus status
+            const productItem = d.items.find(di => {
+              const diId = di.productId || di.product_id
+              const diName = di.productName || di.product_name || ''
+              return (diId === itemProductId || diName.toLowerCase() === itemProductName.toLowerCase()) &&
+                (!!diName.toLowerCase().includes('bonus') === itemIsBonus)
+            })
             return sum + (productItem?.quantityDelivered || 0)
           }, 0)
         : item.quantityDelivered
@@ -416,7 +419,7 @@ export function DeliveryNotePDF({ delivery, transactionInfo, children }: Deliver
 
         <!-- Warning Footer -->
         <tr>
-          <td colspan="5" style="border-top: 1px solid #000; padding-top: 1mm; font-size: 10pt;">
+          <td colspan="5" style="border-top: 1.5pt solid #000; padding-top: 1mm; font-size: 10pt;">
             WAJIB CEK BARANG ANDA SENDIRI SEBELUM BARANG TURUN, KEHILANGAN BUKAN TANGGUNG JAWAB KAMI
           </td>
         </tr>
