@@ -140,34 +140,38 @@ export function DeliveryNotePDF({ delivery, transactionInfo, children }: Deliver
             </thead>
             <tbody>
               ${delivery.items.map((item, index) => {
-      // Calculation Logic from before
       const itemProductId = item.productId || item.product_id
-      const itemProductName = item.productName || item.product_name || ''
+      const itemProductName = (item.productName || item.product_name || '').toLowerCase()
+      const itemIsBonus = !!(item.isBonus || itemProductName.includes('bonus'))
+      const deliveryCreatedAt = delivery.createdAt ? new Date(delivery.createdAt).getTime() : Date.now()
 
       const deliverySummaryItem = transaction?.deliverySummary?.find(ds =>
-        ds.productId === itemProductId ||
-        ds.productName?.toLowerCase() === itemProductName.toLowerCase()
+        (ds.productId === itemProductId || ds.productName?.toLowerCase() === itemProductName) &&
+        (!!((ds as any).isBonus || (ds.productName || '').toLowerCase().includes('bonus')) === itemIsBonus)
       )
 
       const orderedQuantity = item.orderedQuantity || deliverySummaryItem?.orderedQuantity || item.quantityDelivered
-      const deliveryCreatedAt = delivery.createdAt ? new Date(delivery.createdAt).getTime() : Date.now()
 
-      const cumulativeDeliveredAtThisPoint = transaction?.deliveries
-        ? transaction.deliveries
-          .filter(d => {
-            const dCreatedAt = d.createdAt ? new Date(d.createdAt).getTime() : 0
-            return !isNaN(dCreatedAt) && !isNaN(deliveryCreatedAt) && dCreatedAt <= deliveryCreatedAt
+      const deliveries = transaction?.deliveries || []
+      const cumulativeDeliveredAtThisPoint = deliveries
+        .filter(d => {
+          const dCreatedAt = d.createdAt ? new Date(d.createdAt).getTime() : 0
+          return !isNaN(dCreatedAt) && dCreatedAt <= deliveryCreatedAt
+        })
+        .reduce((sum, d) => {
+          const productItem = d.items.find(di => {
+            const diId = di.productId || di.product_id
+            const diName = (di.productName || di.product_name || '').toLowerCase()
+            const diIsBonus = !!(di.isBonus || diName.includes('bonus'))
+            return (diId === itemProductId || diName === itemProductName) &&
+              (diIsBonus === itemIsBonus)
           })
-          .reduce((sum, d) => {
-            const productItem = d.items.find(di =>
-              di.productId === itemProductId ||
-              di.productName?.toLowerCase() === itemProductName.toLowerCase()
-            )
-            return sum + (productItem?.quantityDelivered || 0)
-          }, 0)
-        : item.quantityDelivered
+          return sum + (productItem?.quantityDelivered || 0)
+        }, 0) || item.quantityDelivered
 
-      const remainingAtThisPoint = orderedQuantity - cumulativeDeliveredAtThisPoint
+      // Ensure current delivery is counted even if not yet in deliveries array
+      const finalTotalAntar = Math.max(cumulativeDeliveredAtThisPoint, item.quantityDelivered)
+      const remainingAtThisPoint = orderedQuantity - finalTotalAntar
 
       // Coloring for remaining
       const remainingColor = remainingAtThisPoint > 0 ? '#ea580c' : remainingAtThisPoint < 0 ? '#dc2626' : '#16a34a';
@@ -178,7 +182,7 @@ export function DeliveryNotePDF({ delivery, transactionInfo, children }: Deliver
                   <td style="padding: 12px 16px; border: 1px solid #e5e7eb; font-weight: 500; color: #111827;">${item.productName}</td>
                   <td style="padding: 12px 16px; text-align: center; border: 1px solid #e5e7eb; font-weight: 600; color: #111827;">${formatNumber(item.quantityDelivered)}</td>
                   <td style="padding: 12px 16px; text-align: center; border: 1px solid #e5e7eb; color: #6b7280;">${item.unit}</td>
-                  <td style="padding: 12px 16px; text-align: center; border: 1px solid #e5e7eb; font-weight: 600; color: #2563eb;">${formatNumber(cumulativeDeliveredAtThisPoint)}</td>
+                  <td style="padding: 12px 16px; text-align: center; border: 1px solid #e5e7eb; font-weight: 600; color: #2563eb;">${formatNumber(finalTotalAntar)}</td>
                   <td style="padding: 12px 16px; text-align: center; border: 1px solid #e5e7eb; font-weight: 600; color: ${remainingColor};">${formatNumber(remainingAtThisPoint)}</td>
                 </tr>
                 `
@@ -330,45 +334,44 @@ export function DeliveryNotePDF({ delivery, transactionInfo, children }: Deliver
 
         <!-- Items -->
         ${delivery.items.map((item, index) => {
-      // Flexible matching: check product identity and bonus status separately
       const itemProductId = item.productId || item.product_id
-      const itemProductName = item.productName || item.product_name || ''
-      const itemIsBonus = !!(item.productName || '').toLowerCase().includes('bonus')
+      const itemProductName = (item.productName || item.product_name || '').toLowerCase()
+      const itemIsBonus = !!(item.isBonus || itemProductName.includes('bonus'))
+      const deliveryCreatedAt = delivery.createdAt ? new Date(delivery.createdAt).getTime() : Date.now()
 
       const deliverySummaryItem = transaction?.deliverySummary?.find(ds =>
-        (ds.productId === itemProductId || ds.productName?.toLowerCase() === itemProductName.toLowerCase()) &&
-        (!!(ds.productName || '').toLowerCase().includes('bonus') === itemIsBonus)
+        (ds.productId === itemProductId || ds.productName?.toLowerCase() === itemProductName) &&
+        (!!((ds as any).isBonus || (ds.productName || '').toLowerCase().includes('bonus')) === itemIsBonus)
       )
 
       const orderedQuantity = item.orderedQuantity || deliverySummaryItem?.orderedQuantity || item.quantityDelivered
-      const deliveryCreatedAt = delivery.createdAt ? new Date(delivery.createdAt).getTime() : Date.now()
 
-      // Calculate cumulative delivered up to this delivery point, matching bonus status
-      const cumulativeDeliveredAtThisPoint = transaction?.deliveries
-        ? transaction.deliveries
-          .filter(d => {
-            const dCreatedAt = d.createdAt ? new Date(d.createdAt).getTime() : 0
-            return !isNaN(dCreatedAt) && !isNaN(deliveryCreatedAt) && dCreatedAt <= deliveryCreatedAt
+      const deliveries = transaction?.deliveries || []
+      const cumulativeDeliveredAtThisPoint = deliveries
+        .filter(d => {
+          const dCreatedAt = d.createdAt ? new Date(d.createdAt).getTime() : 0
+          return !isNaN(dCreatedAt) && dCreatedAt <= deliveryCreatedAt
+        })
+        .reduce((sum, d) => {
+          const productItem = d.items.find(di => {
+            const diId = di.productId || di.product_id
+            const diName = (di.productName || di.product_name || '').toLowerCase()
+            const diIsBonus = !!(di.isBonus || diName.includes('bonus'))
+            return (diId === itemProductId || diName === itemProductName) &&
+              (diIsBonus === itemIsBonus)
           })
-          .reduce((sum, d) => {
-            // Find item in history with same identity and bonus status
-            const productItem = d.items.find(di => {
-              const diId = di.productId || di.product_id
-              const diName = di.productName || di.product_name || ''
-              return (diId === itemProductId || diName.toLowerCase() === itemProductName.toLowerCase()) &&
-                (!!diName.toLowerCase().includes('bonus') === itemIsBonus)
-            })
-            return sum + (productItem?.quantityDelivered || 0)
-          }, 0)
-        : item.quantityDelivered
+          return sum + (productItem?.quantityDelivered || 0)
+        }, 0) || item.quantityDelivered
 
-      const remainingAtThisPoint = orderedQuantity - cumulativeDeliveredAtThisPoint
+      // Ensure current delivery is counted even if not yet in deliveries array
+      const finalTotalAntar = Math.max(cumulativeDeliveredAtThisPoint, item.quantityDelivered)
+      const remainingAtThisPoint = orderedQuantity - finalTotalAntar
       return `
             <tr>
               <td style="padding: 0.5mm 1mm; font-size: 11pt;">${index + 1}</td>
               <td style="padding: 0.5mm 1mm; font-size: 11pt;">${item.productName}</td>
               <td style="padding: 0.5mm 1mm; text-align: center; font-size: 11pt;">${formatNumber(item.quantityDelivered)} ${shortUnit(item.unit)}</td>
-              <td style="padding: 0.5mm 1mm; text-align: center; font-size: 11pt;">${formatNumber(cumulativeDeliveredAtThisPoint)} ${shortUnit(item.unit)}</td>
+              <td style="padding: 0.5mm 1mm; text-align: center; font-size: 11pt;">${formatNumber(finalTotalAntar)} ${shortUnit(item.unit)}</td>
               <td style="padding: 0.5mm 1mm; text-align: center; font-size: 11pt;">${formatNumber(remainingAtThisPoint)} ${shortUnit(item.unit)}</td>
             </tr>
           `
@@ -619,31 +622,37 @@ export function DeliveryNotePDF({ delivery, transactionInfo, children }: Deliver
                 </thead>
                 <tbody>
                   {delivery.items.map((item, index) => {
-                    // FIXED: Calculate historical cumulative totals up to and including this delivery
-                    // Get the delivery summary item for baseline data
-                    const deliverySummaryItem = transaction.deliverySummary?.find(ds => ds.productId === item.productId)
+                    const itemProductId = item.productId || item.product_id
+                    const itemProductName = (item.productName || item.product_name || '').toLowerCase()
+                    const itemIsBonus = !!(item.isBonus || itemProductName.includes('bonus'))
+                    const deliveryCreatedAt = delivery.createdAt ? new Date(delivery.createdAt).getTime() : Date.now()
+
+                    const deliverySummaryItem = transaction.deliverySummary?.find(ds =>
+                      (ds.productId === itemProductId || ds.productName?.toLowerCase() === itemProductName) &&
+                      (!!(ds.isBonus || (ds.productName || '').toLowerCase().includes('bonus')) === itemIsBonus)
+                    )
+
                     const orderedQuantity = (item as any).orderedQuantity || deliverySummaryItem?.orderedQuantity || 0
 
-                    // Calculate cumulative delivered quantity up to and including this delivery
-                    // by finding all deliveries for this product up to this delivery's creation date
-                    const deliveryCreatedAt = delivery.createdAt ? new Date(delivery.createdAt).getTime() : Date.now()
-                    const cumulativeDeliveredAtThisPoint = transaction.deliveries
-                      ? transaction.deliveries
-                        .filter(d => {
-                          const dCreatedAt = d.createdAt ? new Date(d.createdAt).getTime() : 0
-                          return !isNaN(dCreatedAt) && !isNaN(deliveryCreatedAt) && dCreatedAt <= deliveryCreatedAt
+                    const deliveries = transaction.deliveries || []
+                    const cumulativeDeliveredAtThisPoint = deliveries
+                      .filter(d => {
+                        const dCreatedAt = d.createdAt ? new Date(d.createdAt).getTime() : 0
+                        return !isNaN(dCreatedAt) && dCreatedAt <= deliveryCreatedAt
+                      })
+                      .reduce((sum, d) => {
+                        const productItem = d.items.find(di => {
+                          const diId = di.productId || di.product_id
+                          const diName = (di.productName || di.product_name || '').toLowerCase()
+                          const diIsBonus = !!(di.isBonus || diName.includes('bonus'))
+                          return (diId === itemProductId || diName === itemProductName) &&
+                            (diIsBonus === itemIsBonus)
                         })
-                        .reduce((sum, d) => {
-                          const productItem = d.items.find(di => di.productId === item.productId)
-                          return sum + (productItem?.quantityDelivered || 0)
-                        }, 0)
-                      : item.quantityDelivered // Fallback to current delivery quantity if no deliveries array
+                        return sum + (productItem?.quantityDelivered || 0)
+                      }, 0) || item.quantityDelivered
 
-                    // Calculate remaining quantity at this point in time
-                    // For history view without complete transaction data, show 0 remaining
-                    const remainingAtThisPoint = transaction.deliverySummary
-                      ? orderedQuantity - cumulativeDeliveredAtThisPoint
-                      : 0
+                    const finalTotalAntar = Math.max(cumulativeDeliveredAtThisPoint, item.quantityDelivered)
+                    const remainingAtThisPoint = orderedQuantity - finalTotalAntar
 
                     return (
                       <tr key={item.id} className="border-b border-gray-200">
@@ -651,7 +660,7 @@ export function DeliveryNotePDF({ delivery, transactionInfo, children }: Deliver
                         <td className="border border-gray-300 px-4 py-3 font-medium text-gray-800">{item.productName}</td>
                         <td className="border border-gray-300 px-4 py-3 text-center font-medium">{item.quantityDelivered}</td>
                         <td className="border border-gray-300 px-4 py-3 text-center text-gray-600">{item.unit}</td>
-                        <td className="border border-gray-300 px-4 py-3 text-center font-medium text-blue-600">{cumulativeDeliveredAtThisPoint}</td>
+                        <td className="border border-gray-300 px-4 py-3 text-center font-medium text-blue-600">{finalTotalAntar}</td>
                         <td className="border border-gray-300 px-4 py-3 text-center font-medium text-orange-600">{remainingAtThisPoint}</td>
                       </tr>
                     )
@@ -760,31 +769,37 @@ export function DeliveryNotePDF({ delivery, transactionInfo, children }: Deliver
               </thead>
               <tbody>
                 {delivery.items.map((item, index) => {
-                  // FIXED: Calculate historical cumulative totals up to and including this delivery
-                  // Get the delivery summary item for baseline data
-                  const deliverySummaryItem = transaction.deliverySummary?.find(ds => ds.productId === item.productId)
+                  const itemProductId = item.productId || item.product_id
+                  const itemProductName = (item.productName || item.product_name || '').toLowerCase()
+                  const itemIsBonus = !!(item.isBonus || itemProductName.includes('bonus'))
+                  const deliveryCreatedAt = delivery.createdAt ? new Date(delivery.createdAt).getTime() : Date.now()
+
+                  const deliverySummaryItem = transaction.deliverySummary?.find(ds =>
+                    (ds.productId === itemProductId || ds.productName?.toLowerCase() === itemProductName) &&
+                    (!!(ds.isBonus || (ds.productName || '').toLowerCase().includes('bonus')) === itemIsBonus)
+                  )
+
                   const orderedQuantity = (item as any).orderedQuantity || deliverySummaryItem?.orderedQuantity || 0
 
-                  // Calculate cumulative delivered quantity up to and including this delivery
-                  // by finding all deliveries for this product up to this delivery's creation date
-                  const deliveryCreatedAt2 = delivery.createdAt ? new Date(delivery.createdAt).getTime() : Date.now()
-                  const cumulativeDeliveredAtThisPoint = transaction.deliveries
-                    ? transaction.deliveries
-                      .filter(d => {
-                        const dCreatedAt = d.createdAt ? new Date(d.createdAt).getTime() : 0
-                        return !isNaN(dCreatedAt) && !isNaN(deliveryCreatedAt2) && dCreatedAt <= deliveryCreatedAt2
+                  const deliveries = transaction.deliveries || []
+                  const cumulativeDeliveredAtThisPoint = deliveries
+                    .filter(d => {
+                      const dCreatedAt = d.createdAt ? new Date(d.createdAt).getTime() : 0
+                      return !isNaN(dCreatedAt) && dCreatedAt <= deliveryCreatedAt
+                    })
+                    .reduce((sum, d) => {
+                      const productItem = d.items.find(di => {
+                        const diId = di.productId || di.product_id
+                        const diName = (di.productName || di.product_name || '').toLowerCase()
+                        const diIsBonus = !!(di.isBonus || diName.includes('bonus'))
+                        return (diId === itemProductId || diName === itemProductName) &&
+                          (diIsBonus === itemIsBonus)
                       })
-                      .reduce((sum, d) => {
-                        const productItem = d.items.find(di => di.productId === item.productId)
-                        return sum + (productItem?.quantityDelivered || 0)
-                      }, 0)
-                    : item.quantityDelivered // Fallback to current delivery quantity if no deliveries array
+                      return sum + (productItem?.quantityDelivered || 0)
+                    }, 0) || item.quantityDelivered
 
-                  // Calculate remaining quantity at this point in time
-                  // For history view without complete transaction data, show 0 remaining
-                  const remainingAtThisPoint = transaction.deliverySummary
-                    ? orderedQuantity - cumulativeDeliveredAtThisPoint
-                    : 0
+                  const finalTotalAntar = Math.max(cumulativeDeliveredAtThisPoint, item.quantityDelivered)
+                  const remainingAtThisPoint = orderedQuantity - finalTotalAntar
 
                   return (
                     <tr key={item.id}>
@@ -792,7 +807,7 @@ export function DeliveryNotePDF({ delivery, transactionInfo, children }: Deliver
                       <td className="pt-1 align-top">{item.productName}</td>
                       <td className="pt-1 text-right align-top">{item.quantityDelivered}</td>
                       <td className="pt-1 text-center align-top">{item.unit}</td>
-                      <td className="pt-1 text-right align-top">{cumulativeDeliveredAtThisPoint}</td>
+                      <td className="pt-1 text-right align-top">{finalTotalAntar}</td>
                       <td className="pt-1 text-right align-top">{remainingAtThisPoint}</td>
                     </tr>
                   )

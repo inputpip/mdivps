@@ -23,6 +23,7 @@ import { Badge } from "./ui/badge"
 import { useAccounts } from "@/hooks/useAccounts"
 import { Trash2 } from "lucide-react"
 import { PanjarReceiptPDF } from "./PanjarReceiptPDF"
+import { EmployeeAdvancesReport } from "./EmployeeAdvancesReport"
 import { useTimezone } from "@/contexts/TimezoneContext"
 import { getOfficeTime } from "@/utils/officeTime"
 import {
@@ -214,18 +215,27 @@ export function EmployeeAdvanceManagement() {
       )}
 
       <Card>
-        <CardHeader>
-          <CardTitle>
-            {isViewOnly ? 'Data Panjar Saya' : 'Riwayat Panjar Karyawan'}
-          </CardTitle>
-          <CardDescription>
-            {isViewOnly
-              ? 'Berikut adalah data panjar yang pernah Anda terima'
-              : 'Klik nama karyawan untuk melihat detail panjar'
-            }
-          </CardDescription>
+        <CardHeader className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="space-y-1.5">
+            <CardTitle>
+              {isViewOnly ? 'Data Panjar Saya' : 'Riwayat Panjar Karyawan'}
+            </CardTitle>
+            <CardDescription>
+              {isViewOnly
+                ? 'Berikut adalah data panjar yang pernah Anda terima'
+                : 'Klik nama karyawan untuk melihat detail panjar'
+              }
+            </CardDescription>
+          </div>
+
+          {!isViewOnly && advances && (
+            <div className="flex flex-col sm:flex-row gap-2">
+              <EmployeeAdvancesReport advances={advances} />
+            </div>
+          )}
+
           {isViewOnly && (
-            <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg w-full">
               <p className="text-sm text-blue-800">
                 <span className="font-medium">Info:</span> Anda hanya dapat melihat data panjar pribadi Anda.
                 Untuk mengelola panjar karyawan lain, hubungi Admin/Owner/Kasir.

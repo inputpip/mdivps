@@ -731,10 +731,23 @@ export const useTransactionDeliveryInfo = (transactionId: string, options?: { en
         });
         */
 
+        const isBonus = item.is_bonus || item.isBonus ||
+          productName.toLowerCase().includes('bonus') ||
+          productName.toLowerCase().includes('free');
+
         // Calculate total delivered for this item across all deliveries
         const totalDelivered = deliveries.reduce((sum: number, d: Delivery) => {
-          const dItem = d.items.find((di: any) => di.productId === productId);
-          return sum + (dItem ? dItem.quantityDelivered : 0);
+          // Find matching delivery items (could be multiple in one delivery)
+          const matchedItems = d.items.filter(di => {
+            const diId = di.productId || di.product_id;
+            const diName = (di.productName || '').toLowerCase();
+            const diIsBonus = di.isBonus || diName.includes('bonus') || diName.includes('free');
+
+            return diId === productId && !!diIsBonus === !!isBonus;
+          });
+
+          const subtotal = matchedItems.reduce((s, di) => s + (Number(di.quantityDelivered) || 0), 0);
+          return sum + subtotal;
         }, 0);
 
         return {
