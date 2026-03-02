@@ -25,8 +25,9 @@ import { Badge } from "@/components/ui/badge"
 const salesReportSchema = z.object({
     customerId: z.string().min(1, "Pilih pelanggan."),
     notes: z.string().min(3, "Catatan minimal 3 karakter."),
-    latitude: z.number().optional(),
-    longitude: z.number().optional(),
+    latitude: z.number({ required_error: "Lokasi wajib diambil" }),
+    longitude: z.number({ required_error: "Lokasi wajib diambil" }),
+    photo: z.any().refine((file) => file instanceof File, "Foto wajib diunggah"),
 })
 
 type SalesReportFormData = z.infer<typeof salesReportSchema>
@@ -55,6 +56,8 @@ export default function MobileSalesReportPage() {
         defaultValues: {
             customerId: "",
             notes: "",
+            latitude: undefined,
+            longitude: undefined,
         }
     })
 
@@ -95,6 +98,7 @@ export default function MobileSalesReportPage() {
         try {
             const compressed = await compressImage(file, 200)
             setPhoto(compressed)
+            setValue("photo", compressed, { shouldValidate: true })
             const reader = new FileReader()
             reader.onload = (e) => setPhotoPreview(e.target?.result as string)
             reader.readAsDataURL(compressed)
@@ -106,6 +110,7 @@ export default function MobileSalesReportPage() {
     const removePhoto = () => {
         setPhoto(null)
         setPhotoPreview(null)
+        setValue("photo", null)
         if (fileInputRef.current) fileInputRef.current.value = ''
     }
 
@@ -121,6 +126,8 @@ export default function MobileSalesReportPage() {
                     'visits'
                 )
                 photoUrl = uploadResult.webViewLink
+            } else {
+                throw new Error("Foto wajib diunggah")
             }
 
             // Save Report to database (using Supabase directly for now)
@@ -219,11 +226,21 @@ export default function MobileSalesReportPage() {
                     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                         <Card className="shadow-sm border-none border-l-4 border-l-indigo-600">
                             <CardContent className="p-4 flex items-center justify-between">
-                                <div>
-                                    <h2 className="font-bold text-indigo-900">{selectedCustomer?.name}</h2>
+                                <div className="flex-1 min-w-0 mr-4">
+                                    <h2 className="font-bold text-indigo-900 truncate">{selectedCustomer?.name}</h2>
                                     <p className="text-xs text-muted-foreground">{selectedCustomer?.id}</p>
                                 </div>
-                                <Button variant="ghost" size="sm" onClick={() => setSelectedCustomerId(null)}>Ganti</Button>
+                                <div className="flex gap-2 shrink-0">
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        className="bg-emerald-600 hover:bg-emerald-700"
+                                        onClick={() => window.location.href = `/pos?customer=${selectedCustomerId}`}
+                                    >
+                                        POS
+                                    </Button>
+                                    <Button type="button" variant="ghost" size="sm" onClick={() => setSelectedCustomerId(null)}>Ganti</Button>
+                                </div>
                             </CardContent>
                         </Card>
 
@@ -239,9 +256,12 @@ export default function MobileSalesReportPage() {
                                         <p className="text-[10px] text-muted-foreground">{location ? `${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}` : 'Belum mengunci lokasi'}</p>
                                     </div>
                                 </div>
-                                <Button type="button" size="sm" variant="outline" onClick={getGPS} disabled={isLocating}>
-                                    {isLocating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Ambil Lokasi"}
-                                </Button>
+                                <div className="flex flex-col items-end gap-1">
+                                    <Button type="button" size="sm" variant="outline" onClick={getGPS} disabled={isLocating}>
+                                        {isLocating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Ambil Lokasi"}
+                                    </Button>
+                                    {(errors.latitude || errors.longitude) && <p className="text-[10px] text-destructive">Lokasi wajib diambil</p>}
+                                </div>
                             </CardContent>
                         </Card>
 
@@ -325,6 +345,7 @@ export default function MobileSalesReportPage() {
                                             </Button>
                                         </div>
                                     )}
+                                    {errors.photo && <p className="text-xs text-destructive">{errors.photo.message as string}</p>}
                                 </div>
 
                                 <Button type="submit" className="w-full h-12 bg-indigo-600 hover:bg-indigo-700" disabled={isUploading}>
@@ -344,6 +365,6 @@ export default function MobileSalesReportPage() {
                 transaction={selectedTransaction}
                 defaultPaymentAccount={userCashAccount}
             />
-        </div>
+        </div >
     )
 }

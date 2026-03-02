@@ -121,7 +121,17 @@ export const PosForm = () => {
     if (quotationId && products && customers) {
       loadQuotationData(quotationId);
     }
-  }, [searchParams, products, customers]);
+
+    const customerIdFromQuery = searchParams.get('customer');
+    if (customerIdFromQuery && customers && !selectedCustomer) {
+      const customer = customers.find(c => c.id === customerIdFromQuery);
+      if (customer) {
+        setSelectedCustomer(customer);
+        setCustomerSearch(customer.name);
+        console.log('[PosForm] Auto-selected customer from query:', customer.name);
+      }
+    }
+  }, [searchParams, products, customers, selectedCustomer]);
 
   const loadQuotationData = async (quotationId: string) => {
     try {

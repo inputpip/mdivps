@@ -139,6 +139,19 @@ export const MobilePosForm = () => {
     }
   }, [isProductSheetOpen]);
 
+  // Handle customer query parameter
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const customerId = params.get('customer');
+    if (customerId && customers && !selectedCustomer) {
+      const customer = customers.find(c => c.id === customerId);
+      if (customer) {
+        setSelectedCustomer(customer);
+        console.log('[MobilePOS] Auto-selected customer from query:', customer.name);
+      }
+    }
+  }, [location.search, customers, selectedCustomer]);
+
   const handleAddItem = () => {
     const newItem: FormTransactionItem = {
       id: Date.now(), product: null, keterangan: '', qty: 1, harga: 0, unit: 'pcs'
