@@ -129,7 +129,7 @@ const MobileLayout = () => {
   const regularMenuItems = [
     // POS Kasir - controlled by pos_access permission
     ...(canAccessPOS ? [{
-      title: 'Point of Sale',
+      title: 'Point of Sale (POS)',
       icon: ShoppingCart,
       path: '/pos',
       description: 'Buat transaksi penjualan',
@@ -236,7 +236,7 @@ const MobileLayout = () => {
       textColor: 'text-white'
     }] : []),
     // Komisi - controlled by commission_view or commission_report permission
-    ...(canViewCommission ? [{
+    ...((canViewCommission || user?.role?.toLowerCase() === 'sales') ? [{
       title: 'Komisi Saya',
       icon: Coins,
       path: '/my-commission',
@@ -245,7 +245,7 @@ const MobileLayout = () => {
       textColor: 'text-white'
     }] : []),
     // Absensi - controlled by attendance_access permission
-    ...(canAccessAttendance ? [{
+    ...((canAccessAttendance || user?.role?.toLowerCase() === 'sales') ? [{
       title: 'Absensi',
       icon: Clock,
       path: '/attendance',
@@ -273,8 +273,26 @@ const MobileLayout = () => {
     }
   ]
 
-  // Use helper menu if user is helper, otherwise use regular menu
-  const menuItems = isHelper ? helperMenuItems : regularMenuItems
+  // Determine menu items based on role
+  const getMenuItemsForUser = () => {
+    // Helper gets limited menu
+    if (isHelper) return helperMenuItems;
+
+    // Sales gets specific menu
+    if (user?.role?.toLowerCase() === 'sales') {
+      return regularMenuItems.filter(item =>
+        item.title === 'Laporan Sales' ||
+        item.title === 'Point of Sale (POS)' ||
+        item.title === 'Komisi Saya' ||
+        item.title === 'Absensi'
+      );
+    }
+
+    // Default regular menu
+    return regularMenuItems;
+  }
+
+  const menuItems = getMenuItemsForUser();
 
   const handleLogout = async () => {
     try {
@@ -301,7 +319,7 @@ const MobileLayout = () => {
 
     switch (path) {
       case '/pos':
-        return 'Point of Sale'
+        return 'Point of Sale (POS)'
       case '/driver-pos':
         return 'POS Supir'
       case '/transactions':

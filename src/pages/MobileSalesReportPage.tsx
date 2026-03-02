@@ -21,6 +21,8 @@ import { supabase } from "@/integrations/supabase/client"
 import { PayReceivableDialog } from "@/components/PayReceivableDialog"
 import { Transaction } from "@/types/transaction"
 import { Badge } from "@/components/ui/badge"
+import { Dialog, DialogContent } from "@/components/ui/dialog"
+import { MobilePosForm } from "@/components/MobilePosForm"
 
 const salesReportSchema = z.object({
     customerId: z.string().min(1, "Pilih pelanggan."),
@@ -47,6 +49,7 @@ export default function MobileSalesReportPage() {
     const [searchQuery, setSearchQuery] = useState("")
     const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
     const [isPayDialogOpen, setIsPayDialogOpen] = useState(false)
+    const [isPosModalOpen, setIsPosModalOpen] = useState(false)
     const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
 
     const fileInputRef = useRef<HTMLInputElement>(null)
@@ -163,7 +166,7 @@ export default function MobileSalesReportPage() {
 
     const filteredCustomers = customers?.filter(c =>
         c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.id.toLowerCase().includes(searchQuery.toLowerCase())
+        (c.phone && c.phone.toLowerCase().includes(searchQuery.toLowerCase()))
     ).slice(0, 10) || []
 
     const selectedCustomer = customers?.find(c => c.id === selectedCustomerId)
@@ -196,7 +199,7 @@ export default function MobileSalesReportPage() {
                             <div className="relative">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                 <Input
-                                    placeholder="Cari Nama / ID Pelanggan..."
+                                    placeholder="Cari Nama / No. HP Pelanggan..."
                                     className="pl-10"
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
@@ -216,7 +219,7 @@ export default function MobileSalesReportPage() {
                                         }}
                                     >
                                         <span className="font-bold text-indigo-700">{customer.name}</span>
-                                        <span className="text-[10px] text-muted-foreground">{customer.id} • {customer.address || 'No Address'}</span>
+                                        <span className="text-[10px] text-muted-foreground">{customer.phone || 'No Phone'} • {customer.address || 'No Address'}</span>
                                     </Button>
                                 ))}
                             </div>
@@ -228,14 +231,14 @@ export default function MobileSalesReportPage() {
                             <CardContent className="p-4 flex items-center justify-between">
                                 <div className="flex-1 min-w-0 mr-4">
                                     <h2 className="font-bold text-indigo-900 truncate">{selectedCustomer?.name}</h2>
-                                    <p className="text-xs text-muted-foreground">{selectedCustomer?.id}</p>
+                                    <p className="text-xs text-muted-foreground">{selectedCustomer?.phone || 'No Phone'}</p>
                                 </div>
                                 <div className="flex gap-2 shrink-0">
                                     <Button
                                         type="button"
                                         size="sm"
                                         className="bg-emerald-600 hover:bg-emerald-700"
-                                        onClick={() => window.location.href = `/pos?customer=${selectedCustomerId}`}
+                                        onClick={() => setIsPosModalOpen(true)}
                                     >
                                         POS
                                     </Button>
@@ -365,6 +368,20 @@ export default function MobileSalesReportPage() {
                 transaction={selectedTransaction}
                 defaultPaymentAccount={userCashAccount}
             />
-        </div >
+
+            <Dialog open={isPosModalOpen} onOpenChange={setIsPosModalOpen}>
+                <DialogContent className="p-0 sm:max-w-[100vw] h-[100vh] border-none overflow-y-auto bg-slate-50 flex flex-col">
+                    <div className="sticky top-0 z-50 bg-indigo-600 text-white p-4 flex items-center justify-between shadow-md shrink-0">
+                        <h2 className="font-bold">Point of Sale</h2>
+                        <Button variant="ghost" size="icon" onClick={() => setIsPosModalOpen(false)} className="text-white hover:bg-indigo-700">
+                            <X className="h-6 w-6" />
+                        </Button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-4">
+                        <MobilePosForm preselectedCustomerId={selectedCustomerId || undefined} />
+                    </div>
+                </DialogContent>
+            </Dialog>
+        </div>
     )
 }

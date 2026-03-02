@@ -48,7 +48,11 @@ interface FormTransactionItem {
   isManualPrice?: boolean;
 }
 
-export const MobilePosForm = () => {
+interface MobilePosFormProps {
+  preselectedCustomerId?: string;
+}
+
+export const MobilePosForm = ({ preselectedCustomerId }: MobilePosFormProps) => {
   const { toast } = useToast()
   const navigate = useNavigate()
   const location = useLocation()
@@ -139,18 +143,18 @@ export const MobilePosForm = () => {
     }
   }, [isProductSheetOpen]);
 
-  // Handle customer query parameter
+  // Handle customer preselection from props or query
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    const customerId = params.get('customer');
+    const customerId = preselectedCustomerId || params.get('customer');
     if (customerId && customers && !selectedCustomer) {
       const customer = customers.find(c => c.id === customerId);
       if (customer) {
         setSelectedCustomer(customer);
-        console.log('[MobilePOS] Auto-selected customer from query:', customer.name);
+        console.log('[MobilePOS] Auto-selected customer:', customer.name);
       }
     }
-  }, [location.search, customers, selectedCustomer]);
+  }, [location.search, customers, selectedCustomer, preselectedCustomerId]);
 
   const handleAddItem = () => {
     const newItem: FormTransactionItem = {

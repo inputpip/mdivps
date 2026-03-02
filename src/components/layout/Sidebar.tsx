@@ -77,7 +77,7 @@ const getMenuItems = (hasPermission: (permission: Permission) => boolean, hasGra
     title: "Utama",
     items: [
       { href: "/", label: "Dashboard", icon: Home },
-      { href: "/pos", label: "Kasir (POS)", icon: ShoppingCart, permission: PERMISSIONS.TRANSACTIONS },
+      { href: "/pos", label: "Point of Sale (POS)", icon: ShoppingCart, permission: PERMISSIONS.TRANSACTIONS },
       // POS Supir removed from web sidebar - only available in mobile view
       { href: "/transactions", label: "Data Transaksi", icon: List, permission: PERMISSIONS.TRANSACTIONS },
       { href: "/quotations", label: "Penawaran", icon: FileText, granularPermission: 'quotations_view' },
@@ -92,7 +92,16 @@ const getMenuItems = (hasPermission: (permission: Permission) => boolean, hasGra
         return hasGranularPermission(item.granularPermission) || hasGranularPermission('quotations_create');
       }
       // Check regular permission
-      if (item.permission && !hasPermission(item.permission)) return false;
+      if (item.permission && !hasPermission(item.permission)) {
+        // Force include for sales role if it's one of the allowed 4 items
+        if (userRole?.toLowerCase() === 'sales' && (
+          item.label === 'Laporan Sales' ||
+          item.label === 'Point of Sale (POS)' ||
+          item.label === 'Komisi Saya' ||
+          item.label === 'Absensi'
+        )) return true;
+        return false;
+      }
       return true;
     }),
   },
@@ -137,7 +146,7 @@ const getMenuItems = (hasPermission: (permission: Permission) => boolean, hasGra
       { href: "/stock-report", label: "Laporan Stock", icon: BarChart3, permission: PERMISSIONS.REPORTS },
       { href: "/material-movements", label: "Pergerakan Penggunaan Bahan", icon: Package2, permission: PERMISSIONS.REPORTS },
       { href: "/attendance/report", label: "Laporan Absensi", icon: BookCheck, permission: PERMISSIONS.REPORTS },
-      { href: "/commission-report", label: "Laporan Komisi", icon: Calculator, permission: PERMISSIONS.REPORTS },
+      { href: "/commission-report", label: "Komisi Saya", icon: Calculator, permission: PERMISSIONS.REPORTS },
     ].filter(item => hasPermission(item.permission)),
   },
   {
@@ -179,7 +188,23 @@ export function Sidebar({ isCollapsed, setCollapsed }: SidebarProps) {
   const { hasGranularPermission } = useGranularPermission();
 
   // Get filtered menu items based on user permissions and role
-  const menuItems = getMenuItems(hasPermission, hasGranularPermission, user?.role);
+  const rawMenuItems = getMenuItems(hasPermission, hasGranularPermission, user?.role);
+
+  // Filter for Sales role specifically
+  const menuItems = useMemo(() => {
+    if (user?.role?.toLowerCase() === 'sales') {
+      return rawMenuItems.map(section => ({
+        ...section,
+        items: section.items.filter(item =>
+          item.label === 'Laporan Sales' ||
+          item.label === 'Point of Sale (POS)' ||
+          item.label === 'Komisi Saya' ||
+          item.label === 'Absensi'
+        )
+      })).filter(section => section.items.length > 0);
+    }
+    return rawMenuItems;
+  }, [rawMenuItems, user?.role]);
 
   // Search state
   const [searchQuery, setSearchQuery] = useState("");
