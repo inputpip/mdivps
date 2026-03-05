@@ -14,7 +14,8 @@ Semua perubahan penting pada proyek AQUVIT ERP System didokumentasikan di file i
 2. [Local Development Setup](#local-development-setup)
 3. [Server Architecture](#server-architecture-diagram)
 4. [VPS Server Information](#vps-server-information)
-5. [Version History](#v50-2026-03-06---delivery-system-optimization--helper-expansion)
+5. [Version History](#v51-2026-03-06---commission-system-audit--ui-enhancement)
+   - [v5.1] **Commission Duplication Fix & UI Refinement** 🛡️ CRITICAL
    - [v5.0] **Delivery & PO Infrastructure Fixes** 🚚 CRITICAL
    - [v4.6] **Payroll & Journal Hotfixes** 🚑 CRITICAL
    - [v4.5] **Payroll Journal Balancing** ⚖️
@@ -116,6 +117,7 @@ The system relies on **PostgreSQL RPCs** for data integrity. Frontend calls `sup
 
 ## 4. ⚠️ Current Focus & Next Steps
 **Active Task**: Auditing Stock & Validating Retasi Logic.
+**Recently Completed**: Commission Duplication Fix & UI Pagination.
 
 1.  **Frontend**: Modifying `src/hooks/useRetasi.ts` to ensure correct data is sent to RPC.
 2.  **Database**: 
@@ -125,6 +127,20 @@ The system relies on **PostgreSQL RPCs** for data integrity. Frontend calls `sup
 
 
 ---
+
+---
+
+# v5.1 (2026-03-06) - Commission System Audit & UI Enhancement
+
+### 🛡️ Commission Duplication Fix (MKW & NBX)
+*   **Duplicate Cleanup**: Menghapus lebih dari **27.000** baris data komisi duplikat di database Manokwari dan Nabire yang disebabkan oleh *double triggering*.
+*   **Database Constraints**: Penambahan **Unique Index** (`idx_commission_unique_delivery` & `idx_commission_unique_transaction`) untuk mencegah data komisi yang sama persis masuk lebih dari satu kali.
+*   **Atomic Deletion**: Verifikasi fungsi `void_transaction_atomic` untuk memastikan komisi otomatis terhapus saat transaksi dibatalkan (Full Cascade).
+
+### 📑 Frontend UI Enhancements
+*   **Table Pagination**: Implementasi pagination pada halaman Laporan Komisi (50 data per halaman) dengan navigasi nomor halaman.
+*   **User Experience**: Penambahan fitur *auto-scroll to top* saat berpindah halaman dan indikator total entri yang lebih informatif.
+*   **Icon Stability**: Perbaikan import icon `lucide-react` pada halaman laporan.
 
 # v5.0 (2026-03-06) - Delivery System Optimization & Helper Expansion
 

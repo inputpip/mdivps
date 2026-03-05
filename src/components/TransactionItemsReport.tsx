@@ -764,9 +764,47 @@ export const TransactionItemsReport = () => {
     })
 
     const finalY = (doc as any).lastAutoTable.finalY + 10
+    doc.setFontSize(11)
+    doc.setFont('helvetica', 'bold')
+    doc.text('Ringkasan Produk Laku:', 14, finalY)
+
+    // Calculate product aggregation
+    const productSummaryMap: Record<string, { quantity: number, total: number, unit: string }> = {}
+    reportData.forEach(item => {
+      const key = item.isBonus ? `${item.productName} [BONUS]` : item.productName
+      if (!productSummaryMap[key]) {
+        productSummaryMap[key] = { quantity: 0, total: 0, unit: item.unit }
+      }
+      productSummaryMap[key].quantity += item.quantity
+      productSummaryMap[key].total += item.total
+    })
+
+    const productSummaryTable = Object.entries(productSummaryMap)
+      .map(([name, data]) => [
+        name,
+        data.quantity.toString(),
+        data.unit || 'pcs',
+        `Rp ${data.total.toLocaleString()}`
+      ])
+      .sort((a, b) => (b[1] as any) - (a[1] as any))
+
+    autoTable(doc, {
+      head: [['Produk', 'Total Qty', 'Unit', 'Total Nilai']],
+      body: productSummaryTable,
+      startY: finalY + 5,
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [52, 152, 219] },
+      columnStyles: {
+        1: { halign: 'center', cellWidth: 20 },
+        2: { halign: 'center', cellWidth: 20 },
+        3: { halign: 'right', cellWidth: 40 }
+      }
+    })
+
+    const finalSummaryY = (doc as any).lastAutoTable.finalY + 10
     doc.setFontSize(10)
     doc.setFont('helvetica', 'bold')
-    doc.text('Ringkasan:', 14, finalY)
+    doc.text('Statistik Umum:', 14, finalSummaryY)
 
     const totalItems = reportData.length
     const totalQuantity = reportData.reduce((sum, item) => sum + item.quantity, 0)
@@ -776,20 +814,21 @@ export const TransactionItemsReport = () => {
     const officeSaleItems = reportData.filter(item => item.source === 'office_sale').length
     const retasiItems = reportData.filter(item => item.source === 'retasi').length
     const migrationItems = reportData.filter(item => item.source === 'migration').length
+    const posKasirItems = reportData.filter(item => item.source === 'pos_kasir').length
     const regularItems = reportData.filter(item => !item.isBonus).length
     const bonusItems = reportData.filter(item => item.isBonus).length
 
     doc.setFont('helvetica', 'normal')
-    doc.text(`• Total Produk: ${totalItems} (Diantar: ${deliveryItems}, Laku Kantor: ${officeSaleItems}, Retasi: ${retasiItems}, Migrasi: ${migrationItems})`, 14, finalY + 8)
+    doc.text(`• Total Entri: ${totalItems} (Diantar: ${deliveryItems}, Laku Kantor: ${officeSaleItems}, Retasi: ${retasiItems}, Migrasi: ${migrationItems}, Pos Kasir: ${posKasirItems})`, 14, finalSummaryY + 8)
     if (productFilter === 'all') {
-      doc.text(`• Produk Reguler: ${regularItems}, Produk Bonus: ${bonusItems}`, 14, finalY + 16)
-      doc.text(`• Total Quantity: ${totalQuantity}`, 14, finalY + 24)
-      doc.text(`• Total Nilai: Rp ${totalValue.toLocaleString()}`, 14, finalY + 32)
-      doc.text(`• Total Transaksi: ${uniqueTransactions}`, 14, finalY + 40)
+      doc.text(`• Produk Reguler: ${regularItems}, Produk Bonus: ${bonusItems}`, 14, finalSummaryY + 16)
+      doc.text(`• Total Seluruh Quantity: ${totalQuantity}`, 14, finalSummaryY + 24)
+      doc.text(`• Total Seluruh Nilai: Rp ${totalValue.toLocaleString()}`, 14, finalSummaryY + 32)
+      doc.text(`• Total Transaksi Unik: ${uniqueTransactions}`, 14, finalSummaryY + 40)
     } else {
-      doc.text(`• Total Quantity: ${totalQuantity}`, 14, finalY + 16)
-      doc.text(`• Total Nilai: Rp ${totalValue.toLocaleString()}`, 14, finalY + 24)
-      doc.text(`• Total Transaksi: ${uniqueTransactions}`, 14, finalY + 32)
+      doc.text(`• Total Seluruh Quantity: ${totalQuantity}`, 14, finalSummaryY + 16)
+      doc.text(`• Total Seluruh Nilai: Rp ${totalValue.toLocaleString()}`, 14, finalSummaryY + 24)
+      doc.text(`• Total Transaksi Unik: ${uniqueTransactions}`, 14, finalSummaryY + 32)
     }
 
     const filterSuffix = productFilter !== 'all' ? `-${productFilter.replace(/\s+/g, '')}` : ''
@@ -850,13 +889,32 @@ export const TransactionItemsReport = () => {
     const migrationItems = reportData.filter(item => item.source === 'migration').length
     const posKasirItems = reportData.filter(item => item.source === 'pos_kasir').length
 
+    // Calculate product aggregation for Excel
+    const productSummaryMap: Record<string, { quantity: number, total: number, unit: string }> = {}
+    reportData.forEach(item => {
+      const key = item.isBonus ? `${item.productName} [BONUS]` : item.productName
+      if (!productSummaryMap[key]) {
+        productSummaryMap[key] = { quantity: 0, total: 0, unit: item.unit }
+      }
+      productSummaryMap[key].quantity += item.quantity
+      productSummaryMap[key].total += item.total
+    })
+
+    const productSummaryRows = Object.entries(productSummaryMap)
+      .map(([name, data]) => [name, data.quantity, data.unit, data.total])
+      .sort((a, b) => (b[1] as any) - (a[1] as any))
+
     const summaryStartRow = 5 + excelData.length + 2
     XLSX.utils.sheet_add_aoa(ws, [
-      ['Ringkasan:'],
-      [`Total Produk: ${totalItems} (Diantar: ${deliveryItems}, Laku Kantor: ${officeSaleItems}, Retasi: ${retasiItems}, Migrasi: ${migrationItems}, Pos Kasir: ${posKasirItems})`],
-      [`Total Quantity: ${totalQuantity}`],
-      [`Total Nilai: Rp ${totalValue.toLocaleString()}`],
-      [`Total Transaksi: ${uniqueTransactions}`]
+      ['RINGKASAN PER PRODUK'],
+      ['Produk', 'Total Qty', 'Unit', 'Total Nilai'],
+      ...productSummaryRows,
+      [''],
+      ['STATISTIK UMUM'],
+      [`Total Entri: ${totalItems} (Diantar: ${deliveryItems}, Laku Kantor: ${officeSaleItems}, Retasi: ${retasiItems}, Migrasi: ${migrationItems}, Pos Kasir: ${posKasirItems})`],
+      [`Total Seluruh Quantity: ${totalQuantity}`],
+      [`Total Seluruh Nilai: Rp ${totalValue.toLocaleString()}`],
+      [`Total Transaksi Unik: ${uniqueTransactions}`]
     ], { origin: `A${summaryStartRow}` })
 
     // Set column widths

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -25,6 +25,10 @@ import {
   Trash2,
   FileSpreadsheet,
   RefreshCw,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react"
 import { recalculateCommissionsForPeriod } from "@/utils/commissionUtils"
 import { useToast } from "@/components/ui/use-toast"
@@ -49,6 +53,8 @@ export default function CommissionReportPage() {
   })
 
   const [selectedUser, setSelectedUser] = useState<string>("all")
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 50
 
   // Use optimized commission entries with date filters
   const start = new Date(startDate + "T00:00:00")
@@ -71,6 +77,18 @@ export default function CommissionReportPage() {
 
     return filtered.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
   }, [entries, selectedUser])
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [selectedUser, startDate, endDate])
+
+  const paginatedEntries = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage
+    return filteredEntries.slice(startIndex, startIndex + itemsPerPage)
+  }, [filteredEntries, currentPage, itemsPerPage])
+
+  const totalPages = Math.ceil(filteredEntries.length / itemsPerPage)
 
   // Calculate totals
   const totals = useMemo(() => {
@@ -607,7 +625,7 @@ export default function CommissionReportPage() {
         {/* Export Buttons */}
         <div className="flex justify-between items-center">
           <div className="text-sm text-gray-600">
-            Menampilkan {filteredEntries.length} entri komisi
+            Menampilkan {paginatedEntries.length} dari {filteredEntries.length} entri komisi (Halaman {currentPage} dari {totalPages || 1})
           </div>
           <div className="flex gap-2">
             <Button onClick={exportToExcel} variant="outline" className="bg-green-50 border-green-200 text-green-700 hover:bg-green-100">
@@ -647,7 +665,7 @@ export default function CommissionReportPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredEntries.map((entry) => (
+                  {paginatedEntries.map((entry) => (
                     <tr key={entry.id} className="border-t hover:bg-muted/50 transition-colors">
                       <td className="px-4 py-3">
                         {format(entry.createdAt, "dd MMM yyyy HH:mm", { locale: id })}
@@ -725,6 +743,91 @@ export default function CommissionReportPage() {
                 </tbody>
               </table>
             </div>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-2 mt-6 pb-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setCurrentPage(1);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  disabled={currentPage === 1}
+                  className="hidden sm:flex"
+                >
+                  <ChevronsLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setCurrentPage(prev => Math.max(1, prev - 1));
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  disabled={currentPage === 1}
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  Prev
+                </Button>
+
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant={currentPage === pageNum ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => {
+                          setCurrentPage(pageNum);
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                        className={`w-9 ${currentPage === pageNum ? "bg-blue-600 hover:bg-blue-700" : ""}`}
+                      >
+                        {pageNum}
+                      </Button>
+                    );
+                  })}
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setCurrentPage(prev => Math.min(totalPages, prev + 1));
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setCurrentPage(totalPages);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  disabled={currentPage === totalPages}
+                  className="hidden sm:flex"
+                >
+                  <ChevronsRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
 
