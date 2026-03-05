@@ -1126,7 +1126,7 @@ export default function DeliveryPage() {
                 ) : (
                   paginatedHistory.map((delivery: any, index: number) => (
                     <div
-                      key={delivery.id}
+                      key={`${delivery.id}-${index}`}
                       className="bg-white dark:bg-gray-800 border rounded-lg p-3 shadow-sm"
                       onClick={() => {
                         setSelectedDelivery(delivery)
@@ -1247,7 +1247,7 @@ export default function DeliveryPage() {
                           {paginatedHistory.map((delivery: any, index: number) => {
                             const isExpanded = expandedDeliveries.has(delivery.id)
                             return (
-                              <React.Fragment key={delivery.id}>
+                              <React.Fragment key={`${delivery.id}-${index}`}>
                                 <TableRow className="hover:bg-muted">
                                   <TableCell>
                                     <div className="flex items-center gap-2">
@@ -1497,12 +1497,11 @@ export default function DeliveryPage() {
 
                   return pages.map((page, idx) => (
                     <Button
-                      key={idx}
-                      variant={page === currentPage ? "default" : "outline"}
+                      key={`page-${idx}-${page}`}
+                      variant={currentPage === page ? "default" : "outline"}
                       size="sm"
-                      onClick={() => typeof page === 'number' && setCurrentPage(page)}
-                      disabled={typeof page !== 'number'}
-                      className={`h-8 w-8 p-0 ${typeof page !== 'number' ? 'cursor-default border-none hover:bg-transparent' : ''}`}
+                      className={`h-8 w-8 p-0 ${page === '...' ? 'cursor-default border-none pointer-events-none' : ''}`}
+                      onClick={() => page !== '...' && typeof page === 'number' && setCurrentPage(page)}
                     >
                       {page}
                     </Button>
@@ -1513,7 +1512,7 @@ export default function DeliveryPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                  disabled={currentPage === totalPages}
+                  disabled={currentPage === totalPages || totalPages === 0}
                   className="h-8 w-8 p-0"
                 >
                   &gt;

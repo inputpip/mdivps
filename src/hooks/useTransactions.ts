@@ -175,6 +175,11 @@ export const useTransactions = (filters?: {
         items: newTransaction.items.length
       });
 
+      // Memastikan penjualan bahan baku (material) otomatis menjadi Laku Kantor walau tidak dicentang
+      const hasMaterialItem = newTransaction.items.some((item: any) =>
+        item.product?._isMaterial || item.product?.type === 'material' || item.productId?.startsWith('material-')
+      );
+
       // Prepare Transaction Data (Snake Case for RPC)
       const transactionData = {
         id: newTransaction.id,
@@ -184,7 +189,7 @@ export const useTransactions = (filters?: {
         paid_amount: newTransaction.paidAmount || 0,
         payment_method: newTransaction.paymentMethod || 'Tunai',
         payment_account_id: newTransaction.paymentAccountId || null,
-        is_office_sale: newTransaction.isOfficeSale || false,
+        is_office_sale: hasMaterialItem ? true : (newTransaction.isOfficeSale || false),
         date: newTransaction.orderDate instanceof Date
           ? newTransaction.orderDate.toISOString()
           : newTransaction.orderDate,
