@@ -466,7 +466,13 @@ export default function RetasiPage() {
                           </TableCell>
                           <TableCell>Retasi {retasi.retasi_ke}</TableCell>
                           <TableCell>{retasi.driver_name || '-'}</TableCell>
-                          <TableCell>{retasi.helper_name || '-'}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-col text-xs">
+                              <span>{retasi.helper_name || '-'}</span>
+                              {retasi.helper_name_2 && <span>{retasi.helper_name_2}</span>}
+                              {retasi.helper_name_3 && <span>{retasi.helper_name_3}</span>}
+                            </div>
+                          </TableCell>
                           <TableCell className="text-muted-foreground italic">(Data lama)</TableCell>
                           <TableCell className="text-center">{retasi.total_items}</TableCell>
                           <TableCell className="text-center">{retasi.returned_items_count || 0}</TableCell>
@@ -523,7 +529,15 @@ export default function RetasiPage() {
                           </TableCell>
                           <TableCell>{idx === 0 ? `Retasi ${retasi.retasi_ke}` : ''}</TableCell>
                           <TableCell>{idx === 0 ? (retasi.driver_name || '-') : ''}</TableCell>
-                          <TableCell>{idx === 0 ? (retasi.helper_name || '-') : ''}</TableCell>
+                          <TableCell>
+                            {idx === 0 ? (
+                              <div className="flex flex-col text-xs">
+                                <span>{retasi.helper_name || '-'}</span>
+                                {retasi.helper_name_2 && <span>{retasi.helper_name_2}</span>}
+                                {retasi.helper_name_3 && <span>{retasi.helper_name_3}</span>}
+                              </div>
+                            ) : ''}
+                          </TableCell>
                           <TableCell className="font-medium">{item.product_name}</TableCell>
                           <TableCell className="text-center">{item.quantity || 0}</TableCell>
                           <TableCell className="text-center">{item.returned_quantity || 0}</TableCell>
@@ -708,6 +722,8 @@ function AddRetasiDialog({
   const [open, setOpen] = useState(false);
   const [driverId, setDriverId] = useState(drivers[0]?.id || "");
   const [helperId, setHelperId] = useState<string>("");
+  const [helperId2, setHelperId2] = useState<string>("");
+  const [helperId3, setHelperId3] = useState<string>("");
   const [notes, setNotes] = useState("");
   const [retasiItems, setRetasiItems] = useState<CreateRetasiItemData[]>([]);
   const [selectedProductId, setSelectedProductId] = useState("");
@@ -840,8 +856,10 @@ function AddRetasiDialog({
       return;
     }
 
-    // Get helper name if selected
+    // Get helper names if selected
     const helper = helperId ? drivers.find(d => d.id === helperId) : null;
+    const helper2 = helperId2 ? drivers.find(d => d.id === helperId2) : null;
+    const helper3 = helperId3 ? drivers.find(d => d.id === helperId3) : null;
 
     try {
       // Use office timezone for departure date to ensure correct date
@@ -849,7 +867,12 @@ function AddRetasiDialog({
 
       await createRetasi.mutateAsync({
         driver_name: driver.name,
+        helper_id: helper?.id || undefined,
         helper_name: helper?.name || undefined,
+        helper_id_2: helper2?.id || undefined,
+        helper_name_2: helper2?.name || undefined,
+        helper_id_3: helper3?.id || undefined,
+        helper_name_3: helper3?.name || undefined,
         departure_date: officeDateStr, // Pass string YYYY-MM-DD directly for DATE type
         total_items: totalBawa,
         notes: notes || undefined,
@@ -870,6 +893,8 @@ function AddRetasiDialog({
     setRetasiItems([]);
     setNotes("");
     setHelperId("");
+    setHelperId2("");
+    setHelperId3("");
     setSelectedProductId("");
     setItemQuantity(1);
   };
@@ -924,7 +949,7 @@ function AddRetasiDialog({
               </Select>
             </div>
             <div>
-              <Label className="text-xs text-slate-600">Helper (Opsional)</Label>
+              <Label className="text-xs text-slate-600">Helper 1 (Opsional)</Label>
               <Select value={helperId || "no-helper"} onValueChange={(v) => setHelperId(v === "no-helper" ? "" : v)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Pilih Helper" />
@@ -933,6 +958,45 @@ function AddRetasiDialog({
                   <SelectItem value="no-helper">Tidak ada helper</SelectItem>
                   {drivers
                     .filter((driver) => driver.id !== driverId)
+                    .map((driver) => (
+                      <SelectItem key={driver.id} value={driver.id}>
+                        {driver.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label className="text-xs text-slate-600">Helper 2 (Opsional)</Label>
+              <Select value={helperId2 || "no-helper"} onValueChange={(v) => setHelperId2(v === "no-helper" ? "" : v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Pilih Helper" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="no-helper">Tidak ada helper</SelectItem>
+                  {drivers
+                    .filter((driver) => driver.id !== driverId && driver.id !== helperId)
+                    .map((driver) => (
+                      <SelectItem key={driver.id} value={driver.id}>
+                        {driver.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs text-slate-600">Helper 3 (Opsional)</Label>
+              <Select value={helperId3 || "no-helper"} onValueChange={(v) => setHelperId3(v === "no-helper" ? "" : v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Pilih Helper" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="no-helper">Tidak ada helper</SelectItem>
+                  {drivers
+                    .filter((driver) => driver.id !== driverId && driver.id !== helperId && driver.id !== helperId2)
                     .map((driver) => (
                       <SelectItem key={driver.id} value={driver.id}>
                         {driver.name}
@@ -1125,8 +1189,12 @@ function RetasiDetailDialog({ retasi }: { retasi: any }) {
               <p className="font-medium">{retasi.driver_name || '-'}</p>
             </div>
             <div>
-              <span className="text-slate-500">Helper:</span>
-              <p className="font-medium">{retasi.helper_name || '-'}</p>
+              <span className="text-slate-500">Helpers:</span>
+              <div className="flex flex-col font-medium">
+                <span>{retasi.helper_name || '-'}</span>
+                {retasi.helper_name_2 && <span>{retasi.helper_name_2}</span>}
+                {retasi.helper_name_3 && <span>{retasi.helper_name_3}</span>}
+              </div>
             </div>
             <div>
               <span className="text-slate-500">Status:</span>
@@ -1343,7 +1411,12 @@ function EditRetasiDialog({
   isLoading: boolean;
 }) {
   const [driverName, setDriverName] = useState(retasi?.driver_name || "");
+  const [helperId, setHelperId] = useState(retasi?.helper_id || "");
   const [helperName, setHelperName] = useState(retasi?.helper_name || "");
+  const [helperId2, setHelperId2] = useState(retasi?.helper_id_2 || "");
+  const [helperName2, setHelperName2] = useState(retasi?.helper_name_2 || "");
+  const [helperId3, setHelperId3] = useState(retasi?.helper_id_3 || "");
+  const [helperName3, setHelperName3] = useState(retasi?.helper_name_3 || "");
   const [truckNumber, setTruckNumber] = useState(retasi?.truck_number || "");
   const [notes, setNotes] = useState(retasi?.notes || "");
 
@@ -1362,7 +1435,12 @@ function EditRetasiDialog({
   React.useEffect(() => {
     if (retasi) {
       setDriverName(retasi.driver_name || "");
+      setHelperId(retasi.helper_id || "");
       setHelperName(retasi.helper_name || "");
+      setHelperId2(retasi.helper_id_2 || "");
+      setHelperName2(retasi.helper_name_2 || "");
+      setHelperId3(retasi.helper_id_3 || "");
+      setHelperName3(retasi.helper_name_3 || "");
       setTruckNumber(retasi.truck_number || "");
       setNotes(retasi.notes || "");
       setReturnedCount(retasi.returned_items_count || 0);
@@ -1380,7 +1458,12 @@ function EditRetasiDialog({
   const handleSave = async () => {
     const data: any = {
       driver_name: driverName || undefined,
-      helper_name: helperName || undefined,
+      helper_id: helperId || null,
+      helper_name: helperName || null,
+      helper_id_2: helperId2 || null,
+      helper_name_2: helperName2 || null,
+      helper_id_3: helperId3 || null,
+      helper_name_3: helperName3 || null,
       truck_number: truckNumber || undefined,
       notes: notes || undefined,
     };
@@ -1434,10 +1517,18 @@ function EditRetasiDialog({
             </Select>
           </div>
 
-          {/* Helper */}
+          {/* Helpers */}
           <div className="space-y-2">
-            <Label>Helper (Opsional)</Label>
-            <Select value={helperName || "no-helper"} onValueChange={(v) => setHelperName(v === "no-helper" ? "" : v)}>
+            <Label>Helper 1 (Opsional)</Label>
+            <Select value={helperId || "no-helper"} onValueChange={(v) => {
+              if (v === "no-helper") {
+                setHelperId("");
+                setHelperName("");
+              } else {
+                setHelperId(v);
+                setHelperName(drivers.find(d => d.id === v)?.name || "");
+              }
+            }}>
               <SelectTrigger>
                 <SelectValue placeholder="Pilih Helper" />
               </SelectTrigger>
@@ -1446,7 +1537,61 @@ function EditRetasiDialog({
                 {drivers
                   .filter((driver) => driver.name !== driverName)
                   .map((driver) => (
-                    <SelectItem key={driver.id} value={driver.name}>
+                    <SelectItem key={driver.id} value={driver.id}>
+                      {driver.name}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Helper 2 (Opsional)</Label>
+            <Select value={helperId2 || "no-helper"} onValueChange={(v) => {
+              if (v === "no-helper") {
+                setHelperId2("");
+                setHelperName2("");
+              } else {
+                setHelperId2(v);
+                setHelperName2(drivers.find(d => d.id === v)?.name || "");
+              }
+            }}>
+              <SelectTrigger>
+                <SelectValue placeholder="Pilih Helper" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="no-helper">Tidak ada helper</SelectItem>
+                {drivers
+                  .filter((driver) => driver.name !== driverName && driver.id !== helperId)
+                  .map((driver) => (
+                    <SelectItem key={driver.id} value={driver.id}>
+                      {driver.name}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Helper 3 (Opsional)</Label>
+            <Select value={helperId3 || "no-helper"} onValueChange={(v) => {
+              if (v === "no-helper") {
+                setHelperId3("");
+                setHelperName3("");
+              } else {
+                setHelperId3(v);
+                setHelperName3(drivers.find(d => d.id === v)?.name || "");
+              }
+            }}>
+              <SelectTrigger>
+                <SelectValue placeholder="Pilih Helper" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="no-helper">Tidak ada helper</SelectItem>
+                {drivers
+                  .filter((driver) => driver.name !== driverName && driver.id !== helperId && driver.id !== helperId2)
+                  .map((driver) => (
+                    <SelectItem key={driver.id} value={driver.id}>
                       {driver.name}
                     </SelectItem>
                   ))}

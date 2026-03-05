@@ -188,7 +188,7 @@ export function PurchaseOrderTable() {
                 <Pencil className="h-4 w-4" />
               </Button>
             )}
-            {po.status === 'Dikirim' && (
+            {(po.status === 'Dikirim' || po.status === 'Approved') && (
               <Button size="sm" onClick={() => { setSelectedPo(po); setIsReceiveDialogOpen(true); }}>Terima Barang</Button>
             )}
             {po.status === 'Diterima' && (

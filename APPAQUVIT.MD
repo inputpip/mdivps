@@ -3,6 +3,29 @@
 
 ## 1. 🌐 VPS Connection Information
 
+
+# CHANGELOG
+
+Semua perubahan penting pada proyek AQUVIT ERP System didokumentasikan di file ini.
+
+## Table of Contents
+
+1. [🤖 PANDUAN UNTUK AI](#-panduan-untuk-ai-baca-ini-pertama) - **BACA INI DULU!**
+2. [Local Development Setup](#local-development-setup)
+3. [Server Architecture](#server-architecture-diagram)
+4. [VPS Server Information](#vps-server-information)
+5. [Version History](#v50-2026-03-06---delivery-system-optimization--helper-expansion)
+   - [v5.0] **Delivery & PO Infrastructure Fixes** 🚚 CRITICAL
+   - [v4.6] **Payroll & Journal Hotfixes** 🚑 CRITICAL
+   - [v4.5] **Payroll Journal Balancing** ⚖️
+   - [v4.4] **Payroll Dynamic Account Identification** 🚀 NEW
+   - [v4.3] **RPC Atomic Operations** ⚠️ PENTING!
+   - [v4.2] Accounting System Improvements
+   - [v4.1] Permission System & Notification
+   - [v4] APK Build & Bluetooth Printer
+   - [v3] Dashboard Enhancement & Retasi
+   - [Earlier versions...]
+
 ### SSH Access
 To connect to the VPS server, use the temporary key file (`Aquvit_temp.pem`). Use `git bash` or `powershell`.
 
@@ -101,7 +124,29 @@ The system relies on **PostgreSQL RPCs** for data integrity. Frontend calls `sup
 
 
 
-# AQUVIT ERP - Post-RPC Migration Audit
+---
+
+# v5.0 (2026-03-06) - Delivery System Optimization & Helper Expansion
+
+### 🚚 Delivery System Enhancements (MKW & NBX)
+*   **Multi-Helper Support**: Menambahkan kolom `helper_id_2` dan `helper_id_3` pada tabel `deliveries` di database Manokwari dan Nabire.
+*   **RPC Hotfix**: Deployment `process_delivery_atomic` versi terbaru yang mendukung input multi-helper.
+*   **Performance Optimization**: Optimasi query `useDeliveryHistory` dengan menyederhanakan nested joins yang berat. Sebelumnya menyebabkan history tidak tampil (timeout/memory limit) saat data mencapai 6.000+ baris.
+*   **Bug Fixes**:
+    *   Fix `400 Bad Request` saat fetch pengantaran (missing columns).
+    *   Fix `404 Not Found` pada RPC pengantaran di database MKW.
+    *   Reload PostgREST Schema (`SIGUSR1`) di kedua server untuk sinkronisasi metadata database.
+
+### 📦 Purchase Order & Accounting Fixes
+*   **Partial PO Receipt**: Deployment RPC `receive_po_partial` untuk menangani penerimaan barang sebagian.
+*   **Journal Refactoring**: Refaktor fungsi `approve_purchase_order_atomic` untuk menggunakan standar `create_journal_atomic`, memperbaiki kalkulasi PPN, dan mencegah duplikasi jurnal hutang.
+*   **Data Integrity**: Penambahan validasi pada `create_accounts_payable_atomic` untuk mencegah pembuatan hutang manual pada PO yang sudah di-approve.
+
+### 🔧 Infrastructure Updates
+*   **PostgREST Configuration**: Verifikasi dan update konfigurasi port (3007 untuk MKW, 3000 untuk Nabire).
+*   **RLS Synchronization**: Sinkronisasi Row Level Security pada tabel `deliveries` untuk memastikan data tampil di frontend pengguna terautentikasi.
+
+---
 
 ## Audit Date: 2026-01-06
 

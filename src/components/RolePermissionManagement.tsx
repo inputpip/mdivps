@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { useToast } from '@/components/ui/use-toast'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Shield, Save, RotateCcw, Settings, Eye, Plus, Edit, Trash2, Building2, Calendar } from 'lucide-react'
+import { Shield, Save, RotateCcw, Settings, Eye, Plus, Edit, Trash2, Building2, Calendar, ShoppingCart, Truck, List, Receipt, Users, MapPin, FileText, Factory, Warehouse, Navigation, Coins, Clock, Wrench, Package } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useRoles } from '@/hooks/useRoles'
 import { useBranches } from '@/hooks/useBranches'
@@ -191,6 +191,27 @@ const FEATURES = [
       { id: 'material_movement_report', name: 'Laporan Pergerakan Bahan', icon: Eye },
       { id: 'attendance_reports', name: 'Laporan Absensi', icon: Eye },
       { id: 'production_reports', name: 'Laporan Produksi', icon: Eye },
+    ]
+  },
+  {
+    category: 'Dashboard Mobile (Tampilan HP)',
+    items: [
+      { id: 'mobile_pos', name: 'Menu: Point of Sale (POS)', icon: ShoppingCart },
+      { id: 'mobile_driver_pos', name: 'Menu: POS Supir', icon: Truck },
+      { id: 'mobile_delivery', name: 'Menu: Pengantaran', icon: Truck },
+      { id: 'mobile_transactions', name: 'Menu: Data Transaksi', icon: List },
+      { id: 'mobile_expenses', name: 'Menu: Pengeluaran', icon: Receipt },
+      { id: 'mobile_customers', name: 'Menu: Data Pelanggan', icon: Users },
+      { id: 'mobile_customer_map', name: 'Menu: Pelanggan Terdekat', icon: MapPin },
+      { id: 'mobile_quotations', name: 'Menu: Penawaran', icon: FileText },
+      { id: 'mobile_production', name: 'Menu: Input Produksi', icon: Factory },
+      { id: 'mobile_warehouse', name: 'Menu: Gudang (Stok)', icon: Warehouse },
+      { id: 'mobile_retasi', name: 'Menu: Retasi', icon: Navigation },
+      { id: 'mobile_sold_items', name: 'Menu: Produk Laku', icon: Package },
+      { id: 'mobile_commission', name: 'Menu: Komisi Saya', icon: Coins },
+      { id: 'mobile_attendance', name: 'Menu: Absensi (Clock In)', icon: Clock },
+      { id: 'mobile_maintenance', name: 'Menu: Maintenance Aset', icon: Wrench },
+      { id: 'mobile_sales_report', name: 'Menu: Laporan Sales (Kunjungan)', icon: MapPin },
     ]
   },
   {

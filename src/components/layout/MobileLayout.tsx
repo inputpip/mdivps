@@ -79,23 +79,23 @@ const MobileLayout = () => {
   // Check if user is helper - helper only gets limited menu access
   const isHelper = user?.role?.toLowerCase() === 'helper'
 
-  // Permission checks for mobile features
-  // POS Kasir = transactions_create (bisa buat transaksi)
-  const canAccessPOS = hasGranularPermission('transactions_create') || hasGranularPermission('pos_access')
-  // POS Supir = delivery_create atau pos_driver_access
-  const canAccessDriverPOS = hasGranularPermission('delivery_create') || hasGranularPermission('pos_driver_access')
-  const canAccessWarehouse = hasGranularPermission('warehouse_access')
-  const canAccessProduction = hasGranularPermission('production_view') || hasGranularPermission('production_create')
-  const canViewTransactions = hasGranularPermission('transactions_view')
-  const canViewCustomers = hasGranularPermission('customers_view')
-  const canViewRetasi = hasGranularPermission('retasi_view')
-  const canViewSoldItems = hasGranularPermission('transaction_items_report')
-  const canViewCommission = hasGranularPermission('commission_view') || hasGranularPermission('commission_report')
-  const canAccessAttendance = hasGranularPermission('attendance_access') || hasGranularPermission('attendance_view')
-  const canAccessCustomerMap = hasGranularPermission('customer_map_access') || hasGranularPermission('customers_view')
-  const canAccessQuotations = hasGranularPermission('quotations_view') || hasGranularPermission('quotations_create')
-  const canViewDelivery = hasGranularPermission('delivery_view') || hasGranularPermission('delivery_create')
-  const canAccessExpenses = hasGranularPermission('expenses_view') || hasGranularPermission('expenses_create')
+  // Permission checks for mobile features (Specific mobile dashboard toggles)
+  const canAccessPOS = hasGranularPermission('mobile_pos')
+  const canAccessDriverPOS = hasGranularPermission('mobile_driver_pos')
+  const canViewDelivery = hasGranularPermission('mobile_delivery')
+  const canViewTransactions = hasGranularPermission('mobile_transactions')
+  const canAccessExpenses = hasGranularPermission('mobile_expenses')
+  const canViewCustomers = hasGranularPermission('mobile_customers')
+  const canAccessCustomerMap = hasGranularPermission('mobile_customer_map')
+  const canAccessQuotations = hasGranularPermission('mobile_quotations')
+  const canAccessProduction = hasGranularPermission('mobile_production')
+  const canAccessWarehouse = hasGranularPermission('mobile_warehouse')
+  const canViewRetasi = hasGranularPermission('mobile_retasi')
+  const canViewSoldItems = hasGranularPermission('mobile_sold_items')
+  const canViewCommission = hasGranularPermission('mobile_commission')
+  const canAccessAttendance = hasGranularPermission('mobile_attendance')
+  const canViewMaintenance = hasGranularPermission('mobile_maintenance')
+  const canViewSalesReport = hasGranularPermission('mobile_sales_report')
 
   // Helper gets limited menu: POS Supir, Pelanggan Terdekat, Komisi Saya
   const helperMenuItems = [
@@ -235,8 +235,8 @@ const MobileLayout = () => {
       color: 'bg-emerald-500 hover:bg-emerald-600',
       textColor: 'text-white'
     }] : []),
-    // Komisi - controlled by commission_view or commission_report permission
-    ...((canViewCommission || user?.role?.toLowerCase() === 'sales') ? [{
+    // Komisi - controlled by mobile_commission permission
+    ...(canViewCommission ? [{
       title: 'Komisi Saya',
       icon: Coins,
       path: '/my-commission',
@@ -244,8 +244,8 @@ const MobileLayout = () => {
       color: 'bg-yellow-500 hover:bg-yellow-600',
       textColor: 'text-white'
     }] : []),
-    // Absensi - controlled by attendance_access permission
-    ...((canAccessAttendance || user?.role?.toLowerCase() === 'sales') ? [{
+    // Absensi - controlled by mobile_attendance permission
+    ...(canAccessAttendance ? [{
       title: 'Absensi',
       icon: Clock,
       path: '/attendance',
@@ -253,46 +253,29 @@ const MobileLayout = () => {
       color: 'bg-green-500 hover:bg-green-600',
       textColor: 'text-white'
     }] : []),
-    // Maintenance Aset
-    {
+    // Maintenance Aset - controlled by mobile_maintenance permission
+    ...(canViewMaintenance ? [{
       title: 'Maintenance Aset',
       icon: Wrench,
       path: '/mobile-maintenance',
       description: 'Laporan perbaikan aset',
       color: 'bg-zinc-600 hover:bg-zinc-700',
       textColor: 'text-white'
-    },
-    // Laporan Sales
-    {
+    }] : []),
+    // Laporan Sales - controlled by mobile_sales_report permission
+    ...(canViewSalesReport ? [{
       title: 'Laporan Sales',
       icon: MapPin,
       path: '/mobile-sales-report',
       description: 'Kunjungan & Penagihan',
       color: 'bg-indigo-600 hover:bg-indigo-700',
       textColor: 'text-white'
-    }
+    }] : [])
   ]
 
-  // Determine menu items based on role
-  const getMenuItemsForUser = () => {
-    // Helper gets limited menu
-    if (isHelper) return helperMenuItems;
-
-    // Sales gets specific menu
-    if (user?.role?.toLowerCase() === 'sales') {
-      return regularMenuItems.filter(item =>
-        item.title === 'Laporan Sales' ||
-        item.title === 'Point of Sale (POS)' ||
-        item.title === 'Komisi Saya' ||
-        item.title === 'Absensi'
-      );
-    }
-
-    // Default regular menu
-    return regularMenuItems;
-  }
-
-  const menuItems = getMenuItemsForUser();
+  // Use helper menu ONLY if role is explicitly helper (backward compatibility)
+  // But generally we should use regularMenuItems filtered by permissions
+  const menuItems = isHelper ? helperMenuItems : regularMenuItems
 
   const handleLogout = async () => {
     try {

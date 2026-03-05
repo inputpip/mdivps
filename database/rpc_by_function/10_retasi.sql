@@ -19,7 +19,7 @@ DROP FUNCTION IF EXISTS public.process_retasi_atomic(jsonb, jsonb, uuid, uuid, t
 -- =====================================================
 -- Function: create_retasi_atomic
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.create_retasi_atomic(p_branch_id uuid, p_driver_name text, p_helper_name text DEFAULT NULL::text, p_truck_number text DEFAULT NULL::text, p_route text DEFAULT NULL::text, p_departure_date date DEFAULT CURRENT_DATE, p_departure_time text DEFAULT NULL::text, p_notes text DEFAULT NULL::text, p_items jsonb DEFAULT '[]'::jsonb, p_created_by uuid DEFAULT NULL::uuid)
+CREATE OR REPLACE FUNCTION public.create_retasi_atomic(p_branch_id uuid, p_driver_name text, p_helper_name text DEFAULT NULL::text, p_truck_number text DEFAULT NULL::text, p_route text DEFAULT NULL::text, p_departure_date date DEFAULT CURRENT_DATE, p_departure_time text DEFAULT NULL::text, p_notes text DEFAULT NULL::text, p_items jsonb DEFAULT '[]'::jsonb, p_created_by uuid DEFAULT NULL::uuid, p_helper_id uuid DEFAULT NULL::uuid, p_helper_name_2 text DEFAULT NULL::text, p_helper_id_2 uuid DEFAULT NULL::uuid, p_helper_name_3 text DEFAULT NULL::text, p_helper_id_3 uuid DEFAULT NULL::uuid)
  RETURNS TABLE(success boolean, retasi_id uuid, retasi_number text, retasi_ke integer, error_message text)
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -62,7 +62,12 @@ BEGIN
     retasi_number,
     truck_number,
     driver_name,
+    helper_id,
     helper_name,
+    helper_id_2,
+    helper_name_2,
+    helper_id_3,
+    helper_name_3,
     departure_date,
     departure_time,
     route,
@@ -79,7 +84,12 @@ BEGIN
     v_retasi_number,
     p_truck_number,
     p_driver_name,
+    p_helper_id,
     p_helper_name,
+    p_helper_id_2,
+    p_helper_name_2,
+    p_helper_id_3,
+    p_helper_name_3,
     p_departure_date,
     CASE WHEN p_departure_time IS NOT NULL AND p_departure_time != ''
          THEN p_departure_time::TIME

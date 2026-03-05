@@ -31,7 +31,12 @@ const fromDb = (dbRetasi: any): Retasi => ({
   retasi_number: dbRetasi.retasi_number,
   truck_number: dbRetasi.truck_number,
   driver_name: dbRetasi.driver_name,
+  helper_id: dbRetasi.helper_id,
   helper_name: dbRetasi.helper_name,
+  helper_id_2: dbRetasi.helper_id_2,
+  helper_name_2: dbRetasi.helper_name_2,
+  helper_id_3: dbRetasi.helper_id_3,
+  helper_name_3: dbRetasi.helper_name_3,
   departure_date: new Date(dbRetasi.departure_date),
   departure_time: dbRetasi.departure_time,
   route: dbRetasi.route,
@@ -313,6 +318,11 @@ export const useRetasi = (filters?: {
           p_branch_id: currentBranch.id,
           p_driver_name: mainData.driver_name,
           p_helper_name: mainData.helper_name || null,
+          p_helper_id: mainData.helper_id || null,
+          p_helper_name_2: mainData.helper_name_2 || null,
+          p_helper_id_2: mainData.helper_id_2 || null,
+          p_helper_name_3: mainData.helper_name_3 || null,
+          p_helper_id_3: mainData.helper_id_3 || null,
           p_truck_number: mainData.truck_number || null,
           p_route: mainData.route || null,
           p_departure_date: mainData.departure_date instanceof Date ? mainData.departure_date.toISOString().split('T')[0] : mainData.departure_date,
@@ -379,12 +389,12 @@ export const useRetasi = (filters?: {
           p_return_notes: returnData.return_notes || '',
           p_item_returns: hasItemDetails
             ? returnData.item_returns!.map(ir => ({
-                item_id: ir.item_id,
-                returned_qty: ir.returned_quantity,
-                sold_qty: ir.sold_quantity,
-                error_qty: ir.error_quantity,
-                unsold_qty: ir.unsold_quantity
-              }))
+              item_id: ir.item_id,
+              returned_qty: ir.returned_quantity,
+              sold_qty: ir.sold_quantity,
+              error_qty: ir.error_quantity,
+              unsold_qty: ir.unsold_quantity
+            }))
             : [],
           // Untuk data lama tanpa item details, kirim manual totals
           p_manual_kembali: hasItemDetails ? null : returnData.returned_items_count,
@@ -425,6 +435,11 @@ export const useRetasi = (filters?: {
       const dbData: Record<string, any> = {};
       if (updateData.driver_name !== undefined) dbData.driver_name = updateData.driver_name;
       if (updateData.helper_name !== undefined) dbData.helper_name = updateData.helper_name;
+      if (updateData.helper_id !== undefined) dbData.helper_id = updateData.helper_id;
+      if (updateData.helper_name_2 !== undefined) dbData.helper_name_2 = updateData.helper_name_2;
+      if (updateData.helper_id_2 !== undefined) dbData.helper_id_2 = updateData.helper_id_2;
+      if (updateData.helper_name_3 !== undefined) dbData.helper_name_3 = updateData.helper_name_3;
+      if (updateData.helper_id_3 !== undefined) dbData.helper_id_3 = updateData.helper_id_3;
       if (updateData.truck_number !== undefined) dbData.truck_number = updateData.truck_number;
       if (updateData.route !== undefined) dbData.route = updateData.route;
       if (updateData.departure_date !== undefined) {

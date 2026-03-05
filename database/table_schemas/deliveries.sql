@@ -41,6 +41,10 @@ CREATE TABLE public.deliveries (
     helper_id uuid,
     driver_name text,
     helper_name text,
+    helper_id_2 uuid,
+    helper_name_2 text,
+    helper_id_3 uuid,
+    helper_name_3 text,
     customer_name text,
     customer_address text,
     customer_phone text,
@@ -115,6 +119,12 @@ ALTER TABLE ONLY public.deliveries
 
 ALTER TABLE ONLY public.deliveries
     ADD CONSTRAINT deliveries_helper_id_fkey FOREIGN KEY (helper_id) REFERENCES public.profiles(id);
+
+ALTER TABLE ONLY public.deliveries
+    ADD CONSTRAINT deliveries_helper_id_2_fkey FOREIGN KEY (helper_id_2) REFERENCES public.profiles(id);
+
+ALTER TABLE ONLY public.deliveries
+    ADD CONSTRAINT deliveries_helper_id_3_fkey FOREIGN KEY (helper_id_3) REFERENCES public.profiles(id);
 
 
 --

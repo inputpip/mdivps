@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Download, Calendar, Package, CalendarDays, ShoppingCart, Truck, Store, Navigation, FileSpreadsheet, User, Wallet, CreditCard } from 'lucide-react'
+import { Download, Calendar, Package, CalendarDays, ShoppingCart, Truck, Store, Navigation, FileSpreadsheet, User, Wallet, CreditCard, UserCheck } from 'lucide-react'
 import { format, startOfMonth, endOfMonth } from 'date-fns'
 import { id } from 'date-fns/locale/id'
 import jsPDF from 'jspdf'
@@ -39,7 +39,21 @@ interface SoldProduct {
   paymentAccountId?: string // ID akun pembayaran
   paymentAccountName?: string // Nama akun pembayaran
   paymentStatus?: 'Lunas' | 'Belum Lunas' // Status pembayaran
+  salesName?: string // Nama sales yang menangani transaksi
 }
+
+// Helper: Extract sales name from transaction data
+// Sales name can come from: 1) sales_name column, or 2) _isSalesMeta in items JSON
+const extractSalesName = (transaction: any): string | undefined => {
+  // Priority 1: Direct column
+  if (transaction?.sales_name) return transaction.sales_name;
+  // Priority 2: Metadata in items array
+  const items = transaction?.items;
+  if (Array.isArray(items) && items.length > 0 && items[0]?._isSalesMeta) {
+    return items[0].salesName || undefined;
+  }
+  return undefined;
+};
 
 export const TransactionItemsReport = () => {
   // Default filter: hari ini (dateRange dengan start dan end = hari ini)
@@ -57,6 +71,8 @@ export const TransactionItemsReport = () => {
   const [availableRetasiKe, setAvailableRetasiKe] = useState<{ value: string, label: string }[]>([])
   const [paymentAccountFilter, setPaymentAccountFilter] = useState<string>('all')
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<'all' | 'Lunas' | 'Belum Lunas'>('all')
+  const [salesFilter, setSalesFilter] = useState<string>('all')
+  const [availableSales, setAvailableSales] = useState<string[]>([])
   const [allItems, setAllItems] = useState<SoldProduct[]>([])
   // const [reportData, setReportData] = useState<SoldProduct[]>([]) // Removed state, now derived
   const [isLoading, setIsLoading] = useState(false)
@@ -117,8 +133,13 @@ export const TransactionItemsReport = () => {
       filteredItems = filteredItems.filter(item => item.paymentStatus === paymentStatusFilter)
     }
 
+    // Apply sales filter if selected
+    if (salesFilter !== 'all') {
+      filteredItems = filteredItems.filter(item => item.salesName === salesFilter)
+    }
+
     return filteredItems
-  }, [allItems, productFilter, sourceFilter, driverKasirFilter, retasiKeFilter, paymentAccountFilter, paymentStatusFilter])
+  }, [allItems, productFilter, sourceFilter, driverKasirFilter, retasiKeFilter, paymentAccountFilter, paymentStatusFilter, salesFilter])
 
 
   const months = [
@@ -191,6 +212,7 @@ export const TransactionItemsReport = () => {
               order_date,
               cashier_id,
               retasi_id,
+              sales_name,
               payment_account_id,
               payment_status,
               cashier:profiles!transactions_cashier_id_fkey(full_name),
@@ -338,7 +360,8 @@ export const TransactionItemsReport = () => {
                 isBonus: isBonus,
                 paymentAccountId: paymentAcctId,
                 paymentAccountName: paymentAcct?.name,
-                paymentStatus: transaction?.payment_status || 'Belum Lunas'
+                paymentStatus: transaction?.payment_status || 'Belum Lunas',
+                salesName: extractSalesName(transaction)
               })
             })
           })
@@ -355,6 +378,7 @@ export const TransactionItemsReport = () => {
             order_date,
             items,
             cashier_id,
+            sales_name,
             payment_account_id,
             payment_status,
             cashier:profiles!transactions_cashier_id_fkey(full_name)
@@ -409,7 +433,8 @@ export const TransactionItemsReport = () => {
                 isBonus: isBonus,
                 paymentAccountId: transaction.payment_account_id,
                 paymentAccountName: paymentAcct?.name,
-                paymentStatus: transaction.payment_status || 'Belum Lunas'
+                paymentStatus: transaction.payment_status || 'Belum Lunas',
+                salesName: extractSalesName(transaction)
               })
             })
           })
@@ -431,6 +456,7 @@ export const TransactionItemsReport = () => {
             retasi_id,
             retasi_number,
             cashier_name,
+            sales_name,
             payment_account_id,
             payment_status
           `)
@@ -517,7 +543,8 @@ export const TransactionItemsReport = () => {
                 isBonus: isBonus,
                 paymentAccountId: transaction.payment_account_id,
                 paymentAccountName: paymentAcct?.name,
-                paymentStatus: transaction.payment_status || 'Belum Lunas'
+                paymentStatus: transaction.payment_status || 'Belum Lunas',
+                salesName: extractSalesName(transaction)
               })
             })
           })
@@ -549,6 +576,7 @@ export const TransactionItemsReport = () => {
             order_date,
             items,
             cashier_id,
+            sales_name,
             payment_account_id,
             payment_status,
             cashier:profiles!transactions_cashier_id_fkey(full_name)
@@ -613,7 +641,8 @@ export const TransactionItemsReport = () => {
                 isBonus: isBonus,
                 paymentAccountId: transaction.payment_account_id,
                 paymentAccountName: paymentAcct?.name,
-                paymentStatus: transaction.payment_status || 'Belum Lunas'
+                paymentStatus: transaction.payment_status || 'Belum Lunas',
+                salesName: extractSalesName(transaction)
               })
             })
           })
@@ -650,6 +679,14 @@ export const TransactionItemsReport = () => {
         value: ke.toString(),
         label: `Retasi Ke-${ke}`
       })))
+
+      // Extract unique sales names for filter dropdown
+      const uniqueSales = [...new Set(
+        items
+          .map(item => item.salesName)
+          .filter((name): name is string => !!name)
+      )].sort()
+      setAvailableSales(uniqueSales)
 
       setAllItems(items) // Store all items for client-side filtering
     } catch (error) {
@@ -698,29 +735,31 @@ export const TransactionItemsReport = () => {
       item.retasiNumber || '-',
       item.source === 'delivery' ? (item.driverName || '-') :
         item.source === 'retasi' ? (item.driverName || '-') : item.cashierName,
+      item.salesName || '-',
       item.paymentAccountName || '-',
       item.paymentStatus || 'Belum Lunas'
     ])
 
     autoTable(doc, {
-      head: [['Tanggal', 'No. Trx', 'Customer', 'Produk', 'Qty', 'Harga', 'Total', 'Sumber', 'Retasi', 'Supir/Kasir', 'Akun Bayar', 'Status']],
+      head: [['Tanggal', 'No. Trx', 'Customer', 'Produk', 'Qty', 'Harga', 'Total', 'Sumber', 'Retasi', 'Supir/Kasir', 'Sales', 'Akun Bayar', 'Status']],
       body: tableData,
       startY: 42,
-      styles: { fontSize: 6.5 },
+      styles: { fontSize: 6 },
       headStyles: { fillColor: [66, 139, 202] },
       columnStyles: {
-        0: { cellWidth: 18 },
-        1: { cellWidth: 18 },
-        2: { cellWidth: 25 },
-        3: { cellWidth: 35 },
-        4: { cellWidth: 10 },
-        5: { cellWidth: 20 },
-        6: { cellWidth: 22 },
-        7: { cellWidth: 15 },
-        8: { cellWidth: 20 }, // Retasi
-        9: { cellWidth: 25 }, // Supir/Kasir
-        10: { cellWidth: 25 }, // Akun Bayar
-        11: { cellWidth: 20 }  // Status
+        0: { cellWidth: 17 },
+        1: { cellWidth: 16 },
+        2: { cellWidth: 22 },
+        3: { cellWidth: 30 },
+        4: { cellWidth: 9 },
+        5: { cellWidth: 18 },
+        6: { cellWidth: 20 },
+        7: { cellWidth: 14 },
+        8: { cellWidth: 18 }, // Retasi
+        9: { cellWidth: 22 }, // Supir/Kasir
+        10: { cellWidth: 22 }, // Sales
+        11: { cellWidth: 22 }, // Akun Bayar
+        12: { cellWidth: 17 }  // Status
       }
     })
 
@@ -779,6 +818,7 @@ export const TransactionItemsReport = () => {
       'Sumber': item.source === 'delivery' ? 'Diantar' : item.source === 'office_sale' ? 'Laku Kantor' : item.source === 'retasi' ? 'Retasi' : item.source === 'migration' ? 'Migrasi' : 'Laku Pos Kasir',
       'Retasi': item.retasiNumber || '-',
       'Supir/Kasir': item.source === 'delivery' || item.source === 'retasi' ? (item.driverName || '-') : item.cashierName,
+      'Sales': item.salesName || '-',
       'Akun Pembayaran': item.paymentAccountName || '-',
       'Status': item.paymentStatus || 'Belum Lunas'
     }))
@@ -792,7 +832,7 @@ export const TransactionItemsReport = () => {
     XLSX.utils.sheet_add_aoa(ws, [['']], { origin: 'A3' })
 
     // Re-add data with header starting from row 4
-    const headers = ['Tanggal Laku', 'No. Transaksi', 'Customer', 'Produk', 'Qty', 'Unit', 'Harga', 'Total', 'Sumber', 'Retasi', 'Supir/Kasir', 'Akun Pembayaran', 'Status']
+    const headers = ['Tanggal Laku', 'No. Transaksi', 'Customer', 'Produk', 'Qty', 'Unit', 'Harga', 'Total', 'Sumber', 'Retasi', 'Supir/Kasir', 'Sales', 'Akun Pembayaran', 'Status']
     XLSX.utils.sheet_add_aoa(ws, [headers], { origin: 'A4' })
 
     // Add data rows starting from row 5
@@ -999,7 +1039,7 @@ export const TransactionItemsReport = () => {
               </div>
             </div>
 
-            {/* Payment Account & Status Filter */}
+            {/* Payment Account, Status & Sales Filter */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="space-y-2">
                 <Label className="text-sm font-medium flex items-center gap-1">
@@ -1034,6 +1074,26 @@ export const TransactionItemsReport = () => {
                     <SelectItem value="all">Semua Status</SelectItem>
                     <SelectItem value="Lunas">Lunas</SelectItem>
                     <SelectItem value="Belum Lunas">Belum Lunas</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm font-medium flex items-center gap-1">
+                  <UserCheck className="h-3 w-3" />
+                  Sales
+                </Label>
+                <Select value={salesFilter} onValueChange={setSalesFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Semua Sales" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Semua Sales</SelectItem>
+                    {availableSales.map(name => (
+                      <SelectItem key={name} value={name}>
+                        {name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -1207,6 +1267,7 @@ export const TransactionItemsReport = () => {
                     <TableHead className="text-center">Sumber</TableHead>
                     <TableHead>Retasi</TableHead>
                     <TableHead>Supir/Kasir</TableHead>
+                    <TableHead>Sales</TableHead>
                     <TableHead>Akun Bayar</TableHead>
                     <TableHead className="text-center">Status</TableHead>
                   </TableRow>
@@ -1255,6 +1316,9 @@ export const TransactionItemsReport = () => {
                         {item.source === 'delivery' || item.source === 'retasi'
                           ? (item.driverName || '-')
                           : item.cashierName}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {item.salesName || '-'}
                       </TableCell>
                       <TableCell className="text-sm">
                         {item.paymentAccountName || '-'}

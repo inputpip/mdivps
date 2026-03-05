@@ -110,7 +110,7 @@ export function RetasiDetailPDF({ retasi, items, transactions, children }: Retas
           <div className="grid grid-cols-2 gap-2 mb-3 text-xs">
             <div>
               <p><strong>Supir:</strong> {retasi.driver_name || '-'}</p>
-              <p><strong>Helper:</strong> {retasi.helper_name || '-'}</p>
+              <p><strong>Helper:</strong> {[retasi.helper_name, retasi.helper_name_2, retasi.helper_name_3].filter(Boolean).join(', ') || '-'}</p>
               <p><strong>Berangkat:</strong> {format(retasi.departure_date, 'dd/MM/yyyy', { locale: id })} {retasi.departure_time || ''}</p>
             </div>
             <div>

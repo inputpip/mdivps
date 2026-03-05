@@ -52,7 +52,11 @@ CREATE TABLE public.retasi (
     helper_id uuid,
     date date DEFAULT CURRENT_DATE,
     status text DEFAULT 'open'::text,
-    barang_tidak_laku integer DEFAULT 0
+    barang_tidak_laku integer DEFAULT 0,
+    helper_id_2 uuid,
+    helper_name_2 text,
+    helper_id_3 uuid,
+    helper_name_3 text
 );
 
 
@@ -122,6 +126,22 @@ ALTER TABLE ONLY public.retasi
 
 ALTER TABLE ONLY public.retasi
     ADD CONSTRAINT retasi_helper_id_fkey FOREIGN KEY (helper_id) REFERENCES public.profiles(id);
+
+
+--
+-- Name: retasi retasi_helper_id_2_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.retasi
+    ADD CONSTRAINT retasi_helper_id_2_fkey FOREIGN KEY (helper_id_2) REFERENCES public.profiles(id);
+
+
+--
+-- Name: retasi retasi_helper_id_3_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.retasi
+    ADD CONSTRAINT retasi_helper_id_3_fkey FOREIGN KEY (helper_id_3) REFERENCES public.profiles(id);
 
 
 --

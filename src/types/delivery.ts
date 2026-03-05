@@ -29,6 +29,10 @@ export interface Delivery {
   driverName?: string;
   helperId?: string;
   helperName?: string;
+  helperId2?: string;
+  helperName2?: string;
+  helperId3?: string;
+  helperName3?: string;
   branchId?: string;
   transactionTotal?: number; // Total nilai order
   cashierName?: string;
@@ -44,6 +48,7 @@ export interface DeliverySummaryItem {
   deliveredQuantity: number;
   remainingQuantity: number;
   unit: string;
+  isBonus?: boolean;
   width?: number;
   height?: number;
 }
@@ -69,6 +74,8 @@ export interface CreateDeliveryRequest {
   notes?: string;
   driverId?: string;
   helperId?: string;
+  helperId2?: string;
+  helperId3?: string;
   items: {
     productId: string;
     productName: string;
@@ -89,6 +96,8 @@ export interface DeliveryFormData {
   driverId: string;
   manualDriverName: string;
   helperId: string;
+  helperId2: string;
+  helperId3: string;
   items: {
     itemId: string; // Unique identifier per item row
     productId: string;
@@ -114,6 +123,8 @@ export interface DeliveryInput {
   driverId?: string | null;
   driverName?: string;
   helperId?: string;
+  helperId2?: string;
+  helperId3?: string;
   photoUrl?: string;
   items: {
     productId: string;
@@ -135,6 +146,8 @@ export interface DeliveryUpdateInput {
   notes?: string;
   driverId?: string | null;
   helperId?: string;
+  helperId2?: string;
+  helperId3?: string;
   photoUrl?: string;
   items: {
     productId: string;

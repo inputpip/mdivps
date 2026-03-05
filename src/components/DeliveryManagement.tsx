@@ -182,7 +182,9 @@ export function DeliveryManagement({ transaction, onClose, embedded = false, onD
                           <div className="text-sm text-muted-foreground">
                             {delivery.deliveryDate && isValid(new Date(delivery.deliveryDate)) ? format(new Date(delivery.deliveryDate), "d MMMM yyyy, HH:mm", { locale: idLocale }) : '-'}
                             {delivery.driverId && ` • Supir: ${delivery.driverName || delivery.driverId}`}
-                            {delivery.helperId && ` • Helper: ${delivery.helperName || delivery.helperId}`}
+                            {delivery.helperId && ` • Helper 1: ${delivery.helperName || delivery.helperId}`}
+                            {delivery.helperId2 && ` • Helper 2: ${delivery.helperName2 || delivery.helperId2}`}
+                            {delivery.helperId3 && ` • Helper 3: ${delivery.helperName3 || delivery.helperId3}`}
                           </div>
                         </div>
                         <div className="flex gap-2">

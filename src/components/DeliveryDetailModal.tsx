@@ -70,12 +70,30 @@ export function DeliveryDetailModal({ delivery, open, onOpenChange }: DeliveryDe
                 </div>
               </div>
               <div>
-                <label className="text-sm font-medium text-muted-foreground">Helper</label>
+                <label className="text-sm font-medium text-muted-foreground">Helper 1</label>
                 <div className="flex items-center gap-2">
                   <User className="h-4 w-4 text-muted-foreground" />
                   {delivery.helperName || '-'}
                 </div>
               </div>
+              {delivery.helperId2 && (
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Helper 2</label>
+                  <div className="flex items-center gap-2">
+                    <User className="h-4 w-4 text-muted-foreground" />
+                    {delivery.helperName2 || '-'}
+                  </div>
+                </div>
+              )}
+              {delivery.helperId3 && (
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Helper 3</label>
+                  <div className="flex items-center gap-2">
+                    <User className="h-4 w-4 text-muted-foreground" />
+                    {delivery.helperName3 || '-'}
+                  </div>
+                </div>
+              )}
               <div>
                 <label className="text-sm font-medium text-muted-foreground">Total Transaksi</label>
                 <div className="text-lg font-semibold text-green-600">

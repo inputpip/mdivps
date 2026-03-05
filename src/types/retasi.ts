@@ -3,7 +3,12 @@ export interface Retasi {
   retasi_number: string;
   truck_number?: string;
   driver_name?: string;
+  helper_id?: string;
   helper_name?: string;
+  helper_id_2?: string;
+  helper_name_2?: string;
+  helper_id_3?: string;
+  helper_name_3?: string;
   departure_date: Date;
   departure_time?: string;
   route?: string;
@@ -50,7 +55,12 @@ export interface CreateRetasiItemData {
 export interface CreateRetasiData {
   truck_number?: string;
   driver_name?: string;
+  helper_id?: string;
   helper_name?: string;
+  helper_id_2?: string;
+  helper_name_2?: string;
+  helper_id_3?: string;
+  helper_name_3?: string;
   departure_date: Date;
   departure_time?: string;
   route?: string;
@@ -62,7 +72,12 @@ export interface CreateRetasiData {
 export interface UpdateRetasiData {
   truck_number?: string;
   driver_name?: string;
+  helper_id?: string;
   helper_name?: string;
+  helper_id_2?: string;
+  helper_name_2?: string;
+  helper_id_3?: string;
+  helper_name_3?: string;
   departure_date?: Date;
   departure_time?: string;
   route?: string;

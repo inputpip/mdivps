@@ -52,6 +52,8 @@ export function DriverDeliveryDialog({
 
   const [driverId, setDriverId] = useState("")
   const [helperId, setHelperId] = useState("")
+  const [helperId2, setHelperId2] = useState("")
+  const [helperId3, setHelperId3] = useState("")
   const [notes, setNotes] = useState("")
   const [itemQuantities, setItemQuantities] = useState<Record<string, number>>({})
   const [deliveryPhoto, setDeliveryPhoto] = useState<File | null>(null)
@@ -249,7 +251,9 @@ export function DriverDeliveryDialog({
       const deliveryRequest: CreateDeliveryRequest = {
         transactionId: transaction.id,
         driverId: selectedDriver?.id,
-        helperId: selectedHelper?.id || undefined,
+        helperId: (helperId && helperId !== "no-helper") ? helperId : undefined,
+        helperId2: (helperId2 && helperId2 !== "no-helper") ? helperId2 : undefined,
+        helperId3: (helperId3 && helperId3 !== "no-helper") ? helperId3 : undefined,
         deliveryDate: getOfficeTime(timezone),
         items: deliveryItems,
         notes: notes.trim() || undefined,
@@ -361,28 +365,72 @@ export function DriverDeliveryDialog({
               )}
             </div>
 
-            <div>
-              <Label className="flex items-center gap-2">
-                Helper (Opsional)
-                {activeRetasi?.helper_name && helperId && (
-                  <span className="text-xs text-blue-600">(Dari Retasi)</span>
-                )}
-              </Label>
-              <Select value={helperId} onValueChange={setHelperId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Pilih Helper" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="no-helper">Tidak ada helper</SelectItem>
-                  {(drivers as Driver[])
-                    ?.filter((driver: Driver) => driver.id !== driverId) // Exclude selected driver
-                    ?.map((driver: Driver) => (
-                      <SelectItem key={driver.id} value={driver.id}>
-                        {driver.name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-1 gap-3">
+              <div>
+                <Label className="flex items-center gap-2">
+                  Helper 1 (Opsional)
+                  {activeRetasi?.helper_name && helperId && (
+                    <span className="text-xs text-blue-600">(Dari Retasi)</span>
+                  )}
+                </Label>
+                <Select value={helperId} onValueChange={setHelperId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pilih Helper 1" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="no-helper">Tidak ada helper</SelectItem>
+                    {(drivers as Driver[])
+                      ?.filter((driver: Driver) => driver.id !== driverId && driver.id !== helperId2 && driver.id !== helperId3) // Exclude selected driver and other helpers
+                      ?.map((driver: Driver) => (
+                        <SelectItem key={driver.id} value={driver.id}>
+                          {driver.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="flex items-center gap-2">
+                  Helper 2 (Opsional)
+                </Label>
+                <Select value={helperId2} onValueChange={setHelperId2}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pilih Helper 2" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="no-helper">Tidak ada helper</SelectItem>
+                    {(drivers as Driver[])
+                      ?.filter((driver: Driver) => driver.id !== driverId && driver.id !== helperId && driver.id !== helperId3) // Exclude selected driver and other helpers
+                      ?.map((driver: Driver) => (
+                        <SelectItem key={driver.id} value={driver.id}>
+                          {driver.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="flex items-center gap-2">
+                  Helper 3 (Opsional)
+                </Label>
+                <Select value={helperId3} onValueChange={setHelperId3}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pilih Helper 3" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="no-helper">Tidak ada helper</SelectItem>
+                    {(drivers as Driver[])
+                      ?.filter((driver: Driver) => driver.id !== driverId && driver.id !== helperId && driver.id !== helperId2) // Exclude selected driver and other helpers
+                      ?.map((driver: Driver) => (
+                        <SelectItem key={driver.id} value={driver.id}>
+                          {driver.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
           </div>

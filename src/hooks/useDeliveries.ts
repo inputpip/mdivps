@@ -61,9 +61,13 @@ const fromDbToDelivery = (dbData: any): Delivery => {
     customerAddress: dbData.customer_address || dbData.transactions?.customer?.address, // Try to find address in joined transaction if missing in delivery
     customerPhone: dbData.customer_phone,
     driverId: dbData.driver_id,
-    driverName: dbData.driver?.full_name || dbData.driverName, // Map from joined profile
+    driverName: dbData.driver?.full_name || dbData.driver_name || dbData.driverName, // Map from joined profile
     helperId: dbData.helper_id,
-    helperName: dbData.helper?.full_name || dbData.helperName, // Map from joined profile
+    helperName: dbData.helper?.full_name || dbData.helper_name || dbData.helperName, // Map from joined profile
+    helperId2: dbData.helper_id_2,
+    helperName2: dbData.helper2?.full_name || dbData.helper_name_2 || dbData.helperName2,
+    helperId3: dbData.helper_id_3,
+    helperName3: dbData.helper3?.full_name || dbData.helper_name_3 || dbData.helperName3,
     deliveryDate: new Date(dbData.delivery_date),
     status: dbData.status,
     photoUrl: dbData.photo_url,
@@ -112,7 +116,9 @@ export const useDeliveries = (transactionId?: string) => {
             customer:customer_id(address)
           ),
           driver:driver_id(full_name),
-          helper:helper_id(full_name)
+          helper:helper_id(full_name),
+          helper2:helper_id_2(full_name),
+          helper3:helper_id_3(full_name)
         `);
 
       if (transactionId) {
@@ -180,6 +186,8 @@ export const useDeliveries = (transactionId?: string) => {
         })),
         p_driver_id: input.driverId || null,  // Empty string -> null for UUID
         p_helper_id: input.helperId || null,  // Empty string -> null for UUID
+        p_helper_id_2: input.helperId2 || null,
+        p_helper_id_3: input.helperId3 || null,
         p_delivery_date: input.deliveryDate.toISOString(),
         p_notes: input.notes,
         p_photo_url: finalPhotoUrl
@@ -228,6 +236,8 @@ export const useDeliveries = (transactionId?: string) => {
         })),
         p_driver_id: input.driverId || null,  // Empty string -> null for UUID
         p_helper_id: input.helperId || null,  // Empty string -> null for UUID
+        p_helper_id_2: input.helperId2 || null,
+        p_helper_id_3: input.helperId3 || null,
         p_delivery_date: input.deliveryDate.toISOString(),
         p_notes: input.notes,
         p_photo_url: input.photoUrl
@@ -274,6 +284,8 @@ export const useDeliveries = (transactionId?: string) => {
         })),
         p_driver_id: input.driverId || null,  // Empty string -> null for UUID
         p_helper_id: input.helperId || null,  // Empty string -> null for UUID
+        p_helper_id_2: input.helperId2 || null,
+        p_helper_id_3: input.helperId3 || null,
         p_delivery_date: input.deliveryDate ? input.deliveryDate.toISOString() : new Date().toISOString(),
         p_notes: input.notes,
         p_photo_url: input.photoUrl
@@ -370,16 +382,16 @@ export const useDeliveryHistory = () => {
             total,
             items,
             cashier_name,
-            customer:customer_id(address),
-            deliveries (
-               delivery_items (product_id, quantity_delivered, is_bonus)
-            )
+            customer:customer_id(address)
           ),
           driver:driver_id(full_name),
-          helper:helper_id(full_name)
+          helper:helper_id(full_name),
+          helper2:helper_id_2(full_name),
+          helper3:helper_id_3(full_name)
         `)
         .eq('branch_id', currentBranch?.id)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(500);
 
       if (error) throw error;
       return (data || []).map(fromDbToDelivery);
@@ -639,7 +651,9 @@ export const useTransactionDeliveryInfo = (transactionId: string, options?: { en
             customer:customer_id(address)
           ),
           driver:driver_id(full_name),
-          helper:helper_id(full_name)
+          helper:helper_id(full_name),
+          helper2:helper_id_2(full_name),
+          helper3:helper_id_3(full_name)
         `)
         .eq('transaction_id', transactionId)
         .eq('branch_id', currentBranch?.id)

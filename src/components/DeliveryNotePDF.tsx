@@ -114,8 +114,18 @@ export function DeliveryNotePDF({ delivery, transactionInfo, children }: Deliver
             </div>
             ${delivery.helperName ? `
             <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; margin-bottom: 8px;">
-              <span style="color: #4b5563;">Helper:</span>
+              <span style="color: #4b5563;">Helper 1:</span>
               <span style="font-weight: 500; color: #111827;">${delivery.helperName}</span>
+            </div>` : ''}
+            ${delivery.helperName2 ? `
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; margin-bottom: 8px;">
+              <span style="color: #4b5563;">Helper 2:</span>
+              <span style="font-weight: 500; color: #111827;">${delivery.helperName2}</span>
+            </div>` : ''}
+            ${delivery.helperName3 ? `
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; margin-bottom: 8px;">
+              <span style="color: #4b5563;">Helper 3:</span>
+              <span style="font-weight: 500; color: #111827;">${delivery.helperName3}</span>
             </div>` : ''}
             <div style="display: flex; justify-content: space-between;">
               <span style="color: #4b5563;">Status:</span>
@@ -313,7 +323,9 @@ export function DeliveryNotePDF({ delivery, transactionInfo, children }: Deliver
                 <td style="width: 60%; vertical-align: top; font-size: 11pt;">
                   <table style="width: 100%;">
                     <tr><td width="80">No</td><td>: ${delivery.transactionId}-${delivery.deliveryNumber}</td><td width="50">Driver</td><td>: ${delivery.driverName?.split(' ')[0] || '-'}</td></tr>
-                    <tr><td>Tanggal</td><td>: ${safeFormatDate(orderDate, "dd/MM/yy HH:mm")}</td><td>Helper</td><td>: ${delivery.helperName?.split(' ')[0] || '-'}</td></tr>
+                    <tr><td>Tanggal</td><td>: ${safeFormatDate(orderDate, "dd/MM/yy HH:mm")}</td><td>Helper 1</td><td>: ${delivery.helperName?.split(' ')[0] || '-'}</td></tr>
+                    ${delivery.helperId2 ? `<tr><td></td><td></td><td>Helper 2</td><td>: ${delivery.helperName2?.split(' ')[0] || '-'}</td></tr>` : ''}
+                    ${delivery.helperId3 ? `<tr><td></td><td></td><td>Helper 3</td><td>: ${delivery.helperName3?.split(' ')[0] || '-'}</td></tr>` : ''}
                     <tr><td>Pelanggan</td><td colspan="3">: ${transaction?.customerName || delivery.customerName || '-'}</td></tr>
                     <tr><td>Alamat</td><td colspan="3">: ${transaction?.customerAddress || delivery.customerAddress || '-'}</td></tr>
                   </table>
@@ -595,8 +607,20 @@ export function DeliveryNotePDF({ delivery, transactionInfo, children }: Deliver
                 </div>
                 {delivery.helperName && (
                   <div className="flex justify-between border-b border-gray-200 pb-2">
-                    <span className="text-gray-600">Helper:</span>
+                    <span className="text-gray-600">Helper 1:</span>
                     <span className="font-medium text-gray-900">{delivery.helperName}</span>
+                  </div>
+                )}
+                {delivery.helperName2 && (
+                  <div className="flex justify-between border-b border-gray-200 pb-2">
+                    <span className="text-gray-600">Helper 2:</span>
+                    <span className="font-medium text-gray-900">{delivery.helperName2}</span>
+                  </div>
+                )}
+                {delivery.helperName3 && (
+                  <div className="flex justify-between border-b border-gray-200 pb-2">
+                    <span className="text-gray-600">Helper 3:</span>
+                    <span className="font-medium text-gray-900">{delivery.helperName3}</span>
                   </div>
                 )}
                 <div className="flex justify-between">
@@ -748,7 +772,13 @@ export function DeliveryNotePDF({ delivery, transactionInfo, children }: Deliver
                   <div><strong>Kepada:</strong> {transaction.customerName}</div>
                   <div><strong>Driver:</strong> {delivery.driverName || '-'}</div>
                   {delivery.helperName && (
-                    <div><strong>Helper:</strong> {delivery.helperName}</div>
+                    <div><strong>H1:</strong> {delivery.helperName}</div>
+                  )}
+                  {delivery.helperName2 && (
+                    <div><strong>H2:</strong> {delivery.helperName2}</div>
+                  )}
+                  {delivery.helperName3 && (
+                    <div><strong>H3:</strong> {delivery.helperName3}</div>
                   )}
                 </div>
               </div>

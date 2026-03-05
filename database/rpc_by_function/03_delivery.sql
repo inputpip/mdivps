@@ -99,7 +99,7 @@ $function$
 -- Function: get_delivery_with_employees
 -- =====================================================
 CREATE OR REPLACE FUNCTION public.get_delivery_with_employees(delivery_id_param uuid)
- RETURNS TABLE(id uuid, transaction_id text, delivery_number integer, delivery_date timestamp with time zone, photo_url text, photo_drive_id text, notes text, driver_name text, helper_name text, created_at timestamp with time zone, updated_at timestamp with time zone)
+ RETURNS TABLE(id uuid, transaction_id text, delivery_number integer, delivery_date timestamp with time zone, photo_url text, photo_drive_id text, notes text, driver_name text, helper_name text, helper_name_2 text, helper_name_3 text, created_at timestamp with time zone, updated_at timestamp with time zone)
  LANGUAGE plpgsql
 AS $function$
 BEGIN
@@ -114,11 +114,15 @@ BEGIN
     d.notes,
     driver.name as driver_name,
     helper.name as helper_name,
+    helper2.name as helper_name_2,
+    helper3.name as helper_name_3,
     d.created_at,
     d.updated_at
   FROM deliveries d
   LEFT JOIN employees driver ON d.driver_id = driver.id
   LEFT JOIN employees helper ON d.helper_id = helper.id
+  LEFT JOIN employees helper2 ON d.helper_id_2 = helper2.id
+  LEFT JOIN employees helper3 ON d.helper_id_3 = helper3.id
   WHERE d.id = delivery_id_param;
 END;
 $function$
@@ -225,8 +229,8 @@ $function$
 -- =====================================================
 -- Function: insert_delivery
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.insert_delivery(p_transaction_id text, p_delivery_number integer, p_customer_name text, p_customer_address text DEFAULT ''::text, p_customer_phone text DEFAULT ''::text, p_delivery_date timestamp with time zone DEFAULT now(), p_photo_url text DEFAULT NULL::text, p_notes text DEFAULT NULL::text, p_driver_id uuid DEFAULT NULL::uuid, p_helper_id uuid DEFAULT NULL::uuid, p_branch_id uuid DEFAULT NULL::uuid)
- RETURNS TABLE(id uuid, transaction_id text, delivery_number integer, customer_name text, customer_address text, customer_phone text, delivery_date timestamp with time zone, photo_url text, notes text, driver_id uuid, helper_id uuid, branch_id uuid, created_at timestamp with time zone, updated_at timestamp with time zone)
+CREATE OR REPLACE FUNCTION public.insert_delivery(p_transaction_id text, p_delivery_number integer, p_customer_name text, p_customer_address text DEFAULT ''::text, p_customer_phone text DEFAULT ''::text, p_delivery_date timestamp with time zone DEFAULT now(), p_photo_url text DEFAULT NULL::text, p_notes text DEFAULT NULL::text, p_driver_id uuid DEFAULT NULL::uuid, p_helper_id uuid DEFAULT NULL::uuid, p_branch_id uuid DEFAULT NULL::uuid, p_helper_id_2 uuid DEFAULT NULL::uuid, p_helper_id_3 uuid DEFAULT NULL::uuid)
+ RETURNS TABLE(id uuid, transaction_id text, delivery_number integer, customer_name text, customer_address text, customer_phone text, delivery_date timestamp with time zone, photo_url text, notes text, driver_id uuid, helper_id uuid, helper_id_2 uuid, helper_id_3 uuid, branch_id uuid, created_at timestamp with time zone, updated_at timestamp with time zone)
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO 'public'
@@ -245,6 +249,8 @@ BEGIN
     notes,
     driver_id,
     helper_id,
+    helper_id_2,
+    helper_id_3,
     branch_id
   )
   VALUES (
@@ -258,6 +264,8 @@ BEGIN
     p_notes,
     p_driver_id,
     p_helper_id,
+    p_helper_id_2,
+    p_helper_id_3,
     p_branch_id
   )
   RETURNING deliveries.id INTO new_id;
@@ -275,6 +283,8 @@ BEGIN
     d.notes,
     d.driver_id,
     d.helper_id,
+    d.helper_id_2,
+    d.helper_id_3,
     d.branch_id,
     d.created_at,
     d.updated_at
@@ -375,7 +385,7 @@ $function$
 -- =====================================================
 -- Function: process_delivery_atomic
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.process_delivery_atomic(p_transaction_id text, p_items jsonb, p_branch_id uuid, p_driver_id uuid DEFAULT NULL::uuid, p_helper_id uuid DEFAULT NULL::uuid, p_delivery_date timestamp with time zone DEFAULT now(), p_notes text DEFAULT NULL::text, p_photo_url text DEFAULT NULL::text)
+CREATE OR REPLACE FUNCTION public.process_delivery_atomic(p_transaction_id text, p_items jsonb, p_branch_id uuid, p_driver_id uuid DEFAULT NULL::uuid, p_helper_id uuid DEFAULT NULL::uuid, p_delivery_date timestamp with time zone DEFAULT now(), p_notes text DEFAULT NULL::text, p_photo_url text DEFAULT NULL::text, p_helper_id_2 uuid DEFAULT NULL::uuid, p_helper_id_3 uuid DEFAULT NULL::uuid)
  RETURNS TABLE(success boolean, delivery_id uuid, delivery_number integer, total_hpp numeric, journal_id uuid, error_message text)
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -432,13 +442,13 @@ BEGIN
   INSERT INTO deliveries (
     transaction_id, delivery_number, branch_id, status, 
     customer_name, customer_address, customer_phone,
-    driver_id, helper_id, delivery_date, notes, photo_url,
+    driver_id, helper_id, helper_id_2, helper_id_3, delivery_date, notes, photo_url,
     created_at, updated_at
   )
   VALUES (
     p_transaction_id, v_delivery_number, p_branch_id, 'delivered',
     v_transaction.customer_name, NULL, NULL, -- Assuming txn has these or can be null
-    p_driver_id, p_helper_id, p_delivery_date, 
+    p_driver_id, p_helper_id, p_helper_id_2, p_helper_id_3, p_delivery_date, 
     COALESCE(p_notes, format('Pengiriman ke-%s', v_delivery_number)), p_photo_url,
     NOW(), NOW()
   )
@@ -578,7 +588,7 @@ BEGIN
 
   -- ==================== GENERATE COMMISSIONS ====================
   
-  IF p_driver_id IS NOT NULL OR p_helper_id IS NOT NULL THEN
+  IF p_driver_id IS NOT NULL OR p_helper_id IS NOT NULL OR p_helper_id_2 IS NOT NULL OR p_helper_id_3 IS NOT NULL THEN
     FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
     LOOP
       v_product_id := (v_item->>'product_id')::UUID;
@@ -602,7 +612,7 @@ BEGIN
           WHERE cr.product_id = v_product_id AND cr.role = 'driver' AND cr.rate_per_qty > 0;
         END IF;
 
-        -- Helper Commission
+        -- Helper 1 Commission
         IF p_helper_id IS NOT NULL THEN
           INSERT INTO commission_entries (
             user_id, user_name, role, product_id, product_name, quantity, rate_per_qty, amount, 
@@ -610,6 +620,34 @@ BEGIN
           )
           SELECT 
             p_helper_id, (SELECT full_name FROM profiles WHERE id = p_helper_id), 'helper', 
+            v_product_id, v_product_name, v_qty, cr.rate_per_qty, v_qty * cr.rate_per_qty, 
+            p_transaction_id, v_delivery_id, 'DEL-' || v_delivery_id, 'pending', p_branch_id, NOW()
+          FROM commission_rules cr
+          WHERE cr.product_id = v_product_id AND cr.role = 'helper' AND cr.rate_per_qty > 0;
+        END IF;
+
+        -- Helper 2 Commission
+        IF p_helper_id_2 IS NOT NULL THEN
+          INSERT INTO commission_entries (
+            user_id, user_name, role, product_id, product_name, quantity, rate_per_qty, amount, 
+            transaction_id, delivery_id, ref, status, branch_id, created_at
+          )
+          SELECT 
+            p_helper_id_2, (SELECT full_name FROM profiles WHERE id = p_helper_id_2), 'helper', 
+            v_product_id, v_product_name, v_qty, cr.rate_per_qty, v_qty * cr.rate_per_qty, 
+            p_transaction_id, v_delivery_id, 'DEL-' || v_delivery_id, 'pending', p_branch_id, NOW()
+          FROM commission_rules cr
+          WHERE cr.product_id = v_product_id AND cr.role = 'helper' AND cr.rate_per_qty > 0;
+        END IF;
+
+        -- Helper 3 Commission
+        IF p_helper_id_3 IS NOT NULL THEN
+          INSERT INTO commission_entries (
+            user_id, user_name, role, product_id, product_name, quantity, rate_per_qty, amount, 
+            transaction_id, delivery_id, ref, status, branch_id, created_at
+          )
+          SELECT 
+            p_helper_id_3, (SELECT full_name FROM profiles WHERE id = p_helper_id_3), 'helper', 
             v_product_id, v_product_name, v_qty, cr.rate_per_qty, v_qty * cr.rate_per_qty, 
             p_transaction_id, v_delivery_id, 'DEL-' || v_delivery_id, 'pending', p_branch_id, NOW()
           FROM commission_rules cr
@@ -631,7 +669,7 @@ $function$
 -- =====================================================
 -- Function: process_delivery_atomic_no_stock
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.process_delivery_atomic_no_stock(p_transaction_id text, p_items jsonb, p_branch_id uuid, p_driver_id uuid DEFAULT NULL::uuid, p_helper_id uuid DEFAULT NULL::uuid, p_delivery_date timestamp with time zone DEFAULT now(), p_notes text DEFAULT NULL::text, p_photo_url text DEFAULT NULL::text)
+CREATE OR REPLACE FUNCTION public.process_delivery_atomic_no_stock(p_transaction_id text, p_items jsonb, p_branch_id uuid, p_driver_id uuid DEFAULT NULL::uuid, p_helper_id uuid DEFAULT NULL::uuid, p_delivery_date timestamp with time zone DEFAULT now(), p_notes text DEFAULT NULL::text, p_photo_url text DEFAULT NULL::text, p_helper_id_2 uuid DEFAULT NULL::uuid, p_helper_id_3 uuid DEFAULT NULL::uuid)
  RETURNS TABLE(success boolean, delivery_id uuid, delivery_number integer, total_hpp numeric, journal_id uuid, error_message text)
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -715,6 +753,8 @@ BEGIN
     customer_phone,
     driver_id,
     helper_id,
+    helper_id_2,
+    helper_id_3,
     delivery_date,
     status,
     hpp_total,
@@ -731,6 +771,8 @@ BEGIN
     v_transaction.customer_phone,
     p_driver_id,
     p_helper_id,
+    p_helper_id_2,
+    p_helper_id_3,
     p_delivery_date,
     'delivered',
     0, -- HPP is 0 for legacy data migration
@@ -844,7 +886,7 @@ $function$
 -- =====================================================
 -- Function: process_delivery_atomic_no_stock
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.process_delivery_atomic_no_stock(p_transaction_id text, p_items jsonb, p_branch_id uuid, p_driver_id uuid DEFAULT NULL::uuid, p_helper_id uuid DEFAULT NULL::uuid, p_delivery_date date DEFAULT CURRENT_DATE, p_notes text DEFAULT NULL::text, p_photo_url text DEFAULT NULL::text)
+CREATE OR REPLACE FUNCTION public.process_delivery_atomic_no_stock(p_transaction_id text, p_items jsonb, p_branch_id uuid, p_driver_id uuid DEFAULT NULL::uuid, p_helper_id uuid DEFAULT NULL::uuid, p_delivery_date date DEFAULT CURRENT_DATE, p_notes text DEFAULT NULL::text, p_photo_url text DEFAULT NULL::text, p_helper_id_2 uuid DEFAULT NULL::uuid, p_helper_id_3 uuid DEFAULT NULL::uuid)
  RETURNS TABLE(success boolean, delivery_id uuid, delivery_number integer, total_hpp numeric, journal_id uuid, error_message text)
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -918,6 +960,8 @@ BEGIN
     customer_phone,
     driver_id,
     helper_id,
+    helper_id_2,
+    helper_id_3,
     delivery_date,
     status,
     hpp_total,
@@ -934,6 +978,8 @@ BEGIN
     v_transaction.customer_phone,
     p_driver_id,
     p_helper_id,
+    p_helper_id_2,
+    p_helper_id_3,
     p_delivery_date,
     'delivered',
     0, -- HPP is 0 for legacy data migration
@@ -1130,7 +1176,7 @@ $function$
 -- =====================================================
 -- Function: update_delivery_atomic
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.update_delivery_atomic(p_delivery_id uuid, p_branch_id uuid, p_items jsonb, p_driver_id uuid DEFAULT NULL::uuid, p_helper_id uuid DEFAULT NULL::uuid, p_delivery_date timestamp with time zone DEFAULT now(), p_notes text DEFAULT NULL::text, p_photo_url text DEFAULT NULL::text)
+CREATE OR REPLACE FUNCTION public.update_delivery_atomic(p_delivery_id uuid, p_branch_id uuid, p_items jsonb, p_driver_id uuid DEFAULT NULL::uuid, p_helper_id uuid DEFAULT NULL::uuid, p_delivery_date timestamp with time zone DEFAULT now(), p_notes text DEFAULT NULL::text, p_photo_url text DEFAULT NULL::text, p_helper_id_2 uuid DEFAULT NULL::uuid, p_helper_id_3 uuid DEFAULT NULL::uuid)
  RETURNS TABLE(success boolean, delivery_id uuid, total_hpp numeric, journal_id uuid, error_message text)
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -1202,6 +1248,8 @@ BEGIN
   SET
     driver_id = p_driver_id,
     helper_id = p_helper_id,
+    helper_id_2 = p_helper_id_2,
+    helper_id_3 = p_helper_id_3,
     delivery_date = p_delivery_date,
     notes = p_notes,
     photo_url = COALESCE(p_photo_url, photo_url),
@@ -1310,7 +1358,7 @@ BEGIN
   END IF;
 
   -- 9. Re-generate Commissions
-  IF p_driver_id IS NOT NULL OR p_helper_id IS NOT NULL THEN
+  IF p_driver_id IS NOT NULL OR p_helper_id IS NOT NULL OR p_helper_id_2 IS NOT NULL OR p_helper_id_3 IS NOT NULL THEN
     FOR v_new_item IN SELECT * FROM jsonb_array_elements(p_items)
     LOOP
       v_product_id := (v_new_item->>'product_id')::UUID;
@@ -1321,14 +1369,28 @@ BEGIN
         -- Driver
         IF p_driver_id IS NOT NULL THEN
           INSERT INTO commission_entries (user_id, user_name, role, product_id, quantity, rate_per_qty, amount, delivery_id, status, branch_id, created_at)
-          SELECT p_driver_id, (SELECT name FROM profiles WHERE id = p_driver_id), 'driver', v_product_id, v_qty, cr.rate_per_qty, v_qty * cr.rate_per_qty, p_delivery_id, 'pending', p_branch_id, NOW()
+          SELECT p_driver_id, (SELECT full_name FROM profiles WHERE id = p_driver_id), 'driver', v_product_id, v_qty, cr.rate_per_qty, v_qty * cr.rate_per_qty, p_delivery_id, 'pending', p_branch_id, NOW()
           FROM commission_rules cr WHERE cr.product_id = v_product_id AND cr.role = 'driver' AND cr.rate_per_qty > 0;
         END IF;
 
-        -- Helper
+        -- Helper 1
         IF p_helper_id IS NOT NULL THEN
           INSERT INTO commission_entries (user_id, user_name, role, product_id, quantity, rate_per_qty, amount, delivery_id, status, branch_id, created_at)
-          SELECT p_helper_id, (SELECT name FROM profiles WHERE id = p_helper_id), 'helper', v_product_id, v_qty, cr.rate_per_qty, v_qty * cr.rate_per_qty, p_delivery_id, 'pending', p_branch_id, NOW()
+          SELECT p_helper_id, (SELECT full_name FROM profiles WHERE id = p_helper_id), 'helper', v_product_id, v_qty, cr.rate_per_qty, v_qty * cr.rate_per_qty, p_delivery_id, 'pending', p_branch_id, NOW()
+          FROM commission_rules cr WHERE cr.product_id = v_product_id AND cr.role = 'helper' AND cr.rate_per_qty > 0;
+        END IF;
+
+        -- Helper 2
+        IF p_helper_id_2 IS NOT NULL THEN
+          INSERT INTO commission_entries (user_id, user_name, role, product_id, quantity, rate_per_qty, amount, delivery_id, status, branch_id, created_at)
+          SELECT p_helper_id_2, (SELECT full_name FROM profiles WHERE id = p_helper_id_2), 'helper', v_product_id, v_qty, cr.rate_per_qty, v_qty * cr.rate_per_qty, p_delivery_id, 'pending', p_branch_id, NOW()
+          FROM commission_rules cr WHERE cr.product_id = v_product_id AND cr.role = 'helper' AND cr.rate_per_qty > 0;
+        END IF;
+
+        -- Helper 3
+        IF p_helper_id_3 IS NOT NULL THEN
+          INSERT INTO commission_entries (user_id, user_name, role, product_id, quantity, rate_per_qty, amount, delivery_id, status, branch_id, created_at)
+          SELECT p_helper_id_3, (SELECT full_name FROM profiles WHERE id = p_helper_id_3), 'helper', v_product_id, v_qty, cr.rate_per_qty, v_qty * cr.rate_per_qty, p_delivery_id, 'pending', p_branch_id, NOW()
           FROM commission_rules cr WHERE cr.product_id = v_product_id AND cr.role = 'helper' AND cr.rate_per_qty > 0;
         END IF;
       END IF;

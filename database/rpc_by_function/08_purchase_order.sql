@@ -93,6 +93,13 @@ BEGIN
     RETURN;
   END IF;
 
+  -- Validate: If PPN is enabled, the PPN account MUST exist
+  IF v_po.include_ppn AND v_po.ppn_amount > 0 AND v_acc_piutang_pajak IS NULL THEN
+    RETURN QUERY SELECT FALSE, NULL::UUID[], NULL::TEXT, 
+      'PPN diaktifkan tapi Akun Piutang Pajak / PPN Masukan (1230) tidak ditemukan. Buat akun tersebut terlebih dahulu.'::TEXT;
+    RETURN;
+  END IF;
+
   -- 3. Calculate Totals and Names
   FOR v_item IN SELECT * FROM purchase_order_items WHERE purchase_order_id = p_po_id LOOP
     v_subtotal_all := v_subtotal_all + COALESCE(v_item.subtotal, 0);
@@ -124,6 +131,7 @@ BEGIN
     DECLARE
        v_journal_lines JSONB := '[]'::JSONB;
        v_journal_res RECORD;
+       v_material_ppn_applied NUMERIC := 0;
     BEGIN
        -- Dr. Persediaan Bahan Baku
        v_journal_lines := v_journal_lines || jsonb_build_object(
@@ -141,13 +149,14 @@ BEGIN
             'credit_amount', 0,
             'description', 'PPN Masukan (PO ' || p_po_id || ')'
           );
+          v_material_ppn_applied := v_material_ppn;
        END IF;
 
-       -- Cr. Hutang Usaha
+       -- Cr. Hutang Usaha (must match total debit = persediaan + ppn actually applied)
        v_journal_lines := v_journal_lines || jsonb_build_object(
           'account_id', v_acc_hutang_usaha,
           'debit_amount', 0,
-          'credit_amount', v_total_material + v_material_ppn,
+          'credit_amount', v_total_material + v_material_ppn_applied,
           'description', 'Hutang: ' || v_po.supplier_name
        );
 
@@ -179,6 +188,7 @@ BEGIN
     DECLARE
        v_journal_lines JSONB := '[]'::JSONB;
        v_journal_res RECORD;
+       v_product_ppn_applied NUMERIC := 0;
     BEGIN
        -- Dr. Persediaan Produk Jadi
        v_journal_lines := v_journal_lines || jsonb_build_object(
@@ -196,13 +206,14 @@ BEGIN
             'credit_amount', 0,
             'description', 'PPN Masukan (PO ' || p_po_id || ')'
            );
+           v_product_ppn_applied := v_product_ppn;
        END IF;
 
-       -- Cr. Hutang Usaha
+       -- Cr. Hutang Usaha (must match total debit = persediaan + ppn actually applied)
        v_journal_lines := v_journal_lines || jsonb_build_object(
           'account_id', v_acc_hutang_usaha,
           'debit_amount', 0,
-          'credit_amount', v_total_product + v_product_ppn,
+          'credit_amount', v_total_product + v_product_ppn_applied,
           'description', 'Hutang: ' || v_po.supplier_name
        );
        
@@ -1181,4 +1192,200 @@ END;
 $function$
 ;
 
+
+-- =====================================================
+-- Function: receive_po_partial
+-- Supports partial receiving of PO items
+-- =====================================================
+CREATE OR REPLACE FUNCTION public.receive_po_partial(
+  p_po_id text,
+  p_branch_id uuid,
+  p_items jsonb,
+  p_received_date date DEFAULT CURRENT_DATE,
+  p_notes text DEFAULT NULL,
+  p_user_id uuid DEFAULT NULL,
+  p_user_name text DEFAULT NULL
+)
+ RETURNS TABLE(success boolean, materials_received integer, products_received integer, batches_created integer, error_message text)
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $function$
+DECLARE
+  v_po RECORD;
+  v_item_input JSONB;
+  v_poi RECORD;
+  v_materials_received INTEGER := 0;
+  v_products_received INTEGER := 0;
+  v_batches_created INTEGER := 0;
+  v_previous_stock NUMERIC;
+  v_new_stock NUMERIC;
+  v_qty_to_receive NUMERIC;
+  v_item_id TEXT;
+  v_material_id UUID;
+  v_product_id UUID;
+  v_all_received BOOLEAN := TRUE;
+BEGIN
+  -- ==================== VALIDATION ====================
+  IF p_branch_id IS NULL THEN
+    RETURN QUERY SELECT FALSE, 0, 0, 0, 'Branch ID is required'::TEXT;
+    RETURN;
+  END IF;
+
+  IF p_po_id IS NULL THEN
+    RETURN QUERY SELECT FALSE, 0, 0, 0, 'Purchase Order ID is required'::TEXT;
+    RETURN;
+  END IF;
+
+  IF p_items IS NULL OR jsonb_array_length(p_items) = 0 THEN
+    RETURN QUERY SELECT FALSE, 0, 0, 0, 'Tidak ada item yang akan diterima'::TEXT;
+    RETURN;
+  END IF;
+
+  -- Get PO info
+  SELECT po.id, po.status, po.supplier_id, po.supplier_name, po.branch_id
+  INTO v_po
+  FROM purchase_orders po
+  WHERE po.id = p_po_id AND po.branch_id = p_branch_id;
+
+  IF v_po.id IS NULL THEN
+    RETURN QUERY SELECT FALSE, 0, 0, 0, 'Purchase Order not found in this branch'::TEXT;
+    RETURN;
+  END IF;
+
+  IF v_po.status NOT IN ('Approved', 'Pending', 'Dikirim') THEN
+    RETURN QUERY SELECT FALSE, 0, 0, 0,
+      format('Status PO harus Approved, Pending, atau Dikirim. Status saat ini: %s', v_po.status)::TEXT;
+    RETURN;
+  END IF;
+
+  -- ==================== PROCESS EACH ITEM ======================================
+  FOR v_item_input IN SELECT * FROM jsonb_array_elements(p_items)
+  LOOP
+    v_item_id := v_item_input->>'item_id';
+    v_material_id := (v_item_input->>'material_id')::UUID;
+    v_product_id := (v_item_input->>'product_id')::UUID;
+    v_qty_to_receive := COALESCE((v_item_input->>'quantity')::NUMERIC, 0);
+
+    IF v_qty_to_receive <= 0 THEN
+      CONTINUE;
+    END IF;
+
+    -- Get the PO item record
+    SELECT * INTO v_poi
+    FROM purchase_order_items
+    WHERE id = v_item_id AND purchase_order_id = p_po_id;
+
+    IF v_poi.id IS NULL THEN
+      CONTINUE; -- Skip items not found
+    END IF;
+
+    -- Validate: don't receive more than remaining
+    IF v_qty_to_receive > (v_poi.quantity - COALESCE(v_poi.quantity_received, 0)) THEN
+      v_qty_to_receive := v_poi.quantity - COALESCE(v_poi.quantity_received, 0);
+    END IF;
+
+    IF v_qty_to_receive <= 0 THEN
+      CONTINUE;
+    END IF;
+
+    -- Update quantity_received on the PO item
+    UPDATE purchase_order_items
+    SET quantity_received = COALESCE(quantity_received, 0) + v_qty_to_receive,
+        updated_at = NOW()
+    WHERE id = v_item_id;
+
+    -- Process based on item type
+    IF v_material_id IS NOT NULL THEN
+      -- ==================== MATERIAL ====================
+      SELECT stock INTO v_previous_stock FROM materials WHERE id = v_material_id;
+      v_previous_stock := COALESCE(v_previous_stock, 0);
+      v_new_stock := v_previous_stock + v_qty_to_receive;
+
+      -- Update material stock
+      UPDATE materials
+      SET stock = v_new_stock, updated_at = NOW()
+      WHERE id = v_material_id;
+
+      -- Create material movement record
+      INSERT INTO material_stock_movements (
+        material_id, material_name, type, reason, quantity,
+        previous_stock, new_stock, reference_id, reference_type,
+        notes, user_id, user_name, branch_id, created_at
+      ) VALUES (
+        v_material_id,
+        COALESCE(v_poi.material_name, 'Unknown'),
+        'IN', 'PURCHASE', v_qty_to_receive,
+        v_previous_stock, v_new_stock,
+        p_po_id, 'purchase_order',
+        format('PO %s - Partial receive (%s)', p_po_id, COALESCE(p_notes, '')),
+        p_user_id, p_user_name, p_branch_id, NOW()
+      );
+
+      -- Create inventory batch for FIFO tracking
+      INSERT INTO inventory_batches (
+        material_id, branch_id, purchase_order_id, supplier_id,
+        initial_quantity, remaining_quantity, unit_cost,
+        batch_date, notes, created_at
+      ) VALUES (
+        v_material_id, p_branch_id, p_po_id, v_po.supplier_id,
+        v_qty_to_receive, v_qty_to_receive,
+        COALESCE(v_poi.unit_price, 0),
+        p_received_date,
+        format('PO %s - %s (partial)', p_po_id, COALESCE(v_poi.material_name, 'Unknown')),
+        NOW()
+      );
+
+      v_materials_received := v_materials_received + 1;
+      v_batches_created := v_batches_created + 1;
+
+    ELSIF v_product_id IS NOT NULL THEN
+      -- ==================== PRODUCT ====================
+      INSERT INTO inventory_batches (
+        product_id, branch_id, purchase_order_id, supplier_id,
+        initial_quantity, remaining_quantity, unit_cost,
+        batch_date, notes, created_at
+      ) VALUES (
+        v_product_id, p_branch_id, p_po_id, v_po.supplier_id,
+        v_qty_to_receive, v_qty_to_receive,
+        COALESCE(v_poi.unit_price, 0),
+        p_received_date,
+        format('PO %s - %s (partial)', p_po_id, COALESCE(v_poi.product_name, 'Unknown')),
+        NOW()
+      );
+
+      v_products_received := v_products_received + 1;
+      v_batches_created := v_batches_created + 1;
+    END IF;
+  END LOOP;
+
+  -- ==================== CHECK IF ALL ITEMS FULLY RECEIVED ====================
+  SELECT bool_and(COALESCE(quantity_received, 0) >= quantity) INTO v_all_received
+  FROM purchase_order_items
+  WHERE purchase_order_id = p_po_id;
+
+  -- Update PO status
+  IF v_all_received THEN
+    UPDATE purchase_orders
+    SET status = 'Diterima', received_date = p_received_date
+    WHERE id = p_po_id;
+  ELSE
+    -- Keep status or move to Dikirim if was Approved
+    IF v_po.status = 'Approved' OR v_po.status = 'Pending' THEN
+      UPDATE purchase_orders
+      SET status = 'Dikirim', received_date = NULL
+      WHERE id = p_po_id;
+    END IF;
+  END IF;
+
+  RETURN QUERY SELECT
+    TRUE,
+    v_materials_received,
+    v_products_received,
+    v_batches_created,
+    NULL::TEXT;
+
+EXCEPTION WHEN OTHERS THEN
+  RETURN QUERY SELECT FALSE, 0, 0, 0, SQLERRM::TEXT;
+END;
+$function$;
 
