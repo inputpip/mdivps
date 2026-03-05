@@ -63,33 +63,68 @@ export function DriverDeliveryDialog({
   // Check if user is admin/owner (can select different driver)
   const isAdminOwner = user?.role && ['admin', 'owner'].includes(user.role)
 
-  // Auto-fill driver based on logged-in user (supir/helper)
+  // Auto-fill driver based on active retasi or logged-in user
   useEffect(() => {
-    if (open && user && drivers && drivers.length > 0) {
-      // Find if current user is a driver in the drivers list
-      const currentUserAsDriver = (drivers as Driver[]).find(
-        (d: Driver) => d.id === user.id
-      )
+    if (open && drivers && drivers.length > 0) {
+      // 1. Try to find driver from active retasi first
+      if (activeRetasi?.driver_name) {
+        const driverFromRetasi = (drivers as Driver[]).find(
+          (d: Driver) => d.name === activeRetasi.driver_name
+        )
+        if (driverFromRetasi) {
+          setDriverId(driverFromRetasi.id)
+          console.log(`[DriverDelivery] Auto-filled driver "${activeRetasi.driver_name}" from retasi`)
+          return
+        }
+      }
 
-      if (currentUserAsDriver && !isAdminOwner) {
-        // Auto-fill driver ID for supir/helper
-        setDriverId(currentUserAsDriver.id)
+      // 2. Fallback: Find if current user is a driver in the drivers list
+      if (user) {
+        const currentUserAsDriver = (drivers as Driver[]).find(
+          (d: Driver) => d.id === user.id
+        )
+
+        if (currentUserAsDriver) {
+          // Auto-fill driver ID
+          setDriverId(currentUserAsDriver.id)
+          console.log(`[DriverDelivery] Auto-filled driver from logged-in user: ${user.name}`)
+        }
       }
     }
-  }, [open, user, drivers, isAdminOwner])
+  }, [open, user, drivers, activeRetasi])
 
-  // Auto-fill helper from active retasi
+  // Auto-fill all helpers from active retasi
   useEffect(() => {
-    if (open && activeRetasi?.helper_name && drivers && drivers.length > 0) {
-      // Find helper by name from retasi
-      const helperFromRetasi = (drivers as Driver[]).find(
-        (d: Driver) => d.name === activeRetasi.helper_name
-      )
-
-      if (helperFromRetasi) {
-        setHelperId(helperFromRetasi.id)
-        console.log(`[DriverDelivery] Auto-filled helper "${activeRetasi.helper_name}" from retasi`)
+    if (open && activeRetasi && drivers && drivers.length > 0) {
+      // Helper 1
+      if (activeRetasi.helper_id) {
+        setHelperId(activeRetasi.helper_id)
+      } else if (activeRetasi.helper_name) {
+        const h1 = (drivers as Driver[]).find(d => d.name === activeRetasi.helper_name)
+        if (h1) setHelperId(h1.id)
       }
+
+      // Helper 2
+      if (activeRetasi.helper_id_2) {
+        setHelperId2(activeRetasi.helper_id_2)
+      } else if (activeRetasi.helper_name_2) {
+        const h2 = (drivers as Driver[]).find(d => d.name === activeRetasi.helper_name_2)
+        if (h2) setHelperId2(h2.id)
+      }
+
+      // Helper 3
+      if (activeRetasi.helper_id_3) {
+        setHelperId3(activeRetasi.helper_id_3)
+      } else if (activeRetasi.helper_name_3) {
+        const h3 = (drivers as Driver[]).find(d => d.name === activeRetasi.helper_name_3)
+        if (h3) setHelperId3(h3.id)
+      }
+
+      console.log(`[DriverDelivery] Auto-filled helpers from retasi:`, {
+        h1: activeRetasi.helper_name,
+        h2: activeRetasi.helper_name_2,
+        h3: activeRetasi.helper_name_3
+      })
     }
   }, [open, activeRetasi, drivers])
 
@@ -393,6 +428,9 @@ export function DriverDeliveryDialog({
               <div>
                 <Label className="flex items-center gap-2">
                   Helper 2 (Opsional)
+                  {activeRetasi?.helper_name_2 && helperId2 && (
+                    <span className="text-xs text-blue-600">(Dari Retasi)</span>
+                  )}
                 </Label>
                 <Select value={helperId2} onValueChange={setHelperId2}>
                   <SelectTrigger>
@@ -414,6 +452,9 @@ export function DriverDeliveryDialog({
               <div>
                 <Label className="flex items-center gap-2">
                   Helper 3 (Opsional)
+                  {activeRetasi?.helper_name_3 && helperId3 && (
+                    <span className="text-xs text-blue-600">(Dari Retasi)</span>
+                  )}
                 </Label>
                 <Select value={helperId3} onValueChange={setHelperId3}>
                   <SelectTrigger>

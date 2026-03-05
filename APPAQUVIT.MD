@@ -137,10 +137,11 @@ The system relies on **PostgreSQL RPCs** for data integrity. Frontend calls `sup
 *   **Database Constraints**: Penambahan **Unique Index** (`idx_commission_unique_delivery` & `idx_commission_unique_transaction`) untuk mencegah data komisi yang sama persis masuk lebih dari satu kali.
 *   **Atomic Deletion**: Verifikasi fungsi `void_transaction_atomic` untuk memastikan komisi otomatis terhapus saat transaksi dibatalkan (Full Cascade).
 
-### 📑 Frontend UI Enhancements
+### 📑 Frontend UI Enhancements & POS Mobile
 *   **Table Pagination**: Implementasi pagination pada halaman Laporan Komisi (50 data per halaman) dengan navigasi nomor halaman.
 *   **User Experience**: Penambahan fitur *auto-scroll to top* saat berpindah halaman dan indikator total entri yang lebih informatif.
-*   **Icon Stability**: Perbaikan import icon `lucide-react` pada halaman laporan.
+*   **Auto-Fill POS Mobile**: Fitur otomatis mengisi `Supir`, `Helper 1`, `Helper 2`, dan `Helper 3` di modal pengantaran (DriverDeliveryDialog) berdasarkan data Retasi yang sedang aktif.
+*   **Auto-Delete Photos**: Gambar pengantaran (`photo_url`) secara fisis dihapus langsung dari VPS jika *delivery* atau *transaction* terkait dihapus, demi menghemat storage.
 
 # v5.0 (2026-03-06) - Delivery System Optimization & Helper Expansion
 

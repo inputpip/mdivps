@@ -429,6 +429,20 @@ export const useTransactions = (filters?: {
 
       console.log('🗑️ Voiding Transaction via RPC...', transactionId);
 
+      // Fetch associated deliveries to collect photo URLs before deletion
+      const { data: deliveriesData, error: deliveriesError } = await supabase
+        .from('deliveries')
+        .select('photo_url')
+        .eq('transaction_id', transactionId)
+        .not('photo_url', 'is', null);
+
+      let photoUrlsToDelete: string[] = [];
+      if (!deliveriesError && deliveriesData) {
+        photoUrlsToDelete = deliveriesData
+          .map(d => d.photo_url)
+          .filter((url): url is string => Boolean(url));
+      }
+
       const { data: rpcResultRaw, error: rpcError } = await supabase
         .rpc('void_transaction_atomic', {
           p_transaction_id: transactionId,
@@ -449,6 +463,26 @@ export const useTransactions = (filters?: {
       }
 
       console.log('✅ Transaction Voided & Rolled Back:', rpcResult);
+
+      // Actually delete the physical delivery photos from the VPS
+      if (photoUrlsToDelete.length > 0) {
+        // We import PhotoUploadService dynamically to avoid circular dependencies if any,
+        // or just use it if imported. Let's dynamically import to be safe since it wasn't at the top.
+        const { PhotoUploadService } = await import('@/services/photoUploadService');
+        for (const url of photoUrlsToDelete) {
+          try {
+            const filename = url.split('/').pop();
+            // EXTRA SAFETY CHECK: Pastikan filename valid, bukan string kosong, bukan sekadar spasi, dan minimal 5 karakter 
+            // format nama file kita: delivery-uuid-123456.jpg (>5 chars)
+            if (filename && filename.trim().length > 5 && !filename.includes('/') && filename.includes('.')) {
+              await PhotoUploadService.deletePhoto(filename, 'deliveries');
+              console.log(`[deleteTransaction] Deleted physical photo: ${filename}`);
+            }
+          } catch (e) {
+            console.error(`[deleteTransaction] Failed to delete photo ${url}:`, e);
+          }
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });

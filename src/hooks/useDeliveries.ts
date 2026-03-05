@@ -311,6 +311,15 @@ export const useDeliveries = (transactionId?: string) => {
     mutationFn: async (id: string) => {
       if (!currentBranch?.id) throw new Error('Branch tidak dipilih');
 
+      // Fetch the delivery's photo_url before we delete the record
+      const { data: deliveryData } = await supabase
+        .from('deliveries')
+        .select('photo_url')
+        .eq('id', id)
+        .single();
+
+      const photoUrlToDelete = deliveryData?.photo_url;
+
       const { data, error } = await supabase.rpc('void_delivery_atomic', {
         p_delivery_id: id,
         p_branch_id: currentBranch.id,
@@ -324,6 +333,20 @@ export const useDeliveries = (transactionId?: string) => {
       // Finally delete the record if RPC success (void_delivery_atomic in 07_void.sql doesn't delete the record)
       const { error: deleteError } = await supabase.from('deliveries').delete().eq('id', id);
       if (deleteError) throw deleteError;
+
+      // Actually delete the physical delivery photo from the VPS
+      if (photoUrlToDelete) {
+        try {
+          const filename = photoUrlToDelete.split('/').pop();
+          // EXTRA SAFETY CHECK: Pastikan filename valid, bukan string kosong, dan minimal 5 karakter (eg. abc.jpg)
+          if (filename && filename.trim().length > 5 && !filename.includes('/') && filename.includes('.')) {
+            await PhotoUploadService.deletePhoto(filename, 'deliveries');
+            console.log(`[deleteDelivery] Deleted physical photo: ${filename}`);
+          }
+        } catch (e) {
+          console.error(`[deleteDelivery] Failed to delete photo ${photoUrlToDelete}:`, e);
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['deliveries'] });
