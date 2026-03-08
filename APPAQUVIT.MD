@@ -1,5 +1,5 @@
 # AQUVIT SYSTEM CURRENT STATE
-**Last Updated:** Tuesday, January 6, 2026 15:00 (JST)
+**Last Updated:** Monday, March 9, 2026 02:45 (WIT)
 
 ## 1. 🌐 VPS Connection Information
 
@@ -15,6 +15,7 @@ Semua perubahan penting pada proyek AQUVIT ERP System didokumentasikan di file i
 3. [Server Architecture](#server-architecture-diagram)
 4. [VPS Server Information](#vps-server-information)
 5. [Version History](#v51-2026-03-06---commission-system-audit--ui-enhancement)
+   - [v5.2] **Commission Split Logic & Sidebar UI** 🚀 NEW
    - [v5.1] **Commission Duplication Fix & UI Refinement** 🛡️ CRITICAL
    - [v5.0] **Delivery & PO Infrastructure Fixes** 🚚 CRITICAL
    - [v4.6] **Payroll & Journal Hotfixes** 🚑 CRITICAL
@@ -117,7 +118,7 @@ The system relies on **PostgreSQL RPCs** for data integrity. Frontend calls `sup
 
 ## 4. ⚠️ Current Focus & Next Steps
 **Active Task**: Auditing Stock & Validating Retasi Logic.
-**Recently Completed**: Commission Duplication Fix & UI Pagination.
+**Recently Completed**: Multi-Helper Commission Split (Bagi 3/4) & Sidebar UI Enhancements.
 
 1.  **Frontend**: Modifying `src/hooks/useRetasi.ts` to ensure correct data is sent to RPC.
 2.  **Database**: 
@@ -129,6 +130,17 @@ The system relies on **PostgreSQL RPCs** for data integrity. Frontend calls `sup
 ---
 
 ---
+
+# v5.2 (2026-03-09) - Commission Split Logic & Sidebar UI
+
+### 💰 Multi-Helper Commission Split (Bagi 3 / Bagi 4)
+*   **Bagi 3 & Bagi 4 Logic**: Implementasi otomatis pembagian komisi untuk pengantaran dengan 2 helper (Bagi 3) dan 3 helper (Bagi 4).
+*   **Data Integrity fix**: Perbaikan deteksi field `driver_id` vs `driverId` dan `helper_id` vs `helperId` di `commissionUtils.ts` untuk memastikan aturan Bagi 3/4 terpanggil dengan benar baik dari input baru (*generate*) maupun kalkulasi ulang (*recalculate/regen*).
+*   **Rounding Fix**: Penggunaan `Math.floor` pada pembagian komisi agar angka di laporan bersih tanpa desimal.
+
+### 🍱 Sidebar Enhancements
+*   **Sticky Full-Height**: Sidebar diset ke `h-screen` dan `sticky`, memastikan sidebar tetap terlihat penuh dan tidak terpotong saat scroll halaman panjang.
+*   **Lock Menu Feature**: Penambahan fitur "Lock Expand" (ikon gembok) di sidebar untuk menjaga semua sub-menu tetap terbuka. State fitur ini disimpan di `localStorage`.
 
 # v5.1 (2026-03-06) - Commission System Audit & UI Enhancement
 
@@ -485,6 +497,6 @@ const { data: rpcResultRaw, error: rpcError } = await supabase
 
 ---
 
-Last Updated: 2026-01-06 16:23 WIT
+Last Updated: 2026-03-09 02:45 WIT
 
 
