@@ -39,7 +39,7 @@ export function Layout() {
     <div className="grid min-h-screen w-full grid-cols-[auto_1fr]">
       <IdleWarningBanner />
       <div className={cn(
-        "hidden border-r bg-muted/40 md:block transition-all duration-300",
+        "hidden border-r bg-muted/40 md:block transition-all duration-300 sticky top-0 h-screen",
         isCollapsed ? "w-[60px]" : "w-[220px] lg:w-[280px]"
       )}>
         <Sidebar isCollapsed={isCollapsed} setCollapsed={setIsCollapsed} />

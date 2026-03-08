@@ -43,6 +43,8 @@ import {
   MapPin,
   History,
   Receipt,
+  Lock,
+  Unlock,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
@@ -208,6 +210,24 @@ export function Sidebar({ isCollapsed, setCollapsed }: SidebarProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  // Lock state for submenus
+  const [isLocked, setIsLocked] = useState(() => {
+    const saved = localStorage.getItem('sidebar_locked');
+    return saved === 'true';
+  });
+
+  const toggleLock = () => {
+    const newState = !isLocked;
+    setIsLocked(newState);
+    localStorage.setItem('sidebar_locked', newState.toString());
+    if (newState) {
+      // Expand all sections when locking
+      const allExpanded: Record<string, boolean> = {};
+      menuItems.forEach(s => allExpanded[s.title] = true);
+      setOpenSections(allExpanded);
+    }
+  };
+
   // Auto-expand on hover state
   const [isHoverExpanded, setIsHoverExpanded] = useState(false);
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -270,6 +290,7 @@ export function Sidebar({ isCollapsed, setCollapsed }: SidebarProps) {
   });
 
   function toggleSection(title: string) {
+    if (isLocked) return; // Prevent toggling if locked
     setOpenSections((prev) => ({ ...prev, [title]: !prev[title] }));
   }
 
@@ -301,16 +322,16 @@ export function Sidebar({ isCollapsed, setCollapsed }: SidebarProps) {
     }
   };
 
-  // Auto-expand sections with search results
+  // Auto-expand sections with search results or when locked
   useEffect(() => {
-    if (searchQuery.trim() !== "") {
+    if (searchQuery.trim() !== "" || isLocked) {
       const newOpenSections: Record<string, boolean> = {};
       filteredMenuItems.forEach((section) => {
-        newOpenSections[section.title] = true; // auto-expand sections with results
+        newOpenSections[section.title] = true; // auto-expand sections with results or if locked
       });
       setOpenSections(newOpenSections);
     }
-  }, [searchQuery]); // Only depend on searchQuery, not filteredMenuItems
+  }, [searchQuery, isLocked]); // Only depend on searchQuery and isLocked
 
   return (
     <div
@@ -364,11 +385,28 @@ export function Sidebar({ isCollapsed, setCollapsed }: SidebarProps) {
               </div>
               {/* Show first result hint when searching */}
               {searchQuery && firstSearchResult && (
-                <div className="mt-1.5 text-xs text-muted-foreground flex items-center gap-1">
-                  <span>Enter →</span>
-                  <span className="font-medium text-foreground">{firstSearchResult.label}</span>
+                <div className="mt-1.5 text-xs text-muted-foreground flex items-center justify-between">
+                  <div className="flex items-center gap-1">
+                    <span>Enter →</span>
+                    <span className="font-medium text-foreground">{firstSearchResult.label}</span>
+                  </div>
                 </div>
               )}
+
+              {/* Lock Toggle Button */}
+              <div className="mt-2 flex items-center justify-between px-1">
+                <span className="text-[10px] uppercase font-bold text-slate-400">Lock Menu</span>
+                <button
+                  onClick={toggleLock}
+                  className={cn(
+                    "p-1 rounded-md transition-all",
+                    isLocked ? "bg-indigo-100 text-indigo-600 dark:bg-indigo-900/50" : "text-slate-400 hover:text-slate-600"
+                  )}
+                  title={isLocked ? "Unlock Sub-menus" : "Lock All Sub-menus (Always Expand)"}
+                >
+                  {isLocked ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
+                </button>
+              </div>
             </div>
           )}
 

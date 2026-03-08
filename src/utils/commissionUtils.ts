@@ -132,55 +132,62 @@ export async function generateDeliveryCommission(delivery: Delivery) {
       }
 
       const assignedPeople = [];
-      if (delivery.driverId) assignedPeople.push({ id: delivery.driverId, name: delivery.driverName || 'Unknown Driver', roleLabel: 'driver' });
-      if (delivery.helperId) assignedPeople.push({ id: delivery.helperId, name: delivery.helperName || 'Unknown Helper', roleLabel: 'helper' });
-      if (delivery.helperId2 || (delivery as any).helper_id_2) assignedPeople.push({ id: delivery.helperId2 || (delivery as any).helper_id_2, name: delivery.helperName2 || 'Unknown Helper', roleLabel: 'helper' });
-      if (delivery.helperId3 || (delivery as any).helper_id_3) assignedPeople.push({ id: delivery.helperId3 || (delivery as any).helper_id_3, name: delivery.helperName3 || 'Unknown Helper', roleLabel: 'helper' });
+      const driveId = delivery.driverId || (delivery as any).driver_id;
+      const helperId = delivery.helperId || (delivery as any).helper_id;
+      const helperId2 = delivery.helperId2 || (delivery as any).helper_id_2 || (delivery as any).helper_id2;
+      const helperId3 = delivery.helperId3 || (delivery as any).helper_id_3 || (delivery as any).helper_id3;
+
+      if (driveId) assignedPeople.push({ id: driveId, name: delivery.driverName || (delivery as any).driver_name || 'Unknown Driver', roleLabel: 'driver' });
+      if (helperId) assignedPeople.push({ id: helperId, name: delivery.helperName || (delivery as any).helper_name || 'Unknown Helper', roleLabel: 'helper' });
+      if (helperId2) assignedPeople.push({ id: helperId2, name: delivery.helperName2 || (delivery as any).helper_name_2 || 'Unknown Helper', roleLabel: 'helper' });
+      if (helperId3) assignedPeople.push({ id: helperId3, name: delivery.helperName3 || (delivery as any).helper_name_3 || 'Unknown Helper', roleLabel: 'helper' });
 
       const helperCount = assignedPeople.filter(p => p.roleLabel === 'helper').length;
+      const effectiveDriverId = delivery.driverId || (delivery as any).driver_id;
 
-      const rate2HelpersRule = rules.find(r => r.product_id === item.productId && r.role === 'delivery_2_helpers');
-      const rate3HelpersRule = rules.find(r => r.product_id === item.productId && r.role === 'delivery_3_helpers');
-      const driverRule = rules.find(r => r.product_id === item.productId && r.role === 'driver');
-      const helperRule = rules.find(r => r.product_id === item.productId && r.role === 'helper');
+      const pid = item.productId || (item as any).product_id;
+      console.log(`[Commission] SKU: ${item.productName}, PID: ${pid}, Helpers: ${helperCount}, Driver: ${effectiveDriverId}`);
 
-      let appliedRules: { person: any, ruleRate: number }[] = [];
+      const rate2HelpersRule = rules.find(r => r.product_id === pid && r.role === 'delivery_2_helpers');
+      const rate3HelpersRule = rules.find(r => r.product_id === pid && r.role === 'delivery_3_helpers');
+      const driverRule = rules.find(r => r.product_id === pid && r.role === 'driver');
+      const helperRule = rules.find(r => r.product_id === pid && r.role === 'helper');
 
-      if (helperCount === 3 && delivery.driverId && rate3HelpersRule && rate3HelpersRule.rate_per_qty > 0) {
+      let appliedRules: { person: any, ruleRate: number, actualRole?: string }[] = [];
+
+      if (helperCount === 3 && effectiveDriverId && rate3HelpersRule && Number(rate3HelpersRule.rate_per_qty || 0) > 0) {
         // 3 helpers + 1 driver = split 4
-        const splitRate = rate3HelpersRule.rate_per_qty / 4;
+        const splitRate = Math.floor(Number(rate3HelpersRule.rate_per_qty) / 4);
+        console.log(`[Commission] Using SPLIT-4 rule: ${rate3HelpersRule.rate_per_qty} / 4 = ${splitRate}`);
         assignedPeople.forEach(person => {
           appliedRules.push({ person, ruleRate: splitRate });
         });
-      } else if (helperCount === 2 && delivery.driverId && rate2HelpersRule && rate2HelpersRule.rate_per_qty > 0) {
+      } else if (helperCount === 2 && effectiveDriverId && rate2HelpersRule && Number(rate2HelpersRule.rate_per_qty || 0) > 0) {
         // 2 helpers + 1 driver = split 3
-        const splitRate = rate2HelpersRule.rate_per_qty / 3;
+        const splitRate = Math.floor(Number(rate2HelpersRule.rate_per_qty) / 3);
+        console.log(`[Commission] Using SPLIT-3 rule: ${rate2HelpersRule.rate_per_qty} / 3 = ${splitRate}`);
         assignedPeople.forEach(person => {
           appliedRules.push({ person, ruleRate: splitRate });
         });
       } else {
         // Normal rule (1 driver + 1 helper OR 1 driver only)
-        if (helperCount === 0 && delivery.driverId) {
+        if (helperCount === 0 && effectiveDriverId) {
           // Driver is ALONE (no helpers)
-          const driverRate = driverRule ? driverRule.rate_per_qty : 0;
-          const helperRate = helperRule ? helperRule.rate_per_qty : 0;
-          const totalRate = driverRate + helperRate;
+          const dRate = driverRule ? driverRule.rate_per_qty : 0;
+          const hRate = helperRule ? helperRule.rate_per_qty : 0;
+          const totalRate = dRate + hRate;
+          console.log(`[Commission] Driver ALONE: D=${dRate}, H=${hRate}, Total=${totalRate}`);
 
           if (totalRate > 0) {
             const driverPerson = assignedPeople.find(p => p.roleLabel === 'driver');
             if (driverPerson) {
-              // Create entry for Driver commission
-              if (driverRate > 0) {
-                appliedRules.push({ person: driverPerson, ruleRate: driverRate, actualRole: 'driver' } as any);
-              }
-              // Create entry for Helper commission (but assigned to Driver)
-              if (helperRate > 0) {
-                appliedRules.push({ person: driverPerson, ruleRate: helperRate, actualRole: 'helper' } as any);
-              }
+              if (dRate > 0) appliedRules.push({ person: driverPerson, ruleRate: dRate, actualRole: 'driver' });
+              if (hRate > 0) appliedRules.push({ person: driverPerson, ruleRate: hRate, actualRole: 'helper' });
             }
           }
         } else {
           // Normal case or fallback
+          console.log(`[Commission] Standard rules fallback. Helpers: ${helperCount}`);
           assignedPeople.forEach(person => {
             const rule = person.roleLabel === 'driver' ? driverRule : helperRule;
             if (rule && rule.rate_per_qty > 0) {
@@ -195,17 +202,17 @@ export async function generateDeliveryCommission(delivery: Delivery) {
           user_id: apply.person.id,
           user_name: apply.person.name,
           role: (apply as any).actualRole || (apply.person.roleLabel as any),
-          product_id: item.productId,
-          product_name: item.productName,
-          quantity: item.quantityDelivered,
+          product_id: pid,
+          product_name: item.productName || (item as any).product_name,
+          quantity: item.quantityDelivered || (item as any).quantity_delivered,
           rate_per_qty: apply.ruleRate,
-          amount: item.quantityDelivered * apply.ruleRate,
-          transaction_id: delivery.transactionId,
+          amount: (item.quantityDelivered || (item as any).quantity_delivered || 0) * apply.ruleRate,
+          transaction_id: (delivery as any).transactionId || (delivery as any).transaction_id,
           delivery_id: delivery.id,
           ref: `DEL-${delivery.id}`,
           status: 'pending' as const,
           created_at: new Date().toISOString(),
-          branch_id: delivery.branchId || null
+          branch_id: delivery.branchId || (delivery as any).branch_id || null
         });
       }
     }
@@ -297,55 +304,67 @@ export async function regenerateDeliveryCommission(deliveryId: string) {
       }
 
       const assignedPeople = [];
-      if (delivery.driver_id) assignedPeople.push({ id: delivery.driver_id, name: delivery.driver?.full_name || 'Unknown Driver', roleLabel: 'driver' });
-      if (delivery.helper_id) assignedPeople.push({ id: delivery.helper_id, name: delivery.helper?.full_name || 'Unknown Helper', roleLabel: 'helper' });
-      if (delivery.helper_id_2) assignedPeople.push({ id: delivery.helper_id_2, name: delivery.helper2?.full_name || 'Unknown Helper', roleLabel: 'helper' });
-      if (delivery.helper_id_3) assignedPeople.push({ id: delivery.helper_id_3, name: delivery.helper3?.full_name || 'Unknown Helper', roleLabel: 'helper' });
+      const driveId = delivery.driver_id || (delivery as any).driverId;
+      const helperId = delivery.helper_id || (delivery as any).helperId;
+      const helperId2 = delivery.helper_id_2 || (delivery as any).helperId2 || (delivery as any).helper_id2;
+      const helperId3 = delivery.helper_id_3 || (delivery as any).helperId3 || (delivery as any).helper_id3;
+
+      if (driveId) assignedPeople.push({ id: driveId, name: delivery.driver?.full_name || delivery.driverName || 'Unknown Driver', roleLabel: 'driver' });
+      if (helperId) assignedPeople.push({ id: helperId, name: delivery.helper?.full_name || delivery.helperName || 'Unknown Helper', roleLabel: 'helper' });
+      if (helperId2) assignedPeople.push({ id: helperId2, name: delivery.helper2?.full_name || delivery.helperName2 || 'Unknown Helper', roleLabel: 'helper' });
+      if (helperId3) assignedPeople.push({ id: helperId3, name: delivery.helper3?.full_name || delivery.helperName3 || 'Unknown Helper', roleLabel: 'helper' });
 
       const helperCount = assignedPeople.filter(p => p.roleLabel === 'helper').length;
+      const effectiveDriverId = delivery.driver_id || (delivery as any).driverId;
 
-      const rate2HelpersRule = rules.find(r => r.product_id === item.product_id && r.role === 'delivery_2_helpers');
-      const rate3HelpersRule = rules.find(r => r.product_id === item.product_id && r.role === 'delivery_3_helpers');
-      const driverRule = rules.find(r => r.product_id === item.product_id && r.role === 'driver');
-      const helperRule = rules.find(r => r.product_id === item.product_id && r.role === 'helper');
+      const ruleProductId = item.product_id || (item as any).productId;
+      const rate2HelpersRule = rules.find(r => r.product_id === ruleProductId && r.role === 'delivery_2_helpers');
+      const rate3HelpersRule = rules.find(r => r.product_id === ruleProductId && r.role === 'delivery_3_helpers');
+      const driverRule = rules.find(r => r.product_id === ruleProductId && r.role === 'driver');
+      const helperRule = rules.find(r => r.product_id === ruleProductId && r.role === 'helper');
 
-      let appliedRules: { person: any, ruleRate: number }[] = [];
+      console.log(`[Regen] Item: ${item.product_name}, Helpers: ${helperCount}, Driver: ${effectiveDriverId}, Rules:`, {
+        r2: rate2HelpersRule?.rate_per_qty,
+        r3: rate3HelpersRule?.rate_per_qty,
+        d: driverRule?.rate_per_qty,
+        h: helperRule?.rate_per_qty
+      });
 
-      if (helperCount === 3 && delivery.driver_id && rate3HelpersRule && rate3HelpersRule.rate_per_qty > 0) {
-        // 3 helpers + 1 driver = split 4
-        const splitRate = rate3HelpersRule.rate_per_qty / 4;
+      let appliedRules: { person: any, ruleRate: number, actualRole?: string }[] = [];
+
+      if (helperCount === 3 && effectiveDriverId && rate3HelpersRule && rate3HelpersRule.rate_per_qty > 0) {
+        const totalAmount = Number(rate3HelpersRule.rate_per_qty);
+        const splitRate = Math.floor(totalAmount / 4);
+        console.log(`[RegenCommission] SPLIT-4 (Bagi 4): ${totalAmount} / 4 = ${splitRate}`);
         assignedPeople.forEach(person => {
           appliedRules.push({ person, ruleRate: splitRate });
         });
-      } else if (helperCount === 2 && delivery.driver_id && rate2HelpersRule && rate2HelpersRule.rate_per_qty > 0) {
-        // 2 helpers + 1 driver = split 3
-        const splitRate = rate2HelpersRule.rate_per_qty / 3;
+      } else if (helperCount === 2 && effectiveDriverId && rate2HelpersRule && rate2HelpersRule.rate_per_qty > 0) {
+        const totalAmount = Number(rate2HelpersRule.rate_per_qty);
+        const splitRate = Math.floor(totalAmount / 3);
+        console.log(`[RegenCommission] SPLIT-3 (Bagi 3): ${totalAmount} / 3 = ${splitRate}`);
         assignedPeople.forEach(person => {
           appliedRules.push({ person, ruleRate: splitRate });
         });
       } else {
         // Normal rule (1 driver + 1 helper OR 1 driver only)
-        if (helperCount === 0 && delivery.driver_id) {
+        if (helperCount === 0 && effectiveDriverId) {
           // Driver is ALONE (no helpers)
-          const driverRate = driverRule ? driverRule.rate_per_qty : 0;
-          const helperRate = helperRule ? helperRule.rate_per_qty : 0;
-          const totalRate = driverRate + helperRate;
+          const dRate = driverRule ? driverRule.rate_per_qty : 0;
+          const hRate = helperRule ? helperRule.rate_per_qty : 0;
+          const totalRate = dRate + hRate;
+          console.log(`[RegenCommission] Driver ALONE: D=${dRate}, H=${hRate}, Total=${totalRate}`);
 
           if (totalRate > 0) {
             const driverPerson = assignedPeople.find(p => p.roleLabel === 'driver');
             if (driverPerson) {
-              // Create entry for Driver commission
-              if (driverRate > 0) {
-                appliedRules.push({ person: driverPerson, ruleRate: driverRate, actualRole: 'driver' } as any);
-              }
-              // Create entry for Helper commission (but assigned to Driver)
-              if (helperRate > 0) {
-                appliedRules.push({ person: driverPerson, ruleRate: helperRate, actualRole: 'helper' } as any);
-              }
+              if (dRate > 0) appliedRules.push({ person: driverPerson, ruleRate: dRate, actualRole: 'driver' });
+              if (hRate > 0) appliedRules.push({ person: driverPerson, ruleRate: hRate, actualRole: 'helper' });
             }
           }
         } else {
           // Normal case or fallback
+          console.log(`[RegenCommission] Fallback rules. Helpers: ${helperCount}`);
           assignedPeople.forEach(person => {
             const rule = person.roleLabel === 'driver' ? driverRule : helperRule;
             if (rule && rule.rate_per_qty > 0) {
@@ -495,26 +514,35 @@ export async function recalculateCommissionsForPeriod(startDate: Date, endDate: 
             if (delivery.helper_id_3) assignedPeople.push({ id: delivery.helper_id_3, name: (delivery.helper3 as any)?.full_name || 'Unknown Helper', roleLabel: 'helper' });
 
             const helperCount = assignedPeople.filter(p => p.roleLabel === 'helper').length;
+            const effectiveDriverId = delivery.driver_id || (delivery as any).driverId;
+            const pid = item.product_id || (item as any).productId;
 
-            const rate2HelpersRule = rulesByRole['delivery_2_helpers']?.find((r: any) => r.product_id === item.product_id);
-            const rate3HelpersRule = rulesByRole['delivery_3_helpers']?.find((r: any) => r.product_id === item.product_id);
-            const driverRule = rulesByRole['driver']?.find((r: any) => r.product_id === item.product_id);
-            const helperRule = rulesByRole['helper']?.find((r: any) => r.product_id === item.product_id);
+            const rate2HelpersRule = rulesByRole['delivery_2_helpers']?.find((r: any) => r.product_id === pid);
+            const rate3HelpersRule = rulesByRole['delivery_3_helpers']?.find((r: any) => r.product_id === pid);
+            const driverRule = rulesByRole['driver']?.find((r: any) => r.product_id === pid);
+            const helperRule = rulesByRole['helper']?.find((r: any) => r.product_id === pid);
 
-            let appliedRules: { person: any, ruleRate: number }[] = [];
+            console.log(`[Recalc] SKU: ${item.product_name}, PID: ${pid}, Helpers: ${helperCount}, Driver: ${effectiveDriverId}, Rules:`, {
+              r2: rate2HelpersRule?.rate_per_qty,
+              r3: rate3HelpersRule?.rate_per_qty,
+              d: driverRule?.rate_per_qty,
+              h: helperRule?.rate_per_qty
+            });
 
-            if (helperCount === 3 && delivery.driver_id && rate3HelpersRule && rate3HelpersRule.rate_per_qty > 0) {
-              const splitRate = rate3HelpersRule.rate_per_qty / 4;
+            let appliedRules: { person: any, ruleRate: number, actualRole?: string }[] = [];
+
+            if (helperCount === 3 && effectiveDriverId && rate3HelpersRule && Number(rate3HelpersRule.rate_per_qty || 0) > 0) {
+              const splitRate = Math.floor(Number(rate3HelpersRule.rate_per_qty) / 4);
               assignedPeople.forEach(person => {
                 appliedRules.push({ person, ruleRate: splitRate });
               });
-            } else if (helperCount === 2 && delivery.driver_id && rate2HelpersRule && rate2HelpersRule.rate_per_qty > 0) {
-              const splitRate = rate2HelpersRule.rate_per_qty / 3;
+            } else if (helperCount === 2 && effectiveDriverId && rate2HelpersRule && Number(rate2HelpersRule.rate_per_qty || 0) > 0) {
+              const splitRate = Math.floor(Number(rate2HelpersRule.rate_per_qty) / 3);
               assignedPeople.forEach(person => {
                 appliedRules.push({ person, ruleRate: splitRate });
               });
             } else {
-              if (helperCount === 0 && delivery.driver_id) {
+              if (helperCount === 0 && effectiveDriverId) {
                 // Driver is ALONE (no helpers)
                 const driverRate = driverRule ? driverRule.rate_per_qty : 0;
                 const helperRate = helperRule ? helperRule.rate_per_qty : 0;
