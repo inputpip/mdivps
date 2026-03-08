@@ -7,7 +7,7 @@ export const useCustomers = () => {
   const queryClient = useQueryClient();
   const { currentBranch, canAccessAllBranches } = useBranch();
 
-  const { data: customers, isLoading } = useQuery<Customer[]>({
+  const { data: customers, isLoading, refetch } = useQuery<Customer[]>({
     queryKey: ['customers', currentBranch?.id],
     queryFn: async () => {
       let query = supabase
@@ -89,7 +89,7 @@ export const useCustomers = () => {
         classification: newCustomerData.classification || null,
         branch_id: currentBranch?.id || null,
       };
-      
+
       // Use .order().limit(1) - PostgREST requires explicit order when using limit
       const { data: dataRaw, error } = await supabase
         .from('customers')
@@ -110,7 +110,7 @@ export const useCustomers = () => {
   const updateCustomer = useMutation({
     mutationFn: async (customerData: Partial<Customer> & { id: string }): Promise<Customer> => {
       const { id, ...updateData } = customerData;
-      
+
       const customerToUpdate = {
         name: updateData.name,
         phone: updateData.phone,
@@ -122,7 +122,7 @@ export const useCustomers = () => {
         jumlah_galon_titip: updateData.jumlah_galon_titip,
         classification: updateData.classification || null,
       };
-      
+
       // Use .order().limit(1) - PostgREST requires explicit order when using limit
       const { data: dataRaw, error } = await supabase
         .from('customers')
@@ -164,6 +164,7 @@ export const useCustomers = () => {
   return {
     customers,
     isLoading,
+    refetch,
     addCustomer,
     updateCustomer,
     deleteCustomer,

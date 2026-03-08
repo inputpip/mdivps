@@ -11,11 +11,9 @@
 -- =====================================================
 -- Function: create_tax_payment_atomic
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.create_tax_payment_atomic(p_branch_id uuid, p_period text, p_ppn_masukan_used numeric, p_ppn_keluaran_paid numeric, p_payment_account_id text, p_notes text DEFAULT NULL::text)
- RETURNS TABLE(success boolean, journal_id uuid, net_payment numeric, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.create_tax_payment_atomic(p_branch_id uuid, p_period text, p_ppn_masukan_used numeric, p_ppn_keluaran_paid numeric, p_payment_account_id text, p_notes text DEFAULT NULL::text) RETURNS TABLE(success boolean, journal_id uuid, net_payment numeric, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $_$
 DECLARE
   v_journal_id UUID;
   v_entry_number TEXT;
@@ -212,18 +210,12 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, NULL::UUID, 0::NUMERIC, SQLERRM::TEXT;
 END;
-$function$
-;
+$_$;
 
 
--- =====================================================
--- Function: create_tax_payment_atomic
--- =====================================================
-CREATE OR REPLACE FUNCTION public.create_tax_payment_atomic(p_branch_id uuid, p_period text, p_ppn_masukan_used numeric DEFAULT 0, p_ppn_keluaran_paid numeric DEFAULT 0, p_payment_account_id uuid DEFAULT NULL::uuid, p_notes text DEFAULT NULL::text)
- RETURNS TABLE(success boolean, payment_id uuid, journal_id uuid, net_payment numeric, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.create_tax_payment_atomic(p_branch_id uuid, p_period text, p_ppn_masukan_used numeric DEFAULT 0, p_ppn_keluaran_paid numeric DEFAULT 0, p_payment_account_id uuid DEFAULT NULL::uuid, p_notes text DEFAULT NULL::text) RETURNS TABLE(success boolean, payment_id uuid, journal_id uuid, net_payment numeric, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_payment_id UUID;
   v_journal_id UUID;
@@ -277,14 +269,8 @@ BEGIN
 
   -- ==================== CREATE JOURNAL ENTRY ====================
 
-  -- Generate entry number (Global across all branches)
-  SELECT 'JE-' || TO_CHAR(CURRENT_DATE, 'YYYYMMDD') || '-' || LPAD(
-    (COALESCE(
-      (SELECT MAX(CAST(SUBSTRING(entry_number FROM '-(\d+)$') AS INTEGER))
-       FROM journal_entries
-       WHERE DATE(entry_date) = CURRENT_DATE),
-      0
-    ) + 1)::TEXT, 4, '0')
+  SELECT 'JE-' || TO_CHAR(NOW(), 'YYYYMMDD') || '-' || LPAD(
+    (COALESCE((SELECT COUNT(*) + 1 FROM journal_entries WHERE branch_id = p_branch_id AND DATE(created_at) = CURRENT_DATE), 1))::TEXT, 4, '0')
   INTO v_entry_number;
 
   INSERT INTO journal_entries (id, branch_id, entry_number, entry_date, description, reference_type, reference_id, status, is_voided, created_at, updated_at)
@@ -316,7 +302,12 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, NULL::UUID, NULL::UUID, 0::NUMERIC, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
+
+
+-- =====================================================
+-- Function: create_tax_payment_atomic
+-- =====================================================
+
 
 

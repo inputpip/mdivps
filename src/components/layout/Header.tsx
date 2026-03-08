@@ -43,8 +43,7 @@ export function Header() {
     { href: "/pos", label: "POS Kasir", icon: Store, permission: PERMISSIONS.TRANSACTIONS },
     { href: "/transactions", label: "Transaksi", icon: List, permission: PERMISSIONS.TRANSACTIONS },
     { href: "/delivery", label: "Pengantaran", icon: Truck, permission: PERMISSIONS.DELIVERIES },
-    { href: "/products", label: "Produk", icon: Package, permission: PERMISSIONS.PRODUCTS },
-    { href: "/materials", label: "Bahan Baku", icon: FlaskConical, permission: PERMISSIONS.MATERIALS },
+    { href: "/materials", label: "Data Barang", icon: Package, permission: PERMISSIONS.MATERIALS },
     { href: "/production", label: "Produksi", icon: Factory, permission: PERMISSIONS.PRODUCTION },
     { href: "/customers", label: "Pelanggan", icon: Users, permission: PERMISSIONS.CUSTOMERS },
   ].filter(item => !item.permission || hasPermission(item.permission));

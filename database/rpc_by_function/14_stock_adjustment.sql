@@ -19,27 +19,23 @@
 -- =====================================================
 -- Function: add_material_stock
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.add_material_stock(material_id uuid, quantity_to_add numeric)
- RETURNS void
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.add_material_stock(material_id uuid, quantity_to_add numeric) RETURNS void
+    LANGUAGE plpgsql
+    AS $function$
 BEGIN
   UPDATE public.materials
   SET stock = stock + quantity_to_add
   WHERE id = material_id;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: create_material_stock_adjustment_atomic
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.create_material_stock_adjustment_atomic(p_material_id uuid, p_branch_id uuid, p_quantity_change numeric, p_reason text DEFAULT 'Stock Adjustment'::text, p_unit_cost numeric DEFAULT 0)
- RETURNS TABLE(success boolean, adjustment_id uuid, journal_id uuid, new_stock numeric, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.create_material_stock_adjustment_atomic(p_material_id uuid, p_branch_id uuid, p_quantity_change numeric, p_reason text DEFAULT 'Stock Adjustment'::text, p_unit_cost numeric DEFAULT 0) RETURNS TABLE(success boolean, adjustment_id uuid, journal_id uuid, new_stock numeric, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $_$
 DECLARE
   v_adjustment_id UUID;
   v_journal_id UUID;
@@ -51,6 +47,7 @@ DECLARE
   v_modal_account_id TEXT;
   v_entry_number TEXT;
   v_fifo_success BOOLEAN;
+  v_actual_unit_cost NUMERIC;
 BEGIN
   -- ==================== VALIDASI ====================
 
@@ -85,7 +82,24 @@ BEGIN
     RETURN;
   END IF;
 
-  v_adjustment_value := ABS(p_quantity_change) * COALESCE(p_unit_cost, 0);
+  v_actual_unit_cost := COALESCE(p_unit_cost, 0);
+  
+  -- If actual unit cost is 0, try to get the last known cost from inventory_batches
+  IF v_actual_unit_cost <= 0 THEN
+    SELECT unit_cost INTO v_actual_unit_cost
+    FROM inventory_batches
+    WHERE material_id = p_material_id AND unit_cost > 0
+    ORDER BY created_at DESC
+    LIMIT 1;
+    
+    -- Fallback to materials.price_per_unit if still 0
+    IF v_actual_unit_cost IS NULL OR v_actual_unit_cost <= 0 THEN
+      SELECT COALESCE(price_per_unit, 0) INTO v_actual_unit_cost
+      FROM materials WHERE id = p_material_id;
+    END IF;
+  END IF;
+
+  v_adjustment_value := ABS(p_quantity_change) * COALESCE(v_actual_unit_cost, 0);
 
   -- ==================== GET ACCOUNT IDS ====================
 
@@ -108,7 +122,7 @@ BEGIN
     FROM restore_material_fifo_v2(
       p_material_id,
       p_quantity_change,
-      COALESCE(p_unit_cost, 0),
+      COALESCE(v_actual_unit_cost, 0),
       v_adjustment_id::TEXT,
       'adjustment',
       p_branch_id
@@ -142,20 +156,20 @@ BEGIN
       ) + 1)::TEXT, 4, '0')
     INTO v_entry_number;
 
-    INSERT INTO journal_entries (id, branch_id, entry_number, entry_date, description, reference_type, reference_id, status, is_voided, created_at, updated_at)
-    VALUES (gen_random_uuid(), p_branch_id, v_entry_number, CURRENT_DATE, 'Penyesuaian Stok Bahan - ' || v_material_name || ' - ' || p_reason, 'adjustment', v_adjustment_id::TEXT, 'posted', FALSE, NOW(), NOW())
+    INSERT INTO journal_entries (id, branch_id, entry_number, entry_date, description, reference_type, reference_id, status, is_voided, created_at, updated_at, total_debit, total_credit)
+    VALUES (gen_random_uuid(), p_branch_id, v_entry_number, CURRENT_DATE, 'Penyesuaian Stok Bahan - ' || v_material_name || ' - ' || p_reason, 'adjustment', v_adjustment_id::TEXT, 'posted', FALSE, NOW(), NOW(), v_adjustment_value, v_adjustment_value)
     RETURNING id INTO v_journal_id;
 
     IF p_quantity_change > 0 THEN
-      INSERT INTO journal_entry_lines (journal_entry_id, account_id, account_name, debit_amount, credit_amount, description, line_number)
-      VALUES (v_journal_id, v_bahan_baku_account_id, (SELECT name FROM accounts WHERE id = v_bahan_baku_account_id), v_adjustment_value, 0, 'Penambahan bahan baku (Koreksi Modal Disetor)', 1);
-      INSERT INTO journal_entry_lines (journal_entry_id, account_id, account_name, debit_amount, credit_amount, description, line_number)
-      VALUES (v_journal_id, v_modal_account_id, (SELECT name FROM accounts WHERE id = v_modal_account_id), 0, v_adjustment_value, 'Penyesuaian Modal Disetor', 2);
+      INSERT INTO journal_entry_lines (journal_entry_id, account_id, account_code, account_name, debit_amount, credit_amount, description, line_number)
+      VALUES (v_journal_id, v_bahan_baku_account_id, '1320', (SELECT name FROM accounts WHERE id = v_bahan_baku_account_id), v_adjustment_value, 0, 'Penambahan bahan baku (Koreksi Modal Disetor)', 1);
+      INSERT INTO journal_entry_lines (journal_entry_id, account_id, account_code, account_name, debit_amount, credit_amount, description, line_number)
+      VALUES (v_journal_id, v_modal_account_id, '3100', (SELECT name FROM accounts WHERE id = v_modal_account_id), 0, v_adjustment_value, 'Penyesuaian Modal Disetor', 2);
     ELSE
-      INSERT INTO journal_entry_lines (journal_entry_id, account_id, account_name, debit_amount, credit_amount, description, line_number)
-      VALUES (v_journal_id, v_modal_account_id, (SELECT name FROM accounts WHERE id = v_modal_account_id), v_adjustment_value, 0, 'Penyesuaian Modal Disetor', 1);
-      INSERT INTO journal_entry_lines (journal_entry_id, account_id, account_name, debit_amount, credit_amount, description, line_number)
-      VALUES (v_journal_id, v_bahan_baku_account_id, (SELECT name FROM accounts WHERE id = v_bahan_baku_account_id), 0, v_adjustment_value, 'Pengurangan bahan baku (Koreksi Modal Disetor)', 2);
+      INSERT INTO journal_entry_lines (journal_entry_id, account_id, account_code, account_name, debit_amount, credit_amount, description, line_number)
+      VALUES (v_journal_id, v_modal_account_id, '3100', (SELECT name FROM accounts WHERE id = v_modal_account_id), v_adjustment_value, 0, 'Penyesuaian Modal Disetor', 1);
+      INSERT INTO journal_entry_lines (journal_entry_id, account_id, account_code, account_name, debit_amount, credit_amount, description, line_number)
+      VALUES (v_journal_id, v_bahan_baku_account_id, '1320', (SELECT name FROM accounts WHERE id = v_bahan_baku_account_id), 0, v_adjustment_value, 'Pengurangan bahan baku (Koreksi Modal Disetor)', 2);
     END IF;
   END IF;
 
@@ -164,18 +178,15 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, NULL::UUID, NULL::UUID, 0::NUMERIC, SQLERRM::TEXT;
 END;
-$function$
-;
+$_$;
 
 
 -- =====================================================
 -- Function: create_product_stock_adjustment_atomic
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.create_product_stock_adjustment_atomic(p_product_id uuid, p_branch_id uuid, p_quantity_change numeric, p_reason text DEFAULT 'Stock Adjustment'::text, p_unit_cost numeric DEFAULT 0)
- RETURNS TABLE(success boolean, adjustment_id uuid, journal_id uuid, new_stock numeric, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.create_product_stock_adjustment_atomic(p_product_id uuid, p_branch_id uuid, p_quantity_change numeric, p_reason text DEFAULT 'Stock Adjustment'::text, p_unit_cost numeric DEFAULT 0) RETURNS TABLE(success boolean, adjustment_id uuid, journal_id uuid, new_stock numeric, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $_$
 DECLARE
   v_adjustment_id UUID;
   v_journal_id UUID;
@@ -187,6 +198,7 @@ DECLARE
   v_modal_account_id TEXT;
   v_entry_number TEXT;
   v_fifo_success BOOLEAN;
+  v_actual_unit_cost NUMERIC;
 BEGIN
   -- ==================== VALIDASI ====================
 
@@ -222,8 +234,25 @@ BEGIN
     RETURN;
   END IF;
 
+  v_actual_unit_cost := COALESCE(p_unit_cost, 0);
+
+  -- If actual unit cost is 0, try to get the last known cost from inventory_batches
+  IF v_actual_unit_cost <= 0 THEN
+    SELECT unit_cost INTO v_actual_unit_cost
+    FROM inventory_batches
+    WHERE product_id = p_product_id AND unit_cost > 0
+    ORDER BY created_at DESC
+    LIMIT 1;
+    
+    -- Fallback to products.cost_price if still 0
+    IF v_actual_unit_cost IS NULL OR v_actual_unit_cost <= 0 THEN
+      SELECT COALESCE(cost_price, 0) INTO v_actual_unit_cost
+      FROM products WHERE id = p_product_id;
+    END IF;
+  END IF;
+
   -- Calculate adjustment value
-  v_adjustment_value := ABS(p_quantity_change) * COALESCE(p_unit_cost, 0);
+  v_adjustment_value := ABS(p_quantity_change) * COALESCE(v_actual_unit_cost, 0);
 
   -- ==================== GET ACCOUNT IDS ====================
 
@@ -282,25 +311,25 @@ BEGIN
 
     INSERT INTO journal_entries (
       id, branch_id, entry_number, entry_date, description,
-      reference_type, reference_id, status, is_voided, created_at, updated_at
+      reference_type, reference_id, status, is_voided, created_at, updated_at, total_debit, total_credit
     ) VALUES (
       gen_random_uuid(), p_branch_id, v_entry_number, CURRENT_DATE,
       'Penyesuaian Stok - ' || v_product_name || ' - ' || p_reason,
-      'adjustment', v_adjustment_id::TEXT, 'posted', FALSE, NOW(), NOW()
+      'adjustment', v_adjustment_id::TEXT, 'posted', FALSE, NOW(), NOW(), v_adjustment_value, v_adjustment_value
     ) RETURNING id INTO v_journal_id;
 
     IF p_quantity_change > 0 THEN
-      INSERT INTO journal_entry_lines (journal_entry_id, account_id, account_name, debit_amount, credit_amount, description, line_number)
-      VALUES (v_journal_id, v_persediaan_account_id, (SELECT name FROM accounts WHERE id = v_persediaan_account_id), v_adjustment_value, 0, 'Penambahan produk (Koreksi Modal Disetor)', 1);
+      INSERT INTO journal_entry_lines (journal_entry_id, account_id, account_code, account_name, debit_amount, credit_amount, description, line_number)
+      VALUES (v_journal_id, v_persediaan_account_id, '1310', (SELECT name FROM accounts WHERE id = v_persediaan_account_id), v_adjustment_value, 0, 'Penambahan produk (Koreksi Modal Disetor)', 1);
 
-      INSERT INTO journal_entry_lines (journal_entry_id, account_id, account_name, debit_amount, credit_amount, description, line_number)
-      VALUES (v_journal_id, v_modal_account_id, (SELECT name FROM accounts WHERE id = v_modal_account_id), 0, v_adjustment_value, 'Penyesuaian Modal Disetor', 2);
+      INSERT INTO journal_entry_lines (journal_entry_id, account_id, account_code, account_name, debit_amount, credit_amount, description, line_number)
+      VALUES (v_journal_id, v_modal_account_id, '3100', (SELECT name FROM accounts WHERE id = v_modal_account_id), 0, v_adjustment_value, 'Penyesuaian Modal Disetor', 2);
     ELSE
-      INSERT INTO journal_entry_lines (journal_entry_id, account_id, account_name, debit_amount, credit_amount, description, line_number)
-      VALUES (v_journal_id, v_modal_account_id, (SELECT name FROM accounts WHERE id = v_modal_account_id), v_adjustment_value, 0, 'Penyesuaian Modal Disetor', 1);
+      INSERT INTO journal_entry_lines (journal_entry_id, account_id, account_code, account_name, debit_amount, credit_amount, description, line_number)
+      VALUES (v_journal_id, v_modal_account_id, '3100', (SELECT name FROM accounts WHERE id = v_modal_account_id), v_adjustment_value, 0, 'Penyesuaian Modal Disetor', 1);
 
-      INSERT INTO journal_entry_lines (journal_entry_id, account_id, account_name, debit_amount, credit_amount, description, line_number)
-      VALUES (v_journal_id, v_persediaan_account_id, (SELECT name FROM accounts WHERE id = v_persediaan_account_id), 0, v_adjustment_value, 'Pengurangan produk (Koreksi Modal Disetor)', 2);
+      INSERT INTO journal_entry_lines (journal_entry_id, account_id, account_code, account_name, debit_amount, credit_amount, description, line_number)
+      VALUES (v_journal_id, v_persediaan_account_id, '1310', (SELECT name FROM accounts WHERE id = v_persediaan_account_id), 0, v_adjustment_value, 'Pengurangan produk (Koreksi Modal Disetor)', 2);
     END IF;
   END IF;
 
@@ -309,18 +338,15 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, NULL::UUID, NULL::UUID, 0::NUMERIC, SQLERRM::TEXT;
 END;
-$function$
-;
+$_$;
 
 
 -- =====================================================
 -- Function: get_material_stock
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.get_material_stock(p_material_id uuid, p_branch_id uuid)
- RETURNS numeric
- LANGUAGE plpgsql
- STABLE
-AS $function$
+CREATE OR REPLACE FUNCTION public.get_material_stock(p_material_id uuid, p_branch_id uuid) RETURNS numeric
+    LANGUAGE plpgsql STABLE
+    AS $function$
 BEGIN
   IF p_branch_id IS NULL THEN
     RAISE EXCEPTION 'Branch ID is REQUIRED';
@@ -335,18 +361,15 @@ BEGIN
     0
   );
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: get_product_stock
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.get_product_stock(p_product_id uuid, p_branch_id uuid)
- RETURNS numeric
- LANGUAGE plpgsql
- STABLE
-AS $function$
+CREATE OR REPLACE FUNCTION public.get_product_stock(p_product_id uuid, p_branch_id uuid) RETURNS numeric
+    LANGUAGE plpgsql STABLE
+    AS $function$
 BEGIN
   IF p_branch_id IS NULL THEN
     RAISE EXCEPTION 'Branch ID is REQUIRED';
@@ -361,17 +384,15 @@ BEGIN
     0
   );
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: get_product_weighted_avg_cost
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.get_product_weighted_avg_cost(p_product_id uuid, p_branch_id uuid)
- RETURNS numeric
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.get_product_weighted_avg_cost(p_product_id uuid, p_branch_id uuid) RETURNS numeric
+    LANGUAGE plpgsql
+    AS $function$
 DECLARE
     v_avg_cost numeric;
 BEGIN
@@ -385,17 +406,15 @@ BEGIN
     END IF;
     RETURN COALESCE(v_avg_cost, 0);
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: migrate_material_stock_to_batches
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.migrate_material_stock_to_batches()
- RETURNS TABLE(material_id uuid, material_name text, migrated_quantity numeric, batch_id uuid)
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.migrate_material_stock_to_batches() RETURNS TABLE(material_id uuid, material_name text, migrated_quantity numeric, batch_id uuid)
+    LANGUAGE plpgsql
+    AS $function$
 DECLARE
   v_material RECORD;
   v_new_batch_id UUID;
@@ -430,18 +449,15 @@ BEGIN
     RETURN QUERY SELECT v_material.id, v_material.name, v_material.stock, v_new_batch_id;
   END LOOP;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: search_products_with_stock
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.search_products_with_stock(search_term text DEFAULT ''::text, category_filter text DEFAULT NULL::text, limit_count integer DEFAULT 50)
- RETURNS TABLE(id uuid, name text, category text, base_price numeric, unit text, current_stock numeric, min_order integer, is_low_stock boolean)
- LANGUAGE plpgsql
- STABLE
-AS $function$
+CREATE OR REPLACE FUNCTION public.search_products_with_stock(search_term text DEFAULT ''::text, category_filter text DEFAULT NULL::text, limit_count integer DEFAULT 50) RETURNS TABLE(id uuid, name text, category text, base_price numeric, unit text, current_stock numeric, min_order integer, is_low_stock boolean)
+    LANGUAGE plpgsql STABLE
+    AS $function$
 BEGIN
   RETURN QUERY
   SELECT 
@@ -460,18 +476,15 @@ BEGIN
   ORDER BY p.name
   LIMIT limit_count;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: sync_material_initial_stock_atomic
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.sync_material_initial_stock_atomic(p_material_id uuid, p_branch_id uuid, p_new_initial_stock numeric, p_unit_cost numeric DEFAULT 0)
- RETURNS TABLE(success boolean, batch_id uuid, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.sync_material_initial_stock_atomic(p_material_id uuid, p_branch_id uuid, p_new_initial_stock numeric, p_unit_cost numeric DEFAULT 0) RETURNS TABLE(success boolean, batch_id uuid, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_batch_id UUID;
   v_old_initial NUMERIC;
@@ -523,18 +536,15 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, NULL::UUID, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: sync_product_initial_stock_atomic
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.sync_product_initial_stock_atomic(p_product_id uuid, p_branch_id uuid, p_new_initial_stock numeric, p_unit_cost numeric DEFAULT 0)
- RETURNS TABLE(success boolean, batch_id uuid, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.sync_product_initial_stock_atomic(p_product_id uuid, p_branch_id uuid, p_new_initial_stock numeric, p_unit_cost numeric DEFAULT 0) RETURNS TABLE(success boolean, batch_id uuid, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_batch_id UUID;
   v_old_initial NUMERIC;
@@ -586,7 +596,6 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, NULL::UUID, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 

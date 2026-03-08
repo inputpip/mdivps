@@ -58,11 +58,9 @@
 -- =====================================================
 -- Function: can_access_branch
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.can_access_branch(branch_uuid uuid)
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.can_access_branch(branch_uuid uuid) RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 DECLARE
     user_role TEXT;
     user_branch UUID;
@@ -82,473 +80,365 @@ BEGIN
     -- Regular users can only access their own branch
     RETURN user_branch = branch_uuid;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: can_access_pos
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.can_access_pos()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.can_access_pos() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 BEGIN RETURN has_permission('pos_access'); END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: can_access_settings
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.can_access_settings()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.can_access_settings() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 BEGIN RETURN has_permission('settings_access'); END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: can_create_advances
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.can_create_advances()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.can_create_advances() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 BEGIN RETURN has_permission('advances_create'); END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: can_create_customers
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.can_create_customers()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.can_create_customers() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 BEGIN RETURN has_permission('customers_create'); END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: can_create_employees
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.can_create_employees()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.can_create_employees() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 BEGIN RETURN has_permission('employees_create'); END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: can_create_expenses
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.can_create_expenses()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.can_create_expenses() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 BEGIN RETURN has_permission('expenses_create'); END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: can_create_materials
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.can_create_materials()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.can_create_materials() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 BEGIN RETURN has_permission('materials_create'); END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: can_create_products
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.can_create_products()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.can_create_products() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 BEGIN RETURN has_permission('products_create'); END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: can_create_quotations
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.can_create_quotations()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.can_create_quotations() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 BEGIN RETURN has_permission('quotations_create'); END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: can_create_transactions
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.can_create_transactions()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.can_create_transactions() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 BEGIN RETURN has_permission('transactions_create'); END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: can_delete_customers
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.can_delete_customers()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.can_delete_customers() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 BEGIN RETURN has_permission('customers_delete'); END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: can_delete_employees
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.can_delete_employees()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.can_delete_employees() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 BEGIN RETURN has_permission('employees_delete'); END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: can_delete_materials
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.can_delete_materials()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.can_delete_materials() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 BEGIN RETURN has_permission('materials_delete'); END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: can_delete_products
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.can_delete_products()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.can_delete_products() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 BEGIN RETURN has_permission('products_delete'); END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: can_delete_transactions
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.can_delete_transactions()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.can_delete_transactions() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 BEGIN RETURN has_permission('transactions_delete'); END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: can_edit_accounts
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.can_edit_accounts()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.can_edit_accounts() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 BEGIN RETURN has_permission('accounts_edit'); END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: can_edit_customers
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.can_edit_customers()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.can_edit_customers() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 BEGIN RETURN has_permission('customers_edit'); END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: can_edit_employees
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.can_edit_employees()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.can_edit_employees() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 BEGIN RETURN has_permission('employees_edit'); END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: can_edit_materials
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.can_edit_materials()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.can_edit_materials() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 BEGIN RETURN has_permission('materials_edit'); END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: can_edit_products
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.can_edit_products()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.can_edit_products() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 BEGIN RETURN has_permission('products_edit'); END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: can_edit_quotations
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.can_edit_quotations()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.can_edit_quotations() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 BEGIN RETURN has_permission('quotations_edit'); END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: can_edit_transactions
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.can_edit_transactions()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.can_edit_transactions() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 BEGIN RETURN has_permission('transactions_edit'); END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: can_manage_roles
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.can_manage_roles()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.can_manage_roles() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 BEGIN RETURN has_permission('role_management'); END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: can_view_accounts
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.can_view_accounts()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.can_view_accounts() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 BEGIN RETURN has_permission('accounts_view'); END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: can_view_advances
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.can_view_advances()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.can_view_advances() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 BEGIN RETURN has_permission('advances_view'); END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: can_view_customers
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.can_view_customers()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.can_view_customers() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 BEGIN RETURN has_permission('customers_view'); END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: can_view_employees
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.can_view_employees()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.can_view_employees() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 BEGIN RETURN has_permission('employees_view'); END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: can_view_expenses
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.can_view_expenses()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.can_view_expenses() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 BEGIN RETURN has_permission('expenses_view'); END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: can_view_financial_reports
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.can_view_financial_reports()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.can_view_financial_reports() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 BEGIN RETURN has_permission('financial_reports'); END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: can_view_materials
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.can_view_materials()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.can_view_materials() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 BEGIN RETURN has_permission('materials_view'); END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: can_view_products
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.can_view_products()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.can_view_products() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 BEGIN RETURN has_permission('products_view'); END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: can_view_quotations
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.can_view_quotations()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.can_view_quotations() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 BEGIN RETURN has_permission('quotations_view'); END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: can_view_receivables
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.can_view_receivables()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.can_view_receivables() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 BEGIN RETURN has_permission('receivables_view'); END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: can_view_stock_reports
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.can_view_stock_reports()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.can_view_stock_reports() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 BEGIN RETURN has_permission('stock_reports'); END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: can_view_transactions
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.can_view_transactions()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.can_view_transactions() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 BEGIN RETURN has_permission('transactions_view'); END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: check_user_permission
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.check_user_permission(p_user_id uuid, p_permission text)
- RETURNS boolean
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.check_user_permission(p_user_id uuid, p_permission text) RETURNS boolean
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_role TEXT;
   v_has_permission BOOLEAN := FALSE;
@@ -579,18 +469,15 @@ BEGIN
   WHERE role_id = v_role;
   RETURN COALESCE(v_has_permission, FALSE);
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: check_user_permission_all
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.check_user_permission_all(p_user_id uuid, p_permissions text[])
- RETURNS boolean
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.check_user_permission_all(p_user_id uuid, p_permissions text[]) RETURNS boolean
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_permission TEXT;
 BEGIN
@@ -602,18 +489,15 @@ BEGIN
   END LOOP;
   RETURN TRUE;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: check_user_permission_any
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.check_user_permission_any(p_user_id uuid, p_permissions text[])
- RETURNS boolean
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.check_user_permission_any(p_user_id uuid, p_permissions text[]) RETURNS boolean
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_permission TEXT;
 BEGIN
@@ -625,18 +509,15 @@ BEGIN
   END LOOP;
   RETURN FALSE;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: get_current_user_role
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.get_current_user_role()
- RETURNS text
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.get_current_user_role() RETURNS text
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 BEGIN
   RETURN (
     SELECT role 
@@ -644,18 +525,15 @@ BEGIN
     WHERE id = auth.uid()
   );
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: get_user_branch_id
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.get_user_branch_id()
- RETURNS uuid
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.get_user_branch_id() RETURNS uuid
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 DECLARE
   v_branch_id UUID;
 BEGIN
@@ -666,18 +544,15 @@ BEGIN
   
   RETURN v_branch_id;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: get_user_role
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.get_user_role(p_user_id uuid)
- RETURNS text
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.get_user_role(p_user_id uuid) RETURNS text
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_role TEXT;
 BEGIN
@@ -686,18 +561,15 @@ BEGIN
   WHERE id = p_user_id AND status = 'Aktif';
   RETURN v_role;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: has_perm
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.has_perm(perm_name text)
- RETURNS boolean
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.has_perm(perm_name text) RETURNS boolean
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
     jwt_role TEXT;
     perms JSONB;
@@ -731,18 +603,15 @@ BEGIN
     -- Check specific permission
     RETURN COALESCE((perms->>perm_name)::boolean, false);
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: has_permission
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.has_permission(permission_name text)
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.has_permission(permission_name text) RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 DECLARE
     user_role TEXT;
     permissions JSONB;
@@ -784,18 +653,15 @@ BEGIN
     -- Check specific permission
     RETURN COALESCE((permissions->>permission_name)::boolean, false);
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: is_admin
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.is_admin()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.is_admin() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 DECLARE
     user_role TEXT;
 BEGIN
@@ -805,18 +671,24 @@ BEGIN
     LIMIT 1;
     RETURN user_role IN ('admin', 'owner');
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: is_authenticated
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.is_authenticated()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION auth.is_authenticated() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
+BEGIN
+    RETURN auth.uid() IS NOT NULL;
+END;
+$function$;
+
+
+CREATE OR REPLACE FUNCTION public.is_authenticated() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 DECLARE
     user_role TEXT;
 BEGIN
@@ -828,18 +700,15 @@ BEGIN
     user_role := auth.role();
     RETURN user_role IS NOT NULL AND user_role != 'anon';
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: is_owner
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.is_owner()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.is_owner() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 DECLARE
     user_role TEXT;
 BEGIN
@@ -849,18 +718,15 @@ BEGIN
     LIMIT 1;
     RETURN user_role = 'owner';
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: is_super_admin
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.is_super_admin()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.is_super_admin() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 DECLARE
     user_role TEXT;
 BEGIN
@@ -870,18 +736,15 @@ BEGIN
     LIMIT 1;
     RETURN user_role IN ('super_admin', 'head_office_admin', 'owner', 'admin');
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: validate_branch_access
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.validate_branch_access(p_user_id uuid, p_branch_id uuid)
- RETURNS boolean
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.validate_branch_access(p_user_id uuid, p_branch_id uuid) RETURNS boolean
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_user_branch_id UUID;
   v_role TEXT;
@@ -897,7 +760,6 @@ BEGIN
   -- User lain hanya bisa akses branch sendiri
   RETURN v_user_branch_id = p_branch_id;
 END;
-$function$
-;
+$function$;
 
 

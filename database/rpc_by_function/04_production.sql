@@ -14,11 +14,9 @@
 -- =====================================================
 -- Function: process_laku_kantor_atomic
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.process_laku_kantor_atomic(p_transaction_id text, p_branch_id uuid)
- RETURNS TABLE(success boolean, total_hpp numeric, journal_id uuid, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.process_laku_kantor_atomic(p_transaction_id text, p_branch_id uuid) RETURNS TABLE(success boolean, total_hpp numeric, journal_id uuid, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_transaction RECORD;
   v_item RECORD;
@@ -103,10 +101,10 @@ BEGIN
     WHERE code = '1310' AND branch_id = p_branch_id AND is_active = TRUE
     LIMIT 1;
     IF v_hpp_account_id IS NOT NULL AND v_persediaan_id IS NOT NULL THEN
-      -- Generate entry number (Global across all branches)
-      v_entry_number := 'JE-' || TO_CHAR(CURRENT_DATE, 'YYYYMMDD') || '-' ||
-        LPAD((COALESCE((SELECT MAX(CAST(SUBSTRING(entry_number FROM '-(\d+)$') AS INTEGER)) 
-                        FROM journal_entries WHERE DATE(entry_date) = CURRENT_DATE), 0) + 1)::TEXT, 4, '0');
+      v_entry_number := 'JE-' || TO_CHAR(NOW(), 'YYYYMMDD') || '-' ||
+        LPAD((SELECT COUNT(*) + 1 FROM journal_entries
+              WHERE branch_id = p_branch_id
+              AND DATE(created_at) = CURRENT_DATE)::TEXT, 4, '0');
       INSERT INTO journal_entries (
         entry_number,
         entry_date,
@@ -170,18 +168,15 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, 0::NUMERIC, NULL::UUID, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: process_production_atomic
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.process_production_atomic(p_product_id uuid, p_quantity numeric, p_consume_bom boolean DEFAULT true, p_note text DEFAULT NULL::text, p_branch_id uuid DEFAULT NULL::uuid, p_user_id uuid DEFAULT NULL::uuid, p_user_name text DEFAULT NULL::text)
- RETURNS TABLE(success boolean, production_id uuid, production_ref text, total_material_cost numeric, journal_id uuid, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.process_production_atomic(p_product_id uuid, p_quantity numeric, p_consume_bom boolean DEFAULT true, p_note text DEFAULT NULL::text, p_branch_id uuid DEFAULT NULL::uuid, p_user_id uuid DEFAULT NULL::uuid, p_user_name text DEFAULT NULL::text) RETURNS TABLE(success boolean, production_id uuid, production_ref text, total_material_cost numeric, journal_id uuid, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_production_id UUID;
   v_ref TEXT;
@@ -435,18 +430,15 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, NULL::UUID, NULL::TEXT, 0::NUMERIC, NULL::UUID, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: process_spoilage_atomic
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.process_spoilage_atomic(p_material_id uuid, p_quantity numeric, p_note text DEFAULT NULL::text, p_branch_id uuid DEFAULT NULL::uuid, p_user_id uuid DEFAULT NULL::uuid, p_user_name text DEFAULT NULL::text)
- RETURNS TABLE(success boolean, record_id uuid, record_ref text, spoilage_cost numeric, journal_id uuid, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.process_spoilage_atomic(p_material_id uuid, p_quantity numeric, p_note text DEFAULT NULL::text, p_branch_id uuid DEFAULT NULL::uuid, p_user_id uuid DEFAULT NULL::uuid, p_user_name text DEFAULT NULL::text) RETURNS TABLE(success boolean, record_id uuid, record_ref text, spoilage_cost numeric, journal_id uuid, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_record_id UUID;
   v_ref TEXT;
@@ -615,33 +607,28 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, NULL::UUID, NULL::TEXT, 0::NUMERIC, NULL::UUID, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: update_production_records_updated_at
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.update_production_records_updated_at()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.update_production_records_updated_at() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $function$
 BEGIN
     NEW.updated_at = CURRENT_TIMESTAMP;
     RETURN NEW;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: void_production_atomic
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.void_production_atomic(p_production_id uuid, p_branch_id uuid)
- RETURNS TABLE(success boolean, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.void_production_atomic(p_production_id uuid, p_branch_id uuid) RETURNS TABLE(success boolean, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_record RECORD;
   v_consumption RECORD;
@@ -738,7 +725,6 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 

@@ -61,19 +61,19 @@ const fromDbToApp = (dbAdvance: any): EmployeeAdvance => ({
   id: dbAdvance.id,
   employeeId: dbAdvance.employee_id,
   employeeName: dbAdvance.employee_name,
-  amount: dbAdvance.amount,
+  amount: Number(dbAdvance.amount) || 0,
   date: new Date(dbAdvance.date),
   notes: dbAdvance.notes,
-  remainingAmount: dbAdvance.remaining_amount,
+  remainingAmount: Number(dbAdvance.remaining_amount) || 0,
   repayments: (dbAdvance.advance_repayments || []).map((r: any) => ({
     id: r.id,
-    amount: r.amount,
+    amount: Number(r.amount) || 0,
     date: new Date(r.date),
     recordedBy: r.recorded_by,
   })),
   createdAt: new Date(dbAdvance.created_at),
   accountId: dbAdvance.account_id,
-  accountName: dbAdvance.account_name,
+  accountName: dbAdvance.accounts?.name || dbAdvance.account_name || 'Kas Tunai',
 });
 
 // Helper to format date to YYYY-MM-DD string (local date, avoid timezone shift)
@@ -107,7 +107,7 @@ export const useEmployeeAdvances = () => {
   const { data: advances, isLoading, isError, error } = useQuery<EmployeeAdvance[]>({
     queryKey: ['employeeAdvances', currentBranch?.id, user?.id],
     queryFn: async () => {
-      let query = supabase.from('employee_advances').select('*, advance_repayments:advance_repayments(*)');
+      let query = supabase.from('employee_advances').select('*, accounts(name), advance_repayments:advance_repayments(*)');
 
       // Apply branch filter - ALWAYS filter by selected branch
       if (currentBranch?.id) {

@@ -174,9 +174,9 @@ export const MobileWarehouseView = () => {
                             <span className={cn(
                               "text-lg font-bold",
                               isOutOfStock ? "text-red-600 dark:text-red-400" :
-                              isCritical ? "text-orange-600 dark:text-orange-400" :
-                              isLowStock ? "text-yellow-600 dark:text-yellow-400" :
-                              "text-green-600 dark:text-green-400"
+                                isCritical ? "text-orange-600 dark:text-orange-400" :
+                                  isLowStock ? "text-yellow-600 dark:text-yellow-400" :
+                                    "text-green-600 dark:text-green-400"
                             )}>
                               {material.stock}
                             </span>
@@ -272,9 +272,9 @@ export const MobileWarehouseView = () => {
                             <span className={cn(
                               "text-lg font-bold",
                               isOutOfStock ? "text-red-600 dark:text-red-400" :
-                              isCritical ? "text-orange-600 dark:text-orange-400" :
-                              isLowStock ? "text-yellow-600 dark:text-yellow-400" :
-                              "text-green-600 dark:text-green-400"
+                                isCritical ? "text-orange-600 dark:text-orange-400" :
+                                  isLowStock ? "text-yellow-600 dark:text-yellow-400" :
+                                    "text-green-600 dark:text-green-400"
                             )}>
                               {product.currentStock}
                             </span>
@@ -420,14 +420,11 @@ export const MobileWarehouseView = () => {
       {selectedPOForReceive && (
         <MobileReceiveGoodsSheet
           open={isReceiveSheetOpen}
-          onOpenChange={setIsReceiveSheetOpen}
-          purchaseOrder={selectedPOForReceive}
-          onReceive={async () => {
-            await receivePurchaseOrder.mutateAsync(selectedPOForReceive)
-            setIsReceiveSheetOpen(false)
-            setSelectedPOForReceive(null)
+          onOpenChange={(v) => {
+            setIsReceiveSheetOpen(v)
+            if (!v) setSelectedPOForReceive(null)
           }}
-          isLoading={receivePurchaseOrder.isPending}
+          purchaseOrder={selectedPOForReceive}
         />
       )}
 

@@ -12,10 +12,9 @@
 -- =====================================================
 -- Function: generate_supplier_code
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.generate_supplier_code()
- RETURNS character varying
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.generate_supplier_code() RETURNS character varying
+    LANGUAGE plpgsql
+    AS $_$
 DECLARE
   new_code VARCHAR(20);
   counter INTEGER;
@@ -31,18 +30,15 @@ BEGIN
   
   RETURN new_code;
 END;
-$function$
-;
+$_$;
 
 
 -- =====================================================
 -- Function: search_customers
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.search_customers(search_term text DEFAULT ''::text, limit_count integer DEFAULT 50)
- RETURNS TABLE(id uuid, name text, phone text, address text, order_count integer, last_order_date timestamp with time zone, total_spent numeric)
- LANGUAGE plpgsql
- STABLE
-AS $function$
+CREATE OR REPLACE FUNCTION public.search_customers(search_term text DEFAULT ''::text, limit_count integer DEFAULT 50) RETURNS TABLE(id uuid, name text, phone text, address text, order_count integer, last_order_date timestamp with time zone, total_spent numeric)
+    LANGUAGE plpgsql STABLE
+    AS $function$
 BEGIN
   RETURN QUERY
   SELECT 
@@ -63,17 +59,15 @@ BEGIN
   ORDER BY c.name
   LIMIT limit_count;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: set_supplier_code
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.set_supplier_code()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.set_supplier_code() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $function$
 BEGIN
   IF NEW.code IS NULL OR NEW.code = '' THEN
     NEW.code := generate_supplier_code();
@@ -81,7 +75,6 @@ BEGIN
   NEW.updated_at := NOW();
   RETURN NEW;
 END;
-$function$
-;
+$function$;
 
 

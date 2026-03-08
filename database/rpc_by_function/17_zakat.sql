@@ -16,10 +16,9 @@
 -- =====================================================
 -- Function: calculate_zakat_amount
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.calculate_zakat_amount(p_asset_value numeric, p_nishab_type text DEFAULT 'gold'::text)
- RETURNS TABLE(asset_value numeric, nishab_value numeric, is_obligatory boolean, zakat_amount numeric, rate numeric)
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.calculate_zakat_amount(p_asset_value numeric, p_nishab_type text DEFAULT 'gold'::text) RETURNS TABLE(asset_value numeric, nishab_value numeric, is_obligatory boolean, zakat_amount numeric, rate numeric)
+    LANGUAGE plpgsql
+    AS $function$
 DECLARE
   v_nishab_value NUMERIC;
   v_rate NUMERIC;
@@ -48,17 +47,15 @@ BEGIN
     CASE WHEN p_asset_value >= v_nishab_value THEN p_asset_value * v_rate ELSE 0 END,
     v_rate * 100; -- Convert to percentage
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: create_zakat_cash_entry
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.create_zakat_cash_entry()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.create_zakat_cash_entry() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $function$
 DECLARE
     v_account_name TEXT;
     v_cash_history_id TEXT;
@@ -108,18 +105,15 @@ BEGIN
     END IF;
     RETURN NEW;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: create_zakat_payment_atomic
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.create_zakat_payment_atomic(p_zakat jsonb, p_branch_id uuid, p_created_by uuid DEFAULT NULL::uuid)
- RETURNS TABLE(success boolean, zakat_id uuid, journal_id uuid, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.create_zakat_payment_atomic(p_zakat jsonb, p_branch_id uuid, p_created_by uuid DEFAULT NULL::uuid) RETURNS TABLE(success boolean, zakat_id uuid, journal_id uuid, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_zakat_id UUID;
   v_journal_id UUID;
@@ -202,14 +196,13 @@ BEGIN
     NOW()
   );
   -- ==================== CREATE JOURNAL ENTRY ====================
-  -- Generate entry number (Global across all branches)
-  SELECT 'JE-' || TO_CHAR(v_payment_date, 'YYYYMMDD') || '-' || LPAD(
+  SELECT 'JE-' || TO_CHAR(NOW(), 'YYYYMMDD') || '-' || LPAD(
     (COALESCE(
-      (SELECT MAX(CAST(SUBSTRING(entry_number FROM '-(\d+)$') AS INTEGER))
-       FROM journal_entries
-       WHERE DATE(entry_date) = v_payment_date),
-      0
-    ) + 1)::TEXT, 4, '0')
+      (SELECT COUNT(*) + 1 FROM journal_entries
+       WHERE branch_id = p_branch_id
+       AND DATE(created_at) = CURRENT_DATE),
+      1
+    ))::TEXT, 4, '0')
   INTO v_entry_number;
   INSERT INTO journal_entries (
     id,
@@ -259,18 +252,15 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, NULL::UUID, NULL::UUID, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: delete_zakat_record_atomic
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.delete_zakat_record_atomic(p_branch_id uuid, p_zakat_id text)
- RETURNS TABLE(success boolean, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.delete_zakat_record_atomic(p_branch_id uuid, p_zakat_id text) RETURNS TABLE(success boolean, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 BEGIN
   -- Void Journals
   UPDATE journal_entries
@@ -282,17 +272,15 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: get_current_nishab
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.get_current_nishab()
- RETURNS TABLE(gold_price numeric, silver_price numeric, gold_nishab numeric, silver_nishab numeric, zakat_rate numeric, gold_nishab_value numeric, silver_nishab_value numeric)
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.get_current_nishab() RETURNS TABLE(gold_price numeric, silver_price numeric, gold_nishab numeric, silver_nishab numeric, zakat_rate numeric, gold_nishab_value numeric, silver_nishab_value numeric)
+    LANGUAGE plpgsql
+    AS $function$
 BEGIN
   RETURN QUERY
   SELECT 
@@ -320,18 +308,15 @@ BEGIN
       8925000::NUMERIC;  -- silver_nishab_value
   END IF;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: upsert_zakat_record_atomic
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.upsert_zakat_record_atomic(p_branch_id uuid, p_zakat_id text, p_data jsonb)
- RETURNS TABLE(success boolean, zakat_id text, journal_id uuid, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.upsert_zakat_record_atomic(p_branch_id uuid, p_zakat_id text, p_data jsonb) RETURNS TABLE(success boolean, zakat_id text, journal_id uuid, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_zakat_id TEXT := p_zakat_id;
   v_journal_id UUID;
@@ -485,18 +470,15 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, NULL::TEXT, NULL::UUID, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: void_zakat_payment_atomic
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.void_zakat_payment_atomic(p_zakat_id uuid, p_branch_id uuid, p_reason text DEFAULT 'Dibatalkan'::text, p_user_id uuid DEFAULT NULL::uuid)
- RETURNS TABLE(success boolean, journals_voided integer, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.void_zakat_payment_atomic(p_zakat_id uuid, p_branch_id uuid, p_reason text DEFAULT 'Dibatalkan'::text, p_user_id uuid DEFAULT NULL::uuid) RETURNS TABLE(success boolean, journals_voided integer, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_zakat RECORD;
   v_journals_voided INTEGER := 0;
@@ -543,7 +525,6 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, 0, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 

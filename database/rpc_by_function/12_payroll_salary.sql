@@ -17,11 +17,9 @@
 -- =====================================================
 -- Function: create_payroll_record
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.create_payroll_record(p_payroll jsonb, p_branch_id uuid)
- RETURNS TABLE(success boolean, payroll_id uuid, net_salary numeric, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.create_payroll_record(p_payroll jsonb, p_branch_id uuid) RETURNS TABLE(success boolean, payroll_id uuid, net_salary numeric, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_payroll_id UUID;
   v_employee_id UUID;
@@ -128,18 +126,15 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, NULL::UUID, 0::NUMERIC, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: get_active_salary_config
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.get_active_salary_config(emp_id uuid, check_date date)
- RETURNS employee_salaries
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.get_active_salary_config(emp_id uuid, check_date date) RETURNS public.employee_salaries
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   result public.employee_salaries;
 BEGIN
@@ -163,17 +158,15 @@ BEGIN
   END IF;
   RETURN result;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: notify_payroll_processed
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.notify_payroll_processed()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.notify_payroll_processed() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $function$
 BEGIN
     -- Only notify for payroll payment type
     IF NEW.type = 'pembayaran_gaji' THEN
@@ -191,18 +184,15 @@ BEGIN
     END IF;
     RETURN NEW;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: process_payroll_complete
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.process_payroll_complete(p_payroll_id uuid, p_branch_id uuid, p_payment_account_id text, p_payment_date date DEFAULT CURRENT_DATE, p_expense_account_id text DEFAULT NULL)
- RETURNS TABLE(success boolean, journal_id uuid, advances_updated integer, commissions_paid integer, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.process_payroll_complete(p_payroll_id uuid, p_branch_id uuid, p_payment_account_id text, p_payment_date date DEFAULT CURRENT_DATE, p_expense_account_id text DEFAULT NULL::text) RETURNS TABLE(success boolean, journal_id uuid, advances_updated integer, commissions_paid integer, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_payroll RECORD;
   v_journal_id UUID;
@@ -460,18 +450,15 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, NULL::UUID, 0, 0, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: sync_payroll_commissions_to_entries
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.sync_payroll_commissions_to_entries()
- RETURNS integer
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.sync_payroll_commissions_to_entries() RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   synced_count INTEGER := 0;
   payroll_record RECORD;
@@ -521,18 +508,15 @@ BEGIN
   END LOOP;
   RETURN synced_count;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: update_payroll_record_atomic
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.update_payroll_record_atomic(p_payroll_id uuid, p_branch_id uuid, p_base_salary numeric, p_commission numeric, p_bonus numeric, p_advance_deduction numeric, p_salary_deduction numeric, p_notes text)
- RETURNS TABLE(success boolean, net_salary numeric, journal_id uuid, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.update_payroll_record_atomic(p_payroll_id uuid, p_branch_id uuid, p_base_salary numeric, p_commission numeric, p_bonus numeric, p_advance_deduction numeric, p_salary_deduction numeric, p_notes text) RETURNS TABLE(success boolean, net_salary numeric, journal_id uuid, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_old_record RECORD;
   v_new_net_salary NUMERIC;
@@ -626,33 +610,28 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, 0::NUMERIC, NULL::UUID, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: update_payroll_updated_at
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.update_payroll_updated_at()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.update_payroll_updated_at() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $function$
 BEGIN
     NEW.updated_at = NOW();
     RETURN NEW;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: void_payroll_record
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.void_payroll_record(p_payroll_id uuid, p_branch_id uuid, p_reason text DEFAULT 'Cancelled'::text)
- RETURNS TABLE(success boolean, journals_voided integer, commissions_restored integer, advances_restored numeric, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.void_payroll_record(p_payroll_id uuid, p_branch_id uuid, p_reason text DEFAULT 'Cancelled'::text) RETURNS TABLE(success boolean, journals_voided integer, commissions_restored integer, advances_restored numeric, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_payroll RECORD;
   v_journals_voided INTEGER := 0;
@@ -740,5 +719,4 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, 0, 0, 0::NUMERIC, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;

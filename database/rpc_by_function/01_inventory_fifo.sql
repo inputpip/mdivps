@@ -22,11 +22,9 @@
 -- =====================================================
 -- Function: add_material_batch
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.add_material_batch(p_material_id uuid, p_branch_id uuid, p_quantity numeric, p_unit_cost numeric, p_reference_id text DEFAULT NULL::text, p_notes text DEFAULT NULL::text)
- RETURNS TABLE(success boolean, batch_id uuid, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.add_material_batch(p_material_id uuid, p_branch_id uuid, p_quantity numeric, p_unit_cost numeric, p_reference_id text DEFAULT NULL::text, p_notes text DEFAULT NULL::text) RETURNS TABLE(success boolean, batch_id uuid, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_new_batch_id UUID;
   v_material_name TEXT;
@@ -126,18 +124,15 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, NULL::UUID, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: calculate_fifo_cost
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.calculate_fifo_cost(p_product_id uuid DEFAULT NULL::uuid, p_branch_id uuid DEFAULT NULL::uuid, p_quantity numeric DEFAULT 0, p_material_id uuid DEFAULT NULL::uuid)
- RETURNS TABLE(total_hpp numeric, batches_info jsonb)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.calculate_fifo_cost(p_product_id uuid DEFAULT NULL::uuid, p_branch_id uuid DEFAULT NULL::uuid, p_quantity numeric DEFAULT 0, p_material_id uuid DEFAULT NULL::uuid) RETURNS TABLE(total_hpp numeric, batches_info jsonb)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   remaining_qty NUMERIC := p_quantity;
   batch_record RECORD;
@@ -168,8 +163,7 @@ BEGIN
   END IF;
   RETURN QUERY SELECT total_cost, batch_list;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
@@ -181,10 +175,9 @@ $function$
 -- =====================================================
 -- Function: consume_material_fifo_v2
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.consume_material_fifo_v2(p_material_id uuid, p_quantity numeric, p_reference_id text, p_reference_type text, p_branch_id uuid DEFAULT NULL::uuid, p_user_id uuid DEFAULT NULL::uuid, p_user_name text DEFAULT NULL::text)
- RETURNS TABLE(success boolean, total_cost numeric, quantity_consumed numeric, batches_consumed jsonb, error_message text)
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.consume_material_fifo_v2(p_material_id uuid, p_quantity numeric, p_reference_id text, p_reference_type text, p_branch_id uuid DEFAULT NULL::uuid, p_user_id uuid DEFAULT NULL::uuid, p_user_name text DEFAULT NULL::text) RETURNS TABLE(success boolean, total_cost numeric, quantity_consumed numeric, batches_consumed jsonb, error_message text)
+    LANGUAGE plpgsql
+    AS $function$
 DECLARE
   v_batch RECORD;
   v_remaining NUMERIC := p_quantity;
@@ -311,17 +304,15 @@ BEGIN
   -- Stock is derived from v_material_current_stock view
   RETURN QUERY SELECT TRUE, v_total_cost, p_quantity - v_remaining, v_consumed, NULL::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: consume_stock_fifo_v2
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.consume_stock_fifo_v2(p_product_id uuid, p_quantity numeric, p_reference_id text, p_reference_type text, p_branch_id uuid DEFAULT NULL::uuid)
- RETURNS TABLE(success boolean, total_hpp numeric, batches_consumed jsonb, remaining_to_consume numeric, error_message text)
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.consume_stock_fifo_v2(p_product_id uuid, p_quantity numeric, p_reference_id text, p_reference_type text, p_branch_id uuid DEFAULT NULL::uuid) RETURNS TABLE(success boolean, total_hpp numeric, batches_consumed jsonb, remaining_to_consume numeric, error_message text)
+    LANGUAGE plpgsql
+    AS $function$
 DECLARE
   v_batch RECORD;
   v_remaining NUMERIC := p_quantity;
@@ -422,17 +413,15 @@ BEGIN
     v_remaining,
     NULL::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: get_material_fifo_cost
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.get_material_fifo_cost(p_material_id uuid, p_branch_id uuid)
- RETURNS numeric
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.get_material_fifo_cost(p_material_id uuid, p_branch_id uuid) RETURNS numeric
+    LANGUAGE plpgsql
+    AS $function$
 DECLARE
     v_oldest_cost numeric;
 BEGIN
@@ -452,17 +441,15 @@ BEGIN
     END IF;
     RETURN COALESCE(v_oldest_cost, 0);
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: get_product_fifo_cost
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.get_product_fifo_cost(p_product_id uuid, p_branch_id uuid)
- RETURNS numeric
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.get_product_fifo_cost(p_product_id uuid, p_branch_id uuid) RETURNS numeric
+    LANGUAGE plpgsql
+    AS $function$
 DECLARE
     v_oldest_cost numeric;
 BEGIN
@@ -482,8 +469,7 @@ BEGIN
     END IF;
     RETURN COALESCE(v_oldest_cost, 0);
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
@@ -495,10 +481,9 @@ $function$
 -- =====================================================
 -- Function: restore_material_fifo_v2
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.restore_material_fifo_v2(p_material_id uuid, p_quantity numeric, p_unit_cost numeric, p_reference_id text, p_reference_type text, p_branch_id uuid DEFAULT NULL::uuid, p_user_id uuid DEFAULT NULL::uuid, p_user_name text DEFAULT NULL::text)
- RETURNS TABLE(success boolean, batch_id uuid, total_restored numeric, error_message text)
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.restore_material_fifo_v2(p_material_id uuid, p_quantity numeric, p_unit_cost numeric, p_reference_id text, p_reference_type text, p_branch_id uuid DEFAULT NULL::uuid, p_user_id uuid DEFAULT NULL::uuid, p_user_name text DEFAULT NULL::text) RETURNS TABLE(success boolean, batch_id uuid, total_restored numeric, error_message text)
+    LANGUAGE plpgsql
+    AS $function$
 DECLARE
   v_material_name TEXT;
   v_new_batch_id UUID;
@@ -573,17 +558,15 @@ BEGIN
   -- Stock is derived from v_material_current_stock view
   RETURN QUERY SELECT TRUE, v_new_batch_id, p_quantity, NULL::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: restore_stock_fifo_v2
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.restore_stock_fifo_v2(p_product_id uuid, p_quantity numeric, p_reference_id text, p_reference_type text, p_branch_id uuid DEFAULT NULL::uuid)
- RETURNS TABLE(success boolean, total_restored numeric, batches_restored jsonb, error_message text)
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.restore_stock_fifo_v2(p_product_id uuid, p_quantity numeric, p_reference_id text, p_reference_type text, p_branch_id uuid DEFAULT NULL::uuid) RETURNS TABLE(success boolean, total_restored numeric, batches_restored jsonb, error_message text)
+    LANGUAGE plpgsql
+    AS $function$
 DECLARE
   v_batch RECORD;
   v_remaining NUMERIC := p_quantity;
@@ -662,7 +645,6 @@ BEGIN
   WHERE id = p_product_id;
   RETURN QUERY SELECT TRUE, p_quantity - v_remaining, v_restored, NULL::TEXT;
 END;
-$function$
-;
+$function$;
 
 

@@ -25,9 +25,9 @@ const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
 const PosPage = lazy(() => import("@/pages/PosPage"));
 const TransactionListPage = lazy(() => import("@/pages/TransactionListPage"));
 const TransactionDetailPage = lazy(() => import("@/pages/TransactionDetailPage"));
-const ProductPage = lazy(() => import("@/pages/ProductPage"));
+const MasterDataStockPage = lazy(() => import("@/pages/MasterDataStockPage"));
 const ProductDetailPage = lazy(() => import("@/pages/ProductDetailPage"));
-const MaterialPage = lazy(() => import("@/pages/MaterialPage"));
+// const MaterialPage = lazy(() => import("@/pages/MaterialPage")); // Replaced by MasterDataStockPage
 const ProductionPage = lazy(() => import("@/pages/ProductionPage"));
 const MaterialDetailPage = lazy(() => import("@/pages/MaterialDetailPage"));
 const CustomerPage = lazy(() => import("@/pages/CustomerPage"));
@@ -37,8 +37,7 @@ const PurchaseOrderPage = lazy(() => import("@/pages/PurchaseOrderPage"));
 const ChartOfAccountsPage = lazy(() => import("@/pages/ChartOfAccountsPage"));
 const AccountDetailPage = lazy(() => import("@/pages/AccountDetailPage"));
 const ReceivablesPage = lazy(() => import("@/pages/ReceivablesPage"));
-const ExpensePage = lazy(() => import("@/pages/ExpensePage"));
-const EmployeeAdvancePage = lazy(() => import("@/pages/EmployeeAdvancePage"));
+const ExpensesAndAdvancesPage = lazy(() => import("@/pages/ExpensesAndAdvancesPage"));
 const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
 const AccountSettingsPage = lazy(() => import("@/pages/AccountSettingsPage"));
 const LoginPage = lazy(() => import("@/pages/LoginPage"));
@@ -302,9 +301,9 @@ function WebApp() {
                       <Route path="/pos" element={<PosPage />} />
                       <Route path="/transactions" element={<TransactionListPage />} />
                       <Route path="/transactions/:id" element={<TransactionDetailPage />} />
-                      <Route path="/products" element={<ProductPage />} />
+                      <Route path="/products" element={<MasterDataStockPage />} />
                       <Route path="/products/:id" element={<ProductDetailPage />} />
-                      <Route path="/materials" element={<MaterialPage />} />
+                      <Route path="/materials" element={<MasterDataStockPage />} />
                       <Route path="/production" element={<ProductionPage />} />
                       <Route path="/materials/:materialId" element={<MaterialDetailPage />} />
                       <Route path="/customers" element={<CustomerPage />} />
@@ -317,8 +316,8 @@ function WebApp() {
                       <Route path="/accounts/:id" element={<AccountDetailPage />} />
                       <Route path="/receivables" element={<ReceivablesPage />} />
                       <Route path="/accounts-payable" element={<AccountsPayablePage />} />
-                      <Route path="/expenses" element={<ExpensePage />} />
-                      <Route path="/advances" element={<EmployeeAdvancePage />} />
+                      <Route path="/expenses" element={<ExpensesAndAdvancesPage />} />
+                      <Route path="/advances" element={<ExpensesAndAdvancesPage />} />
                       <Route path="/settings" element={<SettingsPage />} />
                       <Route path="/account-settings" element={<AccountSettingsPage />} />
                       <Route path="/attendance" element={<AttendancePage />} />

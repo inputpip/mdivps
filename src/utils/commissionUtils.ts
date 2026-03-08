@@ -38,7 +38,7 @@ export async function generateSalesCommission(transaction: Transaction) {
       }
 
       const rule = rules.find(r => r.product_id === item.product.id);
-      
+
       if (rule && rule.rate_per_qty > 0) {
         const commissionEntry = {
           user_id: transaction.salesId,
@@ -91,7 +91,7 @@ export async function generateSalesCommission(transaction: Transaction) {
               status: entry.status,
               createdAt: new Date(entry.created_at)
             };
-            
+
             await createCommissionExpense(commissionEntry);
           } catch (expenseError) {
             // Don't throw - commission is created successfully, expense is secondary
@@ -111,7 +111,7 @@ export async function generateDeliveryCommission(delivery: Delivery) {
     const { data: rules, error: rulesError } = await supabase
       .from('commission_rules')
       .select('*')
-      .in('role', ['driver', 'helper']);
+      .in('role', ['driver', 'helper', 'delivery_2_helpers', 'delivery_3_helpers']);
 
     if (rulesError) {
       throw rulesError;
@@ -131,51 +131,82 @@ export async function generateDeliveryCommission(delivery: Delivery) {
         continue;
       }
 
+      const assignedPeople = [];
+      if (delivery.driverId) assignedPeople.push({ id: delivery.driverId, name: delivery.driverName || 'Unknown Driver', roleLabel: 'driver' });
+      if (delivery.helperId) assignedPeople.push({ id: delivery.helperId, name: delivery.helperName || 'Unknown Helper', roleLabel: 'helper' });
+      if (delivery.helperId2 || (delivery as any).helper_id_2) assignedPeople.push({ id: delivery.helperId2 || (delivery as any).helper_id_2, name: delivery.helperName2 || 'Unknown Helper', roleLabel: 'helper' });
+      if (delivery.helperId3 || (delivery as any).helper_id_3) assignedPeople.push({ id: delivery.helperId3 || (delivery as any).helper_id_3, name: delivery.helperName3 || 'Unknown Helper', roleLabel: 'helper' });
+
+      const helperCount = assignedPeople.filter(p => p.roleLabel === 'helper').length;
+
+      const rate2HelpersRule = rules.find(r => r.product_id === item.productId && r.role === 'delivery_2_helpers');
+      const rate3HelpersRule = rules.find(r => r.product_id === item.productId && r.role === 'delivery_3_helpers');
       const driverRule = rules.find(r => r.product_id === item.productId && r.role === 'driver');
       const helperRule = rules.find(r => r.product_id === item.productId && r.role === 'helper');
 
-      // Driver commission
-      if (delivery.driverId && driverRule && driverRule.rate_per_qty > 0) {
-        const commissionEntry = {
-          user_id: delivery.driverId,
-          user_name: delivery.driverName || 'Unknown Driver',
-          role: 'driver' as const,
-          product_id: item.productId,
-          product_name: item.productName,
-          quantity: item.quantityDelivered,
-          rate_per_qty: driverRule.rate_per_qty,
-          amount: item.quantityDelivered * driverRule.rate_per_qty,
-          transaction_id: delivery.transactionId,
-          delivery_id: delivery.id,
-          ref: `DEL-${delivery.id}`,
-          status: 'pending' as const,
-          created_at: new Date().toISOString(),
-          branch_id: delivery.branchId || null
-        };
+      let appliedRules: { person: any, ruleRate: number }[] = [];
 
-        commissionEntries.push(commissionEntry);
+      if (helperCount === 3 && delivery.driverId && rate3HelpersRule && rate3HelpersRule.rate_per_qty > 0) {
+        // 3 helpers + 1 driver = split 4
+        const splitRate = rate3HelpersRule.rate_per_qty / 4;
+        assignedPeople.forEach(person => {
+          appliedRules.push({ person, ruleRate: splitRate });
+        });
+      } else if (helperCount === 2 && delivery.driverId && rate2HelpersRule && rate2HelpersRule.rate_per_qty > 0) {
+        // 2 helpers + 1 driver = split 3
+        const splitRate = rate2HelpersRule.rate_per_qty / 3;
+        assignedPeople.forEach(person => {
+          appliedRules.push({ person, ruleRate: splitRate });
+        });
+      } else {
+        // Normal rule (1 driver + 1 helper OR 1 driver only)
+        if (helperCount === 0 && delivery.driverId) {
+          // Driver is ALONE (no helpers)
+          const driverRate = driverRule ? driverRule.rate_per_qty : 0;
+          const helperRate = helperRule ? helperRule.rate_per_qty : 0;
+          const totalRate = driverRate + helperRate;
+
+          if (totalRate > 0) {
+            const driverPerson = assignedPeople.find(p => p.roleLabel === 'driver');
+            if (driverPerson) {
+              // Create entry for Driver commission
+              if (driverRate > 0) {
+                appliedRules.push({ person: driverPerson, ruleRate: driverRate, actualRole: 'driver' } as any);
+              }
+              // Create entry for Helper commission (but assigned to Driver)
+              if (helperRate > 0) {
+                appliedRules.push({ person: driverPerson, ruleRate: helperRate, actualRole: 'helper' } as any);
+              }
+            }
+          }
+        } else {
+          // Normal case or fallback
+          assignedPeople.forEach(person => {
+            const rule = person.roleLabel === 'driver' ? driverRule : helperRule;
+            if (rule && rule.rate_per_qty > 0) {
+              appliedRules.push({ person, ruleRate: rule.rate_per_qty });
+            }
+          });
+        }
       }
 
-      // Helper commission
-      if (delivery.helperId && helperRule && helperRule.rate_per_qty > 0) {
-        const commissionEntry = {
-          user_id: delivery.helperId,
-          user_name: delivery.helperName || 'Unknown Helper',
-          role: 'helper' as const,
+      for (const apply of appliedRules) {
+        commissionEntries.push({
+          user_id: apply.person.id,
+          user_name: apply.person.name,
+          role: (apply as any).actualRole || (apply.person.roleLabel as any),
           product_id: item.productId,
           product_name: item.productName,
           quantity: item.quantityDelivered,
-          rate_per_qty: helperRule.rate_per_qty,
-          amount: item.quantityDelivered * helperRule.rate_per_qty,
+          rate_per_qty: apply.ruleRate,
+          amount: item.quantityDelivered * apply.ruleRate,
           transaction_id: delivery.transactionId,
           delivery_id: delivery.id,
           ref: `DEL-${delivery.id}`,
           status: 'pending' as const,
           created_at: new Date().toISOString(),
           branch_id: delivery.branchId || null
-        };
-
-        commissionEntries.push(commissionEntry);
+        });
       }
     }
 
@@ -209,11 +240,13 @@ export async function regenerateDeliveryCommission(deliveryId: string) {
       .select(`
         *,
         items:delivery_items(*),
-        driver:profiles!driver_id(full_name),
-        helper:profiles!helper_id(full_name)
+        driver:driver_id(full_name),
+        helper:helper_id(full_name),
+        helper2:helper_id_2(full_name),
+        helper3:helper_id_3(full_name)
       `)
       .eq('id', deliveryId)
-      .order('id').limit(1);
+      .single();
 
     if (deliveryError) throw deliveryError;
 
@@ -241,11 +274,10 @@ export async function regenerateDeliveryCommission(deliveryId: string) {
       console.log(`🗑️ Deleted ${existingCommissions.length} existing commission entries for delivery ${deliveryId}`);
     }
 
-    // Get commission rules for driver and helper
     const { data: rules, error: rulesError } = await supabase
       .from('commission_rules')
       .select('*')
-      .in('role', ['driver', 'helper']);
+      .in('role', ['driver', 'helper', 'delivery_2_helpers', 'delivery_3_helpers']);
 
     if (rulesError) throw rulesError;
 
@@ -264,51 +296,82 @@ export async function regenerateDeliveryCommission(deliveryId: string) {
         continue;
       }
 
+      const assignedPeople = [];
+      if (delivery.driver_id) assignedPeople.push({ id: delivery.driver_id, name: delivery.driver?.full_name || 'Unknown Driver', roleLabel: 'driver' });
+      if (delivery.helper_id) assignedPeople.push({ id: delivery.helper_id, name: delivery.helper?.full_name || 'Unknown Helper', roleLabel: 'helper' });
+      if (delivery.helper_id_2) assignedPeople.push({ id: delivery.helper_id_2, name: delivery.helper2?.full_name || 'Unknown Helper', roleLabel: 'helper' });
+      if (delivery.helper_id_3) assignedPeople.push({ id: delivery.helper_id_3, name: delivery.helper3?.full_name || 'Unknown Helper', roleLabel: 'helper' });
+
+      const helperCount = assignedPeople.filter(p => p.roleLabel === 'helper').length;
+
+      const rate2HelpersRule = rules.find(r => r.product_id === item.product_id && r.role === 'delivery_2_helpers');
+      const rate3HelpersRule = rules.find(r => r.product_id === item.product_id && r.role === 'delivery_3_helpers');
       const driverRule = rules.find(r => r.product_id === item.product_id && r.role === 'driver');
       const helperRule = rules.find(r => r.product_id === item.product_id && r.role === 'helper');
 
-      // Driver commission
-      if (delivery.driver_id && driverRule && driverRule.rate_per_qty > 0) {
-        const commissionEntry = {
-          user_id: delivery.driver_id,
-          user_name: delivery.driver?.full_name || 'Unknown Driver',
-          role: 'driver' as const,
-          product_id: item.product_id,
-          product_name: item.product_name,
-          quantity: item.quantity_delivered,
-          rate_per_qty: driverRule.rate_per_qty,
-          amount: item.quantity_delivered * driverRule.rate_per_qty,
-          transaction_id: delivery.transaction_id,
-          delivery_id: delivery.id,
-          ref: `DEL-${delivery.id}`,
-          status: 'pending' as const,
-          created_at: new Date().toISOString(),
-          branch_id: delivery.branch_id || null
-        };
+      let appliedRules: { person: any, ruleRate: number }[] = [];
 
-        commissionEntries.push(commissionEntry);
+      if (helperCount === 3 && delivery.driver_id && rate3HelpersRule && rate3HelpersRule.rate_per_qty > 0) {
+        // 3 helpers + 1 driver = split 4
+        const splitRate = rate3HelpersRule.rate_per_qty / 4;
+        assignedPeople.forEach(person => {
+          appliedRules.push({ person, ruleRate: splitRate });
+        });
+      } else if (helperCount === 2 && delivery.driver_id && rate2HelpersRule && rate2HelpersRule.rate_per_qty > 0) {
+        // 2 helpers + 1 driver = split 3
+        const splitRate = rate2HelpersRule.rate_per_qty / 3;
+        assignedPeople.forEach(person => {
+          appliedRules.push({ person, ruleRate: splitRate });
+        });
+      } else {
+        // Normal rule (1 driver + 1 helper OR 1 driver only)
+        if (helperCount === 0 && delivery.driver_id) {
+          // Driver is ALONE (no helpers)
+          const driverRate = driverRule ? driverRule.rate_per_qty : 0;
+          const helperRate = helperRule ? helperRule.rate_per_qty : 0;
+          const totalRate = driverRate + helperRate;
+
+          if (totalRate > 0) {
+            const driverPerson = assignedPeople.find(p => p.roleLabel === 'driver');
+            if (driverPerson) {
+              // Create entry for Driver commission
+              if (driverRate > 0) {
+                appliedRules.push({ person: driverPerson, ruleRate: driverRate, actualRole: 'driver' } as any);
+              }
+              // Create entry for Helper commission (but assigned to Driver)
+              if (helperRate > 0) {
+                appliedRules.push({ person: driverPerson, ruleRate: helperRate, actualRole: 'helper' } as any);
+              }
+            }
+          }
+        } else {
+          // Normal case or fallback
+          assignedPeople.forEach(person => {
+            const rule = person.roleLabel === 'driver' ? driverRule : helperRule;
+            if (rule && rule.rate_per_qty > 0) {
+              appliedRules.push({ person, ruleRate: rule.rate_per_qty });
+            }
+          });
+        }
       }
 
-      // Helper commission
-      if (delivery.helper_id && helperRule && helperRule.rate_per_qty > 0) {
-        const commissionEntry = {
-          user_id: delivery.helper_id,
-          user_name: delivery.helper?.full_name || 'Unknown Helper',
-          role: 'helper' as const,
+      for (const apply of appliedRules) {
+        commissionEntries.push({
+          user_id: apply.person.id,
+          user_name: apply.person.name,
+          role: (apply as any).actualRole || (apply.person.roleLabel as any),
           product_id: item.product_id,
           product_name: item.product_name,
           quantity: item.quantity_delivered,
-          rate_per_qty: helperRule.rate_per_qty,
-          amount: item.quantity_delivered * helperRule.rate_per_qty,
+          rate_per_qty: apply.ruleRate,
+          amount: item.quantity_delivered * apply.ruleRate,
           transaction_id: delivery.transaction_id,
           delivery_id: delivery.id,
           ref: `DEL-${delivery.id}`,
           status: 'pending' as const,
           created_at: new Date().toISOString(),
           branch_id: delivery.branch_id || null
-        };
-
-        commissionEntries.push(commissionEntry);
+        });
       }
     }
 
@@ -379,7 +442,7 @@ export async function recalculateCommissionsForPeriod(startDate: Date, endDate: 
     const updateEntries: { id: string; amount: number; rate_per_qty: number }[] = [];
 
     // ========== PART 1: Process DELIVERIES (driver, helper) ==========
-    if (rulesByRole['driver'] || rulesByRole['helper']) {
+    if (rulesByRole['driver'] || rulesByRole['helper'] || rulesByRole['delivery_2_helpers'] || rulesByRole['delivery_3_helpers']) {
       const { data: deliveries, error: deliveriesError } = await supabase
         .from('deliveries')
         .select(`
@@ -388,10 +451,14 @@ export async function recalculateCommissionsForPeriod(startDate: Date, endDate: 
           delivery_date,
           driver_id,
           helper_id,
+          helper_id_2,
+          helper_id_3,
           branch_id,
           items:delivery_items(id, product_id, product_name, quantity_delivered, is_bonus),
-          driver:profiles!driver_id(full_name),
-          helper:profiles!helper_id(full_name)
+          driver:driver_id(full_name),
+          helper:helper_id(full_name),
+          helper2:helper_id_2(full_name),
+          helper3:helper_id_3(full_name)
         `)
         .gte('delivery_date', startDate.toISOString())
         .lte('delivery_date', endDate.toISOString())
@@ -404,12 +471,12 @@ export async function recalculateCommissionsForPeriod(startDate: Date, endDate: 
         const deliveryIds = deliveries.map(d => d.id);
         const { data: existingDeliveryCommissions } = await supabase
           .from('commission_entries')
-          .select('id, delivery_id, product_id, role, status, amount, rate_per_qty')
+          .select('id, delivery_id, product_id, role, status, amount, rate_per_qty, user_id')
           .in('delivery_id', deliveryIds);
 
         const deliveryExistingMap = new Map<string, any>();
         for (const c of (existingDeliveryCommissions || [])) {
-          const key = `${c.delivery_id}-${c.product_id}-${c.role}`;
+          const key = `${c.delivery_id}-${c.product_id}-${c.role}-${c.user_id}`;
           deliveryExistingMap.set(key, c);
         }
 
@@ -421,79 +488,94 @@ export async function recalculateCommissionsForPeriod(startDate: Date, endDate: 
               continue;
             }
 
-            // Check driver commission
-            if (delivery.driver_id && rulesByRole['driver']) {
-              const driverRule = rulesByRole['driver'].find((r: any) => r.product_id === item.product_id);
-              const key = `${delivery.id}-${item.product_id}-driver`;
-              const existing = deliveryExistingMap.get(key);
+            const assignedPeople = [];
+            if (delivery.driver_id) assignedPeople.push({ id: delivery.driver_id, name: (delivery.driver as any)?.full_name || 'Unknown Driver', roleLabel: 'driver' });
+            if (delivery.helper_id) assignedPeople.push({ id: delivery.helper_id, name: (delivery.helper as any)?.full_name || 'Unknown Helper', roleLabel: 'helper' });
+            if (delivery.helper_id_2) assignedPeople.push({ id: delivery.helper_id_2, name: (delivery.helper2 as any)?.full_name || 'Unknown Helper', roleLabel: 'helper' });
+            if (delivery.helper_id_3) assignedPeople.push({ id: delivery.helper_id_3, name: (delivery.helper3 as any)?.full_name || 'Unknown Helper', roleLabel: 'helper' });
 
-              if (driverRule && driverRule.rate_per_qty > 0) {
-                const newAmount = item.quantity_delivered * driverRule.rate_per_qty;
+            const helperCount = assignedPeople.filter(p => p.roleLabel === 'helper').length;
 
-                if (existing) {
-                  if (existing.status === 'paid') {
-                    skipped++;
-                  } else if (existing.amount !== newAmount || existing.rate_per_qty !== driverRule.rate_per_qty) {
-                    updateEntries.push({ id: existing.id, amount: newAmount, rate_per_qty: driverRule.rate_per_qty });
-                    updated++;
+            const rate2HelpersRule = rulesByRole['delivery_2_helpers']?.find((r: any) => r.product_id === item.product_id);
+            const rate3HelpersRule = rulesByRole['delivery_3_helpers']?.find((r: any) => r.product_id === item.product_id);
+            const driverRule = rulesByRole['driver']?.find((r: any) => r.product_id === item.product_id);
+            const helperRule = rulesByRole['helper']?.find((r: any) => r.product_id === item.product_id);
+
+            let appliedRules: { person: any, ruleRate: number }[] = [];
+
+            if (helperCount === 3 && delivery.driver_id && rate3HelpersRule && rate3HelpersRule.rate_per_qty > 0) {
+              const splitRate = rate3HelpersRule.rate_per_qty / 4;
+              assignedPeople.forEach(person => {
+                appliedRules.push({ person, ruleRate: splitRate });
+              });
+            } else if (helperCount === 2 && delivery.driver_id && rate2HelpersRule && rate2HelpersRule.rate_per_qty > 0) {
+              const splitRate = rate2HelpersRule.rate_per_qty / 3;
+              assignedPeople.forEach(person => {
+                appliedRules.push({ person, ruleRate: splitRate });
+              });
+            } else {
+              if (helperCount === 0 && delivery.driver_id) {
+                // Driver is ALONE (no helpers)
+                const driverRate = driverRule ? driverRule.rate_per_qty : 0;
+                const helperRate = helperRule ? helperRule.rate_per_qty : 0;
+                const totalRate = driverRate + helperRate;
+
+                if (totalRate > 0) {
+                  const driverPerson = assignedPeople.find(p => p.roleLabel === 'driver');
+                  if (driverPerson) {
+                    // Create entry for Driver commission
+                    if (driverRate > 0) {
+                      appliedRules.push({ person: driverPerson, ruleRate: driverRate, actualRole: 'driver' } as any);
+                    }
+                    // Create entry for Helper commission (but assigned to Driver)
+                    if (helperRate > 0) {
+                      appliedRules.push({ person: driverPerson, ruleRate: helperRate, actualRole: 'helper' } as any);
+                    }
                   }
-                } else {
-                  newEntries.push({
-                    user_id: delivery.driver_id,
-                    user_name: (delivery.driver as any)?.full_name || 'Unknown Driver',
-                    role: 'driver',
-                    product_id: item.product_id,
-                    product_name: item.product_name,
-                    quantity: item.quantity_delivered,
-                    rate_per_qty: driverRule.rate_per_qty,
-                    amount: newAmount,
-                    transaction_id: delivery.transaction_id,
-                    delivery_id: delivery.id,
-                    ref: `DEL-${delivery.id}`,
-                    status: 'pending',
-                    created_at: delivery.delivery_date,
-                    branch_id: delivery.branch_id || null
-                  });
-                  created++;
                 }
+              } else {
+                // Normal case or fallback
+                assignedPeople.forEach(person => {
+                  const rule = person.roleLabel === 'driver' ? driverRule : helperRule;
+                  if (rule && rule.rate_per_qty > 0) {
+                    appliedRules.push({ person, ruleRate: rule.rate_per_qty });
+                  }
+                });
               }
             }
 
-            // Check helper commission
-            if (delivery.helper_id && rulesByRole['helper']) {
-              const helperRule = rulesByRole['helper'].find((r: any) => r.product_id === item.product_id);
-              const key = `${delivery.id}-${item.product_id}-helper`;
+            for (const apply of appliedRules) {
+              const appliedRole = (apply as any).actualRole || apply.person.roleLabel;
+              const key = `${delivery.id}-${item.product_id}-${appliedRole}-${apply.person.id}`;
               const existing = deliveryExistingMap.get(key);
 
-              if (helperRule && helperRule.rate_per_qty > 0) {
-                const newAmount = item.quantity_delivered * helperRule.rate_per_qty;
+              const newAmount = item.quantity_delivered * apply.ruleRate;
 
-                if (existing) {
-                  if (existing.status === 'paid') {
-                    skipped++;
-                  } else if (existing.amount !== newAmount || existing.rate_per_qty !== helperRule.rate_per_qty) {
-                    updateEntries.push({ id: existing.id, amount: newAmount, rate_per_qty: helperRule.rate_per_qty });
-                    updated++;
-                  }
-                } else {
-                  newEntries.push({
-                    user_id: delivery.helper_id,
-                    user_name: (delivery.helper as any)?.full_name || 'Unknown Helper',
-                    role: 'helper',
-                    product_id: item.product_id,
-                    product_name: item.product_name,
-                    quantity: item.quantity_delivered,
-                    rate_per_qty: helperRule.rate_per_qty,
-                    amount: newAmount,
-                    transaction_id: delivery.transaction_id,
-                    delivery_id: delivery.id,
-                    ref: `DEL-${delivery.id}`,
-                    status: 'pending',
-                    created_at: delivery.delivery_date,
-                    branch_id: delivery.branch_id || null
-                  });
-                  created++;
+              if (existing) {
+                if (existing.status === 'paid') {
+                  skipped++;
+                } else if (existing.amount !== newAmount || existing.rate_per_qty !== apply.ruleRate) {
+                  updateEntries.push({ id: existing.id, amount: newAmount, rate_per_qty: apply.ruleRate });
+                  updated++;
                 }
+              } else {
+                newEntries.push({
+                  user_id: apply.person.id,
+                  user_name: apply.person.name,
+                  role: appliedRole,
+                  product_id: item.product_id,
+                  product_name: item.product_name,
+                  quantity: item.quantity_delivered,
+                  rate_per_qty: apply.ruleRate,
+                  amount: newAmount,
+                  transaction_id: delivery.transaction_id,
+                  delivery_id: delivery.id,
+                  ref: `DEL-${delivery.id}`,
+                  status: 'pending',
+                  created_at: delivery.delivery_date,
+                  branch_id: delivery.branch_id || null
+                });
+                created++;
               }
             }
           }
@@ -762,7 +844,7 @@ export async function getCommissionSummary(userId?: string, startDate?: Date, en
     // Calculate summary
     const summary = entries?.reduce((acc, entry) => {
       const key = `${entry.user_id}-${entry.role}`;
-      
+
       if (!acc[key]) {
         acc[key] = {
           userId: entry.user_id,

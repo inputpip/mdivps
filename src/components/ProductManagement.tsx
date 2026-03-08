@@ -21,7 +21,7 @@ import { Link } from "react-router-dom"
 import { useProductStockMovements, STOCK_OUT_REASONS } from "@/hooks/useProductStockMovements"
 import { MinusCircle } from "lucide-react"
 
-export default function ProductPage() {
+export function ProductManagement() {
   const { products, upsertProduct, deleteProduct, isLoading } = useProducts()
   const { user } = useAuth()
   const { hasPermission } = usePermissions()
@@ -307,14 +307,14 @@ export default function ProductPage() {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="text-center">Loading products...</div>
+      <div className="space-y-6">
+        <div className="text-center">Memuat data...</div>
       </div>
     )
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-2">
         <div className="text-lg font-semibold">Produk (Finished Goods)</div>
         <div className="flex gap-2">

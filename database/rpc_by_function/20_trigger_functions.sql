@@ -19,11 +19,9 @@
 -- =====================================================
 -- Function: audit_trigger_func
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.audit_trigger_func()
- RETURNS trigger
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.audit_trigger_func() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   old_data jsonb := NULL;
   new_data jsonb := NULL;
@@ -74,17 +72,15 @@ BEGIN
   VALUES (TG_TABLE_NAME, TG_OP, record_id, old_data, new_data, changed_fields, current_user_id, current_user_email, current_user_role, NOW());
   IF (TG_OP = 'DELETE') THEN RETURN OLD; ELSE RETURN NEW; END IF;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: prevent_posted_journal_lines_update
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.prevent_posted_journal_lines_update()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.prevent_posted_journal_lines_update() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $function$
 DECLARE
   v_journal_status TEXT;
   v_is_voided BOOLEAN;
@@ -118,17 +114,15 @@ BEGIN
   END IF;
   RETURN COALESCE(NEW, OLD);
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: prevent_posted_journal_update
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.prevent_posted_journal_update()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.prevent_posted_journal_update() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $function$
 BEGIN
   -- Allow if changing from draft to posted
   IF OLD.status = 'draft' AND NEW.status = 'posted' THEN
@@ -154,17 +148,15 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: tf_update_balance_on_journal_change
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.tf_update_balance_on_journal_change()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.tf_update_balance_on_journal_change() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $function$
 DECLARE
     r_line RECORD;
     v_delta NUMERIC;
@@ -191,17 +183,15 @@ BEGIN
 
     RETURN NULL;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: tf_update_balance_on_line_change
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.tf_update_balance_on_line_change()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.tf_update_balance_on_line_change() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $function$
 DECLARE
     v_is_voided BOOLEAN;
     v_delta NUMERIC;
@@ -232,17 +222,15 @@ BEGIN
 
     RETURN NULL;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: trigger_migration_delivery_journal
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.trigger_migration_delivery_journal()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.trigger_migration_delivery_journal() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $function$
 DECLARE
   v_transaction RECORD;
   v_is_migration BOOLEAN := FALSE;
@@ -295,17 +283,15 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: trigger_process_advance_repayment
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.trigger_process_advance_repayment()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.trigger_process_advance_repayment() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $function$
 BEGIN
   -- Only process when payroll status changes to 'paid' and there are deductions
   IF NEW.status = 'paid' AND OLD.status != 'paid' AND NEW.deduction_amount > 0 THEN
@@ -314,17 +300,15 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: trigger_sync_payroll_commission
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.trigger_sync_payroll_commission()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.trigger_sync_payroll_commission() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $function$
 BEGIN
   -- When payroll status changes to 'paid' and has commission amount
   IF NEW.status = 'paid' AND OLD.status != 'paid' AND NEW.commission_amount > 0 THEN
@@ -371,37 +355,32 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: update_product_materials_updated_at
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.update_product_materials_updated_at()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.update_product_materials_updated_at() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $function$
 BEGIN
     NEW.updated_at = CURRENT_TIMESTAMP;
     RETURN NEW;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: update_updated_at_column
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.update_updated_at_column()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.update_updated_at_column() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $function$
 BEGIN
     NEW.updated_at = NOW();
     RETURN NEW;
 END;
-$function$
-;
+$function$;
 
 

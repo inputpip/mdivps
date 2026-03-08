@@ -16,10 +16,9 @@
 -- =====================================================
 -- Function: calculate_asset_current_value
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.calculate_asset_current_value(p_asset_id text)
- RETURNS numeric
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.calculate_asset_current_value(p_asset_id text) RETURNS numeric
+    LANGUAGE plpgsql
+    AS $function$
 DECLARE
     v_purchase_price NUMERIC;
     v_purchase_date DATE;
@@ -62,18 +61,15 @@ BEGIN
     END IF;
     RETURN GREATEST(v_current_value, 0);
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: create_asset_atomic
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.create_asset_atomic(p_asset jsonb, p_branch_id uuid)
- RETURNS TABLE(success boolean, asset_id uuid, journal_id uuid, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.create_asset_atomic(p_asset jsonb, p_branch_id uuid) RETURNS TABLE(success boolean, asset_id uuid, journal_id uuid, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_asset_id UUID;
   v_name TEXT;
@@ -294,17 +290,15 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, NULL::UUID, NULL::UUID, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: create_maintenance_reminders
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.create_maintenance_reminders()
- RETURNS void
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.create_maintenance_reminders() RETURNS void
+    LANGUAGE plpgsql
+    AS $function$
 BEGIN
     -- Create notifications for upcoming maintenance
     INSERT INTO notifications (id, title, message, type, reference_type, reference_id, reference_url, priority, user_id)
@@ -336,18 +330,15 @@ BEGIN
       AND scheduled_date >= CURRENT_DATE
       AND notification_sent = FALSE;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: delete_asset_atomic
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.delete_asset_atomic(p_asset_id uuid, p_branch_id uuid)
- RETURNS TABLE(success boolean, journals_voided integer, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.delete_asset_atomic(p_asset_id uuid, p_branch_id uuid) RETURNS TABLE(success boolean, journals_voided integer, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_journals_voided INTEGER := 0;
 BEGIN
@@ -380,18 +371,15 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, 0, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: record_depreciation_atomic
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.record_depreciation_atomic(p_asset_id uuid, p_amount numeric, p_period text, p_branch_id uuid)
- RETURNS TABLE(success boolean, journal_id uuid, new_current_value numeric, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.record_depreciation_atomic(p_asset_id uuid, p_amount numeric, p_period text, p_branch_id uuid) RETURNS TABLE(success boolean, journal_id uuid, new_current_value numeric, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_asset RECORD;
   v_journal_id UUID;
@@ -494,18 +482,15 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, NULL::UUID, 0::NUMERIC, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: update_asset_atomic
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.update_asset_atomic(p_asset_id uuid, p_asset jsonb, p_branch_id uuid)
- RETURNS TABLE(success boolean, journal_updated boolean, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.update_asset_atomic(p_asset_id uuid, p_asset jsonb, p_branch_id uuid) RETURNS TABLE(success boolean, journal_updated boolean, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_old_asset RECORD;
   v_new_price NUMERIC;
@@ -596,17 +581,15 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, FALSE, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: update_overdue_maintenance
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.update_overdue_maintenance()
- RETURNS void
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.update_overdue_maintenance() RETURNS void
+    LANGUAGE plpgsql
+    AS $function$
 BEGIN
     -- Update status to overdue for scheduled maintenance past due date
     UPDATE asset_maintenance
@@ -635,7 +618,6 @@ BEGIN
     WHERE status = 'overdue'
       AND notification_sent = FALSE;
 END;
-$function$
-;
+$function$;
 
 

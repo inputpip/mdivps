@@ -86,6 +86,7 @@ const getMenuItems = (hasPermission: (permission: Permission) => boolean, hasGra
       { href: "/transaction-items-report", label: "Laporan Produk Laku", icon: PackageOpen, permission: PERMISSIONS.REPORTS },
       { href: "/sales-reports", label: "Laporan Sales", icon: MapPin, permission: PERMISSIONS.REPORTS },
       { href: "/attendance", label: "Absensi", icon: Fingerprint, permission: PERMISSIONS.ATTENDANCE },
+      { href: "/expenses", label: "Pengeluaran & Kasbon", icon: FileText, permission: PERMISSIONS.FINANCIAL },
     ].filter(item => {
       // Check granular permission first
       if ('granularPermission' in item && item.granularPermission) {
@@ -108,8 +109,7 @@ const getMenuItems = (hasPermission: (permission: Permission) => boolean, hasGra
   {
     title: "Manajemen Data",
     items: [
-      { href: "/products", label: "Produk", icon: Package, permission: PERMISSIONS.PRODUCTS },
-      { href: "/materials", label: "Bahan & Stok", icon: Box, permission: PERMISSIONS.MATERIALS },
+      { href: "/materials", label: "Barang & Stok", icon: Box, permission: PERMISSIONS.MATERIALS },
       { href: "/production", label: "Produksi", icon: Factory, permission: PERMISSIONS.PRODUCTS },
       { href: "/customers", label: "Pelanggan", icon: Users, permission: PERMISSIONS.CUSTOMERS },
       { href: "/customer-map", label: "Pelanggan Terdekat", icon: MapPin, permission: PERMISSIONS.CUSTOMERS },
@@ -126,8 +126,6 @@ const getMenuItems = (hasPermission: (permission: Permission) => boolean, hasGra
       { href: "/cash-flow", label: "Buku Kas Harian", icon: TrendingUp, permission: PERMISSIONS.FINANCIAL },
       { href: "/receivables", label: "Piutang", icon: ReceiptText, permission: PERMISSIONS.FINANCIAL },
       { href: "/accounts-payable", label: "Hutang", icon: DollarSign, permission: PERMISSIONS.FINANCIAL },
-      { href: "/expenses", label: "Pengeluaran", icon: FileText, permission: PERMISSIONS.FINANCIAL },
-      { href: "/advances", label: "Panjar Karyawan", icon: HandCoins, permission: PERMISSIONS.FINANCIAL },
       { href: "/financial-reports", label: "Laporan Keuangan", icon: PieChart, permission: PERMISSIONS.FINANCIAL },
     ].filter(item => hasPermission(item.permission)),
   },

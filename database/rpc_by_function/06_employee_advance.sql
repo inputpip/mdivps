@@ -15,10 +15,9 @@
 -- =====================================================
 -- Function: calculate_payroll_with_advances
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.calculate_payroll_with_advances(emp_id uuid, period_year integer, period_month integer)
- RETURNS jsonb
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.calculate_payroll_with_advances(emp_id uuid, period_year integer, period_month integer) RETURNS jsonb
+    LANGUAGE plpgsql
+    AS $function$
 DECLARE
   salary_config public.employee_salaries;
   period_start DATE;
@@ -79,18 +78,15 @@ BEGIN
   );
   RETURN result;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: create_employee_advance_atomic
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.create_employee_advance_atomic(p_advance jsonb, p_branch_id uuid)
- RETURNS TABLE(success boolean, advance_id uuid, journal_id uuid, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.create_employee_advance_atomic(p_advance jsonb, p_branch_id uuid) RETURNS TABLE(success boolean, advance_id uuid, journal_id uuid, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_advance_id UUID;
   v_journal_id UUID;
@@ -240,18 +236,15 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, NULL::UUID, NULL::UUID, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: get_outstanding_advances
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.get_outstanding_advances(emp_id uuid, up_to_date date DEFAULT CURRENT_DATE)
- RETURNS numeric
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.get_outstanding_advances(emp_id uuid, up_to_date date DEFAULT CURRENT_DATE) RETURNS numeric
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   total_advances DECIMAL(15,2) := 0;
   total_repayments DECIMAL(15,2) := 0;
@@ -273,18 +266,15 @@ BEGIN
   -- Return 0 if negative (overpaid)
   RETURN GREATEST(outstanding, 0);
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: process_advance_repayment_from_salary
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.process_advance_repayment_from_salary(payroll_record_id uuid, advance_deduction_amount numeric)
- RETURNS void
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.process_advance_repayment_from_salary(payroll_record_id uuid, advance_deduction_amount numeric) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   payroll_record RECORD;
   remaining_deduction DECIMAL(15,2);
@@ -343,27 +333,16 @@ BEGIN
   -- Decrease panjar karyawan account (1220)
   PERFORM public.update_account_balance('acc-1220', -advance_deduction_amount);
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: repay_employee_advance_atomic
 -- =====================================================
 -- UPDATED: Added p_payment_account_id parameter to support user-selected payment account
-CREATE OR REPLACE FUNCTION public.repay_employee_advance_atomic(
-  p_advance_id uuid,
-  p_branch_id uuid,
-  p_amount numeric,
-  p_payment_date date DEFAULT CURRENT_DATE,
-  p_payment_account_id uuid DEFAULT NULL,
-  p_payment_method text DEFAULT 'cash'::text,
-  p_notes text DEFAULT NULL::text
-)
- RETURNS TABLE(success boolean, payment_id uuid, journal_id uuid, remaining_amount numeric, is_fully_paid boolean, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.repay_employee_advance_atomic(p_advance_id uuid, p_branch_id uuid, p_amount numeric, p_payment_date date DEFAULT CURRENT_DATE, p_payment_account_id uuid DEFAULT NULL::uuid, p_payment_method text DEFAULT 'cash'::text, p_notes text DEFAULT NULL::text) RETURNS TABLE(success boolean, payment_id uuid, journal_id uuid, remaining_amount numeric, is_fully_paid boolean, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_advance RECORD;
   v_payment_id UUID;
@@ -505,18 +484,15 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, NULL::UUID, NULL::UUID, 0::NUMERIC, FALSE, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: void_employee_advance_atomic
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.void_employee_advance_atomic(p_advance_id uuid, p_branch_id uuid, p_reason text DEFAULT 'Dibatalkan'::text)
- RETURNS TABLE(success boolean, journals_voided integer, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.void_employee_advance_atomic(p_advance_id uuid, p_branch_id uuid, p_reason text DEFAULT 'Dibatalkan'::text) RETURNS TABLE(success boolean, journals_voided integer, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_advance RECORD;
   v_journals_voided INTEGER := 0;
@@ -576,7 +552,6 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, 0, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 

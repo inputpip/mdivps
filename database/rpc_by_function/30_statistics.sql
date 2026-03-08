@@ -10,14 +10,12 @@
 -- =====================================================
 -- Function: refresh_daily_stats
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.refresh_daily_stats()
- RETURNS void
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.refresh_daily_stats() RETURNS void
+    LANGUAGE plpgsql
+    AS $function$
 BEGIN
   REFRESH MATERIALIZED VIEW public.daily_stats;
 END;
-$function$
-;
+$function$;
 
 

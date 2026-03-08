@@ -154,6 +154,14 @@ export function ExpenseManagement() {
   const [showFilters, setShowFilters] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Pagination logic
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, filterStartDate, filterEndDate, filterExpenseAccountId, filterPaymentAccountId]);
+
   const expenseAccounts = accounts?.filter(a => a.type === 'Beban' && !a.isHeader) || [];
   const paymentAccounts = accounts?.filter(a => a.isPaymentAccount) || [];
   const selectedExpenseAccount = expenseAccounts.find(a => a.id === watchExpenseAccountId);
@@ -250,6 +258,9 @@ export function ExpenseManagement() {
     if (filterPaymentAccountId && filterPaymentAccountId !== "all" && exp.accountId !== filterPaymentAccountId) return false;
     return true;
   }) || [];
+
+  const totalPages = Math.ceil(filteredExpenses.length / itemsPerPage);
+  const paginatedExpenses = filteredExpenses.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const totalFilteredAmount = filteredExpenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
   const totalAllAmount = expenses?.reduce((sum, exp) => sum + (exp.amount || 0), 0) || 0;
@@ -564,7 +575,7 @@ export function ExpenseManagement() {
                     </TableCell>
                   </TableRow>
                 ) :
-                  filteredExpenses.map(exp => {
+                  paginatedExpenses.map(exp => {
                     const isDebtPayment = exp.category === 'Pembayaran Hutang';
                     const sumberDana = exp.accountName || paymentAccounts.find(a => a.id === exp.accountId)?.name || '-';
                     return (
@@ -636,6 +647,36 @@ export function ExpenseManagement() {
               }
             </TableBody>
           </Table>
+
+          {/* Pagination Controls */}
+          {filteredExpenses.length > itemsPerPage && (
+            <div className="flex flex-col sm:flex-row items-center justify-between px-2 mt-4 pt-4 border-t gap-4">
+              <div className="text-xs text-muted-foreground">
+                Menampilkan {filteredExpenses.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1} - {Math.min(currentPage * itemsPerPage, filteredExpenses.length)} dari {filteredExpenses.length} data
+              </div>
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Sebelumnya
+                </Button>
+                <div className="text-xs font-medium border px-3 py-1.5 rounded-md bg-muted/50">
+                  {currentPage} / {totalPages || 1}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages || totalPages === 0}
+                >
+                  Selanjutnya
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

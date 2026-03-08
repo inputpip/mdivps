@@ -17,10 +17,9 @@
 -- =====================================================
 -- Function: notify_debt_payment
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.notify_debt_payment()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.notify_debt_payment() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $function$
 BEGIN
     -- Only notify for debt payment type
     IF NEW.type = 'pembayaran_utang' THEN
@@ -38,17 +37,15 @@ BEGIN
     END IF;
     RETURN NEW;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: pay_receivable
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.pay_receivable(p_transaction_id text, p_amount numeric)
- RETURNS void
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.pay_receivable(p_transaction_id text, p_amount numeric) RETURNS void
+    LANGUAGE plpgsql
+    AS $function$
 DECLARE
   current_paid_amount numeric;
   new_paid_amount numeric;
@@ -67,27 +64,78 @@ BEGIN
     END
   WHERE id = p_transaction_id;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: pay_receivable_complete_rpc
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.pay_receivable_complete_rpc(
-    p_transaction_id text, 
-    p_amount numeric, 
-    p_payment_account_id text, 
-    p_notes text DEFAULT NULL::text, 
-    p_branch_id uuid DEFAULT NULL::uuid, 
-    p_user_id uuid DEFAULT NULL::uuid, 
-    p_recorded_by_name text DEFAULT NULL::text,
-    p_payment_date date DEFAULT CURRENT_DATE
-)
- RETURNS TABLE(success boolean, payment_id uuid, journal_id uuid, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.pay_receivable_complete_rpc(p_branch_id uuid, p_receivable_id uuid, p_amount numeric, p_payment_method text DEFAULT 'cash'::text, p_payment_account_id text DEFAULT NULL::text, p_notes text DEFAULT NULL::text, p_created_by uuid DEFAULT NULL::uuid) RETURNS TABLE(success boolean, payment_id uuid, journal_id uuid, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
+DECLARE
+  v_payment_id UUID := gen_random_uuid();
+  v_journal_id UUID := gen_random_uuid();
+  v_journal_number TEXT;
+  v_receivable RECORD;
+  v_kas_account_id TEXT;
+  v_piutang_account_id TEXT;
+BEGIN
+  IF p_branch_id IS NULL THEN
+    RETURN QUERY SELECT FALSE, NULL::UUID, NULL::UUID, 'Branch ID wajib diisi'::TEXT;
+    RETURN;
+  END IF;
+
+  SELECT r.*, c.name as customer_name INTO v_receivable
+  FROM receivables r LEFT JOIN customers c ON r.customer_id = c.id
+  WHERE r.id = p_receivable_id AND r.branch_id = p_branch_id;
+
+  IF NOT FOUND THEN
+    RETURN QUERY SELECT FALSE, NULL::UUID, NULL::UUID, 'Piutang tidak ditemukan'::TEXT;
+    RETURN;
+  END IF;
+
+  IF p_payment_account_id IS NOT NULL THEN
+    v_kas_account_id := p_payment_account_id;
+  ELSE
+    SELECT id INTO v_kas_account_id FROM accounts WHERE code = '1110' AND branch_id = p_branch_id;
+  END IF;
+
+  SELECT id INTO v_piutang_account_id FROM accounts WHERE code = '1210' AND branch_id = p_branch_id;
+
+  IF v_kas_account_id IS NULL OR v_piutang_account_id IS NULL THEN
+    RETURN QUERY SELECT FALSE, NULL::UUID, NULL::UUID, 'Akun kas atau piutang tidak ditemukan'::TEXT;
+    RETURN;
+  END IF;
+
+  v_journal_number := 'JE-PAY-' || TO_CHAR(NOW(), 'YYYYMMDD') || '-' || LPAD(FLOOR(RANDOM()*10000)::TEXT, 4, '0');
+
+  INSERT INTO journal_entries (id, entry_number, entry_date, description, reference_type, reference_id, status, total_debit, total_credit, branch_id, created_by, created_at, is_voided)
+  VALUES (v_journal_id, v_journal_number, CURRENT_DATE, format('Pembayaran piutang: %s', COALESCE(v_receivable.customer_name, 'Customer')), 'payment', v_payment_id::TEXT, 'posted', p_amount, p_amount, p_branch_id, p_created_by, NOW(), FALSE);
+
+  INSERT INTO journal_entry_lines (journal_entry_id, line_number, account_id, account_code, account_name, description, debit_amount, credit_amount)
+  SELECT v_journal_id, 1, a.id, a.code, a.name, format('Terima dari %s', COALESCE(v_receivable.customer_name, 'Customer')), p_amount, 0
+  FROM accounts a WHERE a.id = v_kas_account_id;
+
+  INSERT INTO journal_entry_lines (journal_entry_id, line_number, account_id, account_code, account_name, description, debit_amount, credit_amount)
+  SELECT v_journal_id, 2, a.id, a.code, a.name, format('Pelunasan piutang: %s', COALESCE(v_receivable.customer_name, 'Customer')), 0, p_amount
+  FROM accounts a WHERE a.id = v_piutang_account_id;
+
+  INSERT INTO receivable_payments (id, receivable_id, amount, payment_method, payment_date, notes, journal_id, created_by, created_at)
+  VALUES (v_payment_id, p_receivable_id, p_amount, p_payment_method, CURRENT_DATE, p_notes, v_journal_id, p_created_by, NOW());
+
+  UPDATE receivables SET paid_amount = paid_amount + p_amount, status = CASE WHEN paid_amount + p_amount >= total_amount THEN 'paid' ELSE 'partial' END WHERE id = p_receivable_id;
+
+  RETURN QUERY SELECT TRUE, v_payment_id, v_journal_id, NULL::TEXT;
+EXCEPTION WHEN OTHERS THEN
+  RETURN QUERY SELECT FALSE, NULL::UUID, NULL::UUID, SQLERRM::TEXT;
+END;
+$function$;
+
+
+CREATE OR REPLACE FUNCTION public.pay_receivable_complete_rpc(p_transaction_id text, p_amount numeric, p_payment_account_id text, p_notes text DEFAULT NULL::text, p_branch_id uuid DEFAULT NULL::uuid, p_user_id uuid DEFAULT NULL::uuid, p_recorded_by_name text DEFAULT NULL::text, p_payment_date date DEFAULT CURRENT_DATE) RETURNS TABLE(success boolean, payment_id uuid, journal_id uuid, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
     v_transaction RECORD;
     v_payment_id UUID;
@@ -204,87 +252,21 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
     RETURN QUERY SELECT FALSE, NULL::UUID, NULL::UUID, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: pay_receivable_complete_rpc (OVERLOAD)
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.pay_receivable_complete_rpc(p_branch_id uuid, p_receivable_id uuid, p_amount numeric, p_payment_method text DEFAULT 'cash'::text, p_payment_account_id text DEFAULT NULL::text, p_notes text DEFAULT NULL::text, p_created_by uuid DEFAULT NULL::uuid)
- RETURNS TABLE(success boolean, payment_id uuid, journal_id uuid, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
-DECLARE
-  v_payment_id UUID := gen_random_uuid();
-  v_journal_id UUID := gen_random_uuid();
-  v_journal_number TEXT;
-  v_receivable RECORD;
-  v_kas_account_id TEXT;
-  v_piutang_account_id TEXT;
-BEGIN
-  IF p_branch_id IS NULL THEN
-    RETURN QUERY SELECT FALSE, NULL::UUID, NULL::UUID, 'Branch ID wajib diisi'::TEXT;
-    RETURN;
-  END IF;
 
-  SELECT r.*, c.name as customer_name INTO v_receivable
-  FROM receivables r LEFT JOIN customers c ON r.customer_id = c.id
-  WHERE r.id = p_receivable_id AND r.branch_id = p_branch_id;
-
-  IF NOT FOUND THEN
-    RETURN QUERY SELECT FALSE, NULL::UUID, NULL::UUID, 'Piutang tidak ditemukan'::TEXT;
-    RETURN;
-  END IF;
-
-  IF p_payment_account_id IS NOT NULL THEN
-    v_kas_account_id := p_payment_account_id;
-  ELSE
-    SELECT id INTO v_kas_account_id FROM accounts WHERE code = '1110' AND branch_id = p_branch_id;
-  END IF;
-
-  SELECT id INTO v_piutang_account_id FROM accounts WHERE code = '1210' AND branch_id = p_branch_id;
-
-  IF v_kas_account_id IS NULL OR v_piutang_account_id IS NULL THEN
-    RETURN QUERY SELECT FALSE, NULL::UUID, NULL::UUID, 'Akun kas atau piutang tidak ditemukan'::TEXT;
-    RETURN;
-  END IF;
-
-  v_journal_number := 'JE-PAY-' || TO_CHAR(NOW(), 'YYYYMMDD') || '-' || LPAD(FLOOR(RANDOM()*10000)::TEXT, 4, '0');
-
-  INSERT INTO journal_entries (id, entry_number, entry_date, description, reference_type, reference_id, status, total_debit, total_credit, branch_id, created_by, created_at, is_voided)
-  VALUES (v_journal_id, v_journal_number, CURRENT_DATE, format('Pembayaran piutang: %s', COALESCE(v_receivable.customer_name, 'Customer')), 'payment', v_payment_id::TEXT, 'posted', p_amount, p_amount, p_branch_id, p_created_by, NOW(), FALSE);
-
-  INSERT INTO journal_entry_lines (journal_entry_id, line_number, account_id, account_code, account_name, description, debit_amount, credit_amount)
-  SELECT v_journal_id, 1, a.id, a.code, a.name, format('Terima dari %s', COALESCE(v_receivable.customer_name, 'Customer')), p_amount, 0
-  FROM accounts a WHERE a.id = v_kas_account_id;
-
-  INSERT INTO journal_entry_lines (journal_entry_id, line_number, account_id, account_code, account_name, description, debit_amount, credit_amount)
-  SELECT v_journal_id, 2, a.id, a.code, a.name, format('Pelunasan piutang: %s', COALESCE(v_receivable.customer_name, 'Customer')), 0, p_amount
-  FROM accounts a WHERE a.id = v_piutang_account_id;
-
-  INSERT INTO receivable_payments (id, receivable_id, amount, payment_method, payment_date, notes, journal_id, created_by, created_at)
-  VALUES (v_payment_id, p_receivable_id, p_amount, p_payment_method, CURRENT_DATE, p_notes, v_journal_id, p_created_by, NOW());
-
-  UPDATE receivables SET paid_amount = paid_amount + p_amount, status = CASE WHEN paid_amount + p_amount >= total_amount THEN 'paid' ELSE 'partial' END WHERE id = p_receivable_id;
-
-  RETURN QUERY SELECT TRUE, v_payment_id, v_journal_id, NULL::TEXT;
-EXCEPTION WHEN OTHERS THEN
-  RETURN QUERY SELECT FALSE, NULL::UUID, NULL::UUID, SQLERRM::TEXT;
-END;
-$function$
-;
 
 
 -- =====================================================
 -- Function: pay_receivable_with_history
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.pay_receivable_with_history(p_transaction_id text, p_amount numeric, p_account_id text DEFAULT NULL::text, p_account_name text DEFAULT NULL::text, p_notes text DEFAULT NULL::text, p_recorded_by text DEFAULT NULL::text, p_recorded_by_name text DEFAULT NULL::text)
- RETURNS void
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.pay_receivable_with_history(p_transaction_id text, p_amount numeric, p_account_id text DEFAULT NULL::text, p_account_name text DEFAULT NULL::text, p_notes text DEFAULT NULL::text, p_recorded_by text DEFAULT NULL::text, p_recorded_by_name text DEFAULT NULL::text) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $_$
 DECLARE
   v_transaction RECORD;
   v_remaining_amount NUMERIC;
@@ -339,17 +321,15 @@ BEGIN
     p_recorded_by_name
   );
 END;
-$function$
-;
+$_$;
 
 
 -- =====================================================
 -- Function: record_receivable_payment
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.record_receivable_payment(p_transaction_id text, p_amount numeric, p_payment_method text DEFAULT 'cash'::text, p_account_id text DEFAULT NULL::text, p_account_name text DEFAULT 'Kas'::text, p_description text DEFAULT NULL::text, p_notes text DEFAULT NULL::text, p_reference_number text DEFAULT NULL::text, p_paid_by_user_id uuid DEFAULT NULL::uuid, p_paid_by_user_name text DEFAULT 'System'::text, p_paid_by_user_role text DEFAULT 'staff'::text)
- RETURNS uuid
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.record_receivable_payment(p_transaction_id text, p_amount numeric, p_payment_method text DEFAULT 'cash'::text, p_account_id text DEFAULT NULL::text, p_account_name text DEFAULT 'Kas'::text, p_description text DEFAULT NULL::text, p_notes text DEFAULT NULL::text, p_reference_number text DEFAULT NULL::text, p_paid_by_user_id uuid DEFAULT NULL::uuid, p_paid_by_user_name text DEFAULT 'System'::text, p_paid_by_user_role text DEFAULT 'staff'::text) RETURNS uuid
+    LANGUAGE plpgsql
+    AS $function$
 DECLARE
   payment_id UUID;
   transaction_total NUMERIC;
@@ -404,18 +384,15 @@ BEGIN
   
   RETURN payment_id;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: update_overdue_installments_atomic
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.update_overdue_installments_atomic()
- RETURNS TABLE(updated_count integer, success boolean, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.update_overdue_installments_atomic() RETURNS TABLE(updated_count integer, success boolean, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_updated_count INTEGER := 0;
 BEGIN
@@ -438,18 +415,15 @@ EXCEPTION WHEN OTHERS THEN
     FALSE,
     SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: update_remaining_amount
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.update_remaining_amount(p_advance_id text)
- RETURNS void
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.update_remaining_amount(p_advance_id text) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_total_repaid NUMERIC := 0;
   v_original_amount NUMERIC := 0;
@@ -483,5 +457,4 @@ BEGIN
   WHERE id = p_advance_id;
   
 END;
-$function$
-;
+$function$;

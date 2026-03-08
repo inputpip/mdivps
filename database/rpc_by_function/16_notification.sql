@@ -11,10 +11,9 @@
 -- =====================================================
 -- Function: notify_production_completed
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.notify_production_completed()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.notify_production_completed() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $function$
 DECLARE
     v_product_name TEXT;
 BEGIN
@@ -36,18 +35,15 @@ BEGIN
     END IF;
     RETURN NEW;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: upsert_notification_atomic
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.upsert_notification_atomic(p_user_id uuid, p_type text, p_title text, p_message text, p_priority text DEFAULT 'normal'::text, p_reference_id text DEFAULT NULL::text, p_reference_type text DEFAULT NULL::text, p_reference_url text DEFAULT NULL::text)
- RETURNS TABLE(notification_id uuid, success boolean, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.upsert_notification_atomic(p_user_id uuid, p_type text, p_title text, p_message text, p_priority text DEFAULT 'normal'::text, p_reference_id text DEFAULT NULL::text, p_reference_type text DEFAULT NULL::text, p_reference_url text DEFAULT NULL::text) RETURNS TABLE(notification_id uuid, success boolean, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_notification_id UUID;
   v_existing_id UUID;
@@ -108,7 +104,6 @@ EXCEPTION WHEN OTHERS THEN
     FALSE,
     SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 

@@ -21,10 +21,9 @@
 -- =====================================================
 -- Function: audit_transactions_changes
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.audit_transactions_changes()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.audit_transactions_changes() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $function$
 BEGIN
   IF TG_OP = 'DELETE' THEN
     PERFORM public.create_audit_log(
@@ -74,17 +73,15 @@ BEGIN
   END IF;
   RETURN NULL;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: calculate_transaction_payment_status
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.calculate_transaction_payment_status(p_transaction_id text)
- RETURNS text
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.calculate_transaction_payment_status(p_transaction_id text) RETURNS text
+    LANGUAGE plpgsql
+    AS $function$
 DECLARE
   transaction_total NUMERIC;
   total_paid NUMERIC;
@@ -104,17 +101,15 @@ BEGIN
   ELSE RETURN 'partial';
   END IF;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: cancel_transaction_payment
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.cancel_transaction_payment(p_payment_id uuid, p_cancelled_by uuid DEFAULT NULL::uuid, p_reason text DEFAULT 'Payment cancelled'::text)
- RETURNS boolean
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.cancel_transaction_payment(p_payment_id uuid, p_cancelled_by uuid DEFAULT NULL::uuid, p_reason text DEFAULT 'Payment cancelled'::text) RETURNS boolean
+    LANGUAGE plpgsql
+    AS $function$
 DECLARE
   transaction_id_var TEXT;
   payment_amount NUMERIC;
@@ -144,17 +139,15 @@ BEGIN
   
   RETURN TRUE;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: cancel_transaction_v2
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.cancel_transaction_v2(p_transaction_id text, p_user_id uuid, p_user_name text, p_reason text DEFAULT 'Cancelled'::text)
- RETURNS TABLE(success boolean, message text, journal_voided boolean, stock_restored boolean)
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.cancel_transaction_v2(p_transaction_id text, p_user_id uuid, p_user_name text, p_reason text DEFAULT 'Cancelled'::text) RETURNS TABLE(success boolean, message text, journal_voided boolean, stock_restored boolean)
+    LANGUAGE plpgsql
+    AS $function$
 DECLARE
   v_transaction RECORD;
   v_item RECORD;
@@ -216,18 +209,15 @@ BEGIN
   END IF;
   RETURN QUERY SELECT TRUE, 'Transaction cancelled successfully'::TEXT, v_journal_id > 0, TRUE;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: create_migration_transaction
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.create_migration_transaction(p_transaction_id text, p_customer_id uuid, p_customer_name text, p_order_date date, p_items jsonb, p_total numeric, p_delivered_value numeric, p_paid_amount numeric DEFAULT 0, p_payment_account_id text DEFAULT NULL::text, p_notes text DEFAULT NULL::text, p_branch_id uuid DEFAULT NULL::uuid, p_cashier_id uuid DEFAULT NULL::uuid, p_cashier_name text DEFAULT NULL::text)
- RETURNS TABLE(success boolean, transaction_id text, journal_id uuid, delivery_id uuid, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.create_migration_transaction(p_transaction_id text, p_customer_id uuid, p_customer_name text, p_order_date date, p_items jsonb, p_total numeric, p_delivered_value numeric, p_paid_amount numeric DEFAULT 0, p_payment_account_id text DEFAULT NULL::text, p_notes text DEFAULT NULL::text, p_branch_id uuid DEFAULT NULL::uuid, p_cashier_id uuid DEFAULT NULL::uuid, p_cashier_name text DEFAULT NULL::text) RETURNS TABLE(success boolean, transaction_id text, journal_id uuid, delivery_id uuid, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_journal_id UUID;
   v_delivery_id UUID;
@@ -643,18 +633,15 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, NULL::TEXT, NULL::UUID, NULL::UUID, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: create_transaction_atomic
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.create_transaction_atomic(p_transaction jsonb, p_items jsonb, p_branch_id uuid, p_cashier_id uuid DEFAULT NULL::uuid, p_cashier_name text DEFAULT NULL::text, p_quotation_id text DEFAULT NULL::text)
- RETURNS TABLE(success boolean, transaction_id text, total_hpp numeric, total_hpp_bonus numeric, journal_id uuid, items_count integer, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.create_transaction_atomic(p_transaction jsonb, p_items jsonb, p_branch_id uuid, p_cashier_id uuid DEFAULT NULL::uuid, p_cashier_name text DEFAULT NULL::text, p_quotation_id text DEFAULT NULL::text) RETURNS TABLE(success boolean, transaction_id text, total_hpp numeric, total_hpp_bonus numeric, journal_id uuid, items_count integer, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_transaction_id TEXT;
   v_customer_id UUID;
@@ -1181,8 +1168,7 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, NULL::TEXT, 0::NUMERIC, 0::NUMERIC, NULL::UUID, 0, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- Legacy material deduction functions removed to prevent double stock reduction.
@@ -1191,10 +1177,9 @@ $function$
 -- =====================================================
 -- Function: delete_transaction_cascade
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.delete_transaction_cascade(p_transaction_id text, p_deleted_by uuid DEFAULT NULL::uuid, p_reason text DEFAULT 'Manual deletion'::text)
- RETURNS boolean
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.delete_transaction_cascade(p_transaction_id text, p_deleted_by uuid DEFAULT NULL::uuid, p_reason text DEFAULT 'Manual deletion'::text) RETURNS boolean
+    LANGUAGE plpgsql
+    AS $function$
 BEGIN
   -- Soft delete payments
   UPDATE transaction_payments 
@@ -1207,18 +1192,15 @@ BEGIN
   
   RETURN TRUE;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: search_transactions
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.search_transactions(search_term text DEFAULT ''::text, limit_count integer DEFAULT 50, offset_count integer DEFAULT 0, status_filter text DEFAULT NULL::text)
- RETURNS TABLE(id text, customer_name text, customer_display_name text, cashier_name text, total numeric, paid_amount numeric, payment_status text, status text, order_date timestamp with time zone, created_at timestamp with time zone)
- LANGUAGE plpgsql
- STABLE
-AS $function$
+CREATE OR REPLACE FUNCTION public.search_transactions(search_term text DEFAULT ''::text, limit_count integer DEFAULT 50, offset_count integer DEFAULT 0, status_filter text DEFAULT NULL::text) RETURNS TABLE(id text, customer_name text, customer_display_name text, cashier_name text, total numeric, paid_amount numeric, payment_status text, status text, order_date timestamp with time zone, created_at timestamp with time zone)
+    LANGUAGE plpgsql STABLE
+    AS $function$
 BEGIN
   RETURN QUERY
   SELECT 
@@ -1245,18 +1227,15 @@ BEGIN
   LIMIT limit_count
   OFFSET offset_count;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: update_transaction_atomic
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.update_transaction_atomic(p_transaction_id text, p_transaction jsonb, p_branch_id uuid, p_user_id uuid DEFAULT NULL::uuid, p_user_name text DEFAULT NULL::text)
- RETURNS TABLE(success boolean, transaction_id text, journal_id uuid, changes_made text[], error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.update_transaction_atomic(p_transaction_id text, p_transaction jsonb, p_branch_id uuid, p_user_id uuid DEFAULT NULL::uuid, p_user_name text DEFAULT NULL::text) RETURNS TABLE(success boolean, transaction_id text, journal_id uuid, changes_made text[], error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_old_transaction RECORD;
   v_new_total NUMERIC;
@@ -1415,17 +1394,15 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, NULL::TEXT, NULL::UUID, '{}'::TEXT[], SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: validate_transaction_status_transition
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.validate_transaction_status_transition()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.validate_transaction_status_transition() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $function$
 BEGIN
   -- Jika transaksi adalah laku kantor, tidak boleh masuk ke delivery flow
   IF NEW.is_office_sale = true AND NEW.status IN ('Siap Antar', 'Diantar Sebagian') THEN
@@ -1435,18 +1412,15 @@ BEGIN
   
   RETURN NEW;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: void_transaction_atomic
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.void_transaction_atomic(p_transaction_id text, p_branch_id uuid, p_reason text DEFAULT 'Cancelled'::text, p_user_id uuid DEFAULT NULL::uuid)
- RETURNS TABLE(success boolean, items_restored integer, journals_voided integer, commissions_deleted integer, deliveries_deleted integer, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.void_transaction_atomic(p_transaction_id text, p_branch_id uuid, p_reason text DEFAULT 'Cancelled'::text, p_user_id uuid DEFAULT NULL::uuid) RETURNS TABLE(success boolean, items_restored integer, journals_voided integer, commissions_deleted integer, deliveries_deleted integer, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_transaction RECORD;
   v_items_restored INTEGER := 0;
@@ -1644,5 +1618,4 @@ EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, 0, 0, 0, 0, SQLERRM::TEXT;
 END;
 
-$function$
-;
+$function$;

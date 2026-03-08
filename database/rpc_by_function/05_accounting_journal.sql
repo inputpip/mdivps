@@ -57,10 +57,9 @@
 -- =====================================================
 -- Function: calculate_balance_delta
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.calculate_balance_delta(p_account_id text, p_debit numeric, p_credit numeric)
- RETURNS numeric
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.calculate_balance_delta(p_account_id text, p_debit numeric, p_credit numeric) RETURNS numeric
+    LANGUAGE plpgsql
+    AS $function$
 DECLARE
     v_type TEXT;
     v_delta NUMERIC;
@@ -79,31 +78,25 @@ BEGIN
 
     RETURN v_delta;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: can_create_accounts
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.can_create_accounts()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.can_create_accounts() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 BEGIN RETURN has_permission('accounts_create'); END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: create_account
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.create_account(p_branch_id text, p_name text, p_code text, p_type text, p_initial_balance numeric DEFAULT 0, p_is_payment_account boolean DEFAULT false, p_parent_id text DEFAULT NULL::text, p_level integer DEFAULT 1, p_is_header boolean DEFAULT false, p_sort_order integer DEFAULT 0, p_employee_id text DEFAULT NULL::text)
- RETURNS TABLE(success boolean, account_id text, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.create_account(p_branch_id text, p_name text, p_code text, p_type text, p_initial_balance numeric DEFAULT 0, p_is_payment_account boolean DEFAULT false, p_parent_id text DEFAULT NULL::text, p_level integer DEFAULT 1, p_is_header boolean DEFAULT false, p_sort_order integer DEFAULT 0, p_employee_id text DEFAULT NULL::text) RETURNS TABLE(success boolean, account_id text, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_account_id UUID;
   v_code_exists BOOLEAN;
@@ -179,18 +172,15 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, NULL::TEXT, SQLERRM;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: create_accounts_payable_atomic
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.create_accounts_payable_atomic(p_branch_id uuid, p_supplier_name text, p_amount numeric, p_due_date date DEFAULT NULL::date, p_description text DEFAULT NULL::text, p_creditor_type text DEFAULT 'supplier'::text, p_purchase_order_id text DEFAULT NULL::text, p_skip_journal boolean DEFAULT false)
- RETURNS TABLE(success boolean, payable_id text, journal_id uuid, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.create_accounts_payable_atomic(p_branch_id uuid, p_supplier_name text, p_amount numeric, p_due_date date DEFAULT NULL::date, p_description text DEFAULT NULL::text, p_creditor_type text DEFAULT 'supplier'::text, p_purchase_order_id text DEFAULT NULL::text, p_skip_journal boolean DEFAULT false) RETURNS TABLE(success boolean, payable_id text, journal_id uuid, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_payable_id TEXT;
   v_journal_id UUID;
@@ -319,18 +309,15 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, NULL::TEXT, NULL::UUID, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: create_all_opening_balance_journal_rpc
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.create_all_opening_balance_journal_rpc(p_branch_id uuid, p_opening_date date DEFAULT CURRENT_DATE)
- RETURNS TABLE(success boolean, journal_id uuid, accounts_processed integer, total_debit numeric, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.create_all_opening_balance_journal_rpc(p_branch_id uuid, p_opening_date date DEFAULT CURRENT_DATE) RETURNS TABLE(success boolean, journal_id uuid, accounts_processed integer, total_debit numeric, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_journal_id UUID;
   v_entry_number TEXT;
@@ -441,18 +428,15 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, NULL::UUID, 0, 0::NUMERIC, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: create_debt_journal_rpc
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.create_debt_journal_rpc(p_branch_id uuid, p_debt_id text, p_debt_date date, p_amount numeric, p_creditor_name text, p_creditor_type text DEFAULT 'other'::text, p_description text DEFAULT NULL::text, p_cash_account_id text DEFAULT NULL::text)
- RETURNS TABLE(success boolean, journal_id uuid, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.create_debt_journal_rpc(p_branch_id uuid, p_debt_id text, p_debt_date date, p_amount numeric, p_creditor_name text, p_creditor_type text DEFAULT 'other'::text, p_description text DEFAULT NULL::text, p_cash_account_id text DEFAULT NULL::text) RETURNS TABLE(success boolean, journal_id uuid, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_journal_id UUID;
   v_entry_number TEXT;
@@ -550,18 +534,15 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, NULL::UUID, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: create_inventory_opening_balance_journal_rpc
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.create_inventory_opening_balance_journal_rpc(p_branch_id uuid, p_products_value numeric DEFAULT 0, p_materials_value numeric DEFAULT 0, p_opening_date date DEFAULT CURRENT_DATE)
- RETURNS TABLE(success boolean, journal_id uuid, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.create_inventory_opening_balance_journal_rpc(p_branch_id uuid, p_products_value numeric DEFAULT 0, p_materials_value numeric DEFAULT 0, p_opening_date date DEFAULT CURRENT_DATE) RETURNS TABLE(success boolean, journal_id uuid, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_journal_id UUID;
   v_entry_number TEXT;
@@ -653,184 +634,15 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, NULL::UUID, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: create_journal_atomic
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.create_journal_atomic(p_branch_id uuid, p_description text, p_reference_type text DEFAULT NULL::text, p_reference_id text DEFAULT NULL::text, p_lines jsonb DEFAULT '[]'::jsonb, p_entry_date date DEFAULT CURRENT_DATE, p_auto_post boolean DEFAULT true, p_created_by uuid DEFAULT NULL::uuid)
- RETURNS TABLE(success boolean, journal_id uuid, entry_number text, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
-DECLARE
-  v_journal_id UUID := gen_random_uuid();
-  v_next_num INTEGER;
-  v_entry_number TEXT;
-  v_total_debit NUMERIC := 0;
-  v_total_credit NUMERIC := 0;
-  v_line RECORD;
-  v_line_number INT := 0;
-  v_account_exists BOOLEAN;
-BEGIN
-  -- Validate branch_id
-  IF p_branch_id IS NULL THEN
-    RETURN QUERY SELECT FALSE, NULL::UUID, NULL::TEXT, 'Branch ID wajib diisi'::TEXT;
-    RETURN;
-  END IF;
-
-  -- Validate lines
-  IF p_lines IS NULL OR jsonb_array_length(p_lines) < 2 THEN
-    RETURN QUERY SELECT FALSE, NULL::UUID, NULL::TEXT, 'Minimal 2 baris jurnal diperlukan'::TEXT;
-    RETURN;
-  END IF;
-
-  -- Calculate totals and validate accounts
-  FOR v_line IN SELECT * FROM jsonb_to_recordset(p_lines) AS x(
-    account_id TEXT,
-    account_code TEXT,
-    debit_amount NUMERIC,
-    credit_amount NUMERIC,
-    description TEXT
-  )
-  LOOP
-    v_total_debit := v_total_debit + COALESCE(v_line.debit_amount, 0);
-    v_total_credit := v_total_credit + COALESCE(v_line.credit_amount, 0);
-
-    -- Validate account exists
-    IF v_line.account_id IS NOT NULL THEN
-      SELECT EXISTS(SELECT 1 FROM accounts WHERE id = v_line.account_id AND branch_id = p_branch_id) INTO v_account_exists;
-    ELSIF v_line.account_code IS NOT NULL THEN
-      SELECT EXISTS(SELECT 1 FROM accounts WHERE code = v_line.account_code AND branch_id = p_branch_id) INTO v_account_exists;
-    ELSE
-      v_account_exists := FALSE;
-    END IF;
-
-    IF NOT v_account_exists THEN
-      RETURN QUERY SELECT FALSE, NULL::UUID, NULL::TEXT,
-        format('Akun tidak ditemukan: %s', COALESCE(v_line.account_id, v_line.account_code, 'NULL'))::TEXT;
-      RETURN;
-    END IF;
-  END LOOP;
-
-  -- Validate balance
-  IF ABS(v_total_debit - v_total_credit) > 0.01 THEN
-    RETURN QUERY SELECT FALSE, NULL::UUID, NULL::TEXT,
-      format('Jurnal tidak balance. Debit: %s, Credit: %s', v_total_debit, v_total_credit)::TEXT;
-    RETURN;
-  END IF;
-
-  -- Generate entry number (Global across all branches)
-  -- Generate entry number (Global across all branches)
-  -- Uses Loop to prevent Duplicate Key Exception
-  v_next_num := COALESCE(
-      (SELECT MAX(CAST(SUBSTRING(je.entry_number FROM '-(\d+)$') AS INTEGER))
-       FROM journal_entries je
-       WHERE DATE(je.entry_date) = p_entry_date),
-      0
-  );
-
-  LOOP
-    v_next_num := v_next_num + 1;
-    v_entry_number := 'JE-' || TO_CHAR(p_entry_date, 'YYYYMMDD') || '-' || LPAD(v_next_num::TEXT, 4, '0');
-    
-    -- Exit loop if this entry number does NOT exist
-    EXIT WHEN NOT EXISTS (SELECT 1 FROM journal_entries je WHERE je.entry_number = v_entry_number);
-  END LOOP;
-
-  -- Create journal entry
-  INSERT INTO journal_entries (
-    id,
-    entry_number,
-    entry_date,
-    description,
-    reference_type,
-    reference_id,
-    status,
-    total_debit,
-    total_credit,
-    branch_id,
-    created_by,
-    created_at,
-    is_voided
-  ) VALUES (
-    v_journal_id,
-    v_entry_number,
-    p_entry_date,
-    p_description,
-    p_reference_type,
-    p_reference_id,
-    CASE WHEN p_auto_post THEN 'posted' ELSE 'draft' END,
-    v_total_debit,
-    v_total_credit,
-    p_branch_id,
-    p_created_by,
-    NOW(),
-    FALSE
-  );
-
-  -- Create journal lines with account_code and account_name from accounts table
-  FOR v_line IN SELECT * FROM jsonb_to_recordset(p_lines) AS x(
-    account_id TEXT,
-    account_code TEXT,
-    debit_amount NUMERIC,
-    credit_amount NUMERIC,
-    description TEXT
-  )
-  LOOP
-    v_line_number := v_line_number + 1;
-
-    INSERT INTO journal_entry_lines (
-      journal_entry_id,
-      line_number,
-      account_id,
-      account_code,
-      account_name,
-      description,
-      debit_amount,
-      credit_amount
-    )
-    SELECT
-      v_journal_id,
-      v_line_number,
-      a.id,
-      a.code,
-      a.name,
-      COALESCE(v_line.description, p_description),
-      COALESCE(v_line.debit_amount, 0),
-      COALESCE(v_line.credit_amount, 0)
-    FROM accounts a
-    WHERE a.branch_id = p_branch_id
-      AND (
-        (v_line.account_id IS NOT NULL AND a.id = v_line.account_id)
-        OR (v_line.account_id IS NULL AND a.code = v_line.account_code)
-      )
-    LIMIT 1;
-  END LOOP;
-
-  -- Post if auto_post
-  IF p_auto_post THEN
-    UPDATE journal_entries SET status = 'posted' WHERE id = v_journal_id;
-  END IF;
-
-  RETURN QUERY SELECT TRUE, v_journal_id, v_entry_number, NULL::TEXT;
-EXCEPTION WHEN OTHERS THEN
-  RETURN QUERY SELECT FALSE, NULL::UUID, NULL::TEXT, SQLERRM::TEXT;
-END;
-$function$
-;
-
-
--- =====================================================
--- Function: create_journal_atomic
--- =====================================================
-CREATE OR REPLACE FUNCTION public.create_journal_atomic(p_branch_id uuid, p_entry_date date, p_description text, p_reference_type text DEFAULT NULL::text, p_reference_id text DEFAULT NULL::text, p_lines jsonb DEFAULT '[]'::jsonb, p_auto_post boolean DEFAULT true)
- RETURNS TABLE(success boolean, journal_id uuid, entry_number text, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.create_journal_atomic(p_branch_id uuid, p_entry_date date, p_description text, p_reference_type text DEFAULT NULL::text, p_reference_id text DEFAULT NULL::text, p_lines jsonb DEFAULT '[]'::jsonb, p_auto_post boolean DEFAULT true) RETURNS TABLE(success boolean, journal_id uuid, entry_number text, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_journal_id UUID;
   v_entry_number TEXT;
@@ -1043,18 +855,181 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE AS success, NULL::UUID AS journal_id, NULL::TEXT AS entry_number, SQLERRM::TEXT AS error_message;
 END;
-$function$
-;
+$function$;
+
+
+CREATE OR REPLACE FUNCTION public.create_journal_atomic(p_branch_id uuid, p_description text, p_reference_type text DEFAULT NULL::text, p_reference_id text DEFAULT NULL::text, p_lines jsonb DEFAULT '[]'::jsonb, p_entry_date date DEFAULT CURRENT_DATE, p_auto_post boolean DEFAULT true, p_created_by uuid DEFAULT NULL::uuid) RETURNS TABLE(success boolean, journal_id uuid, entry_number text, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $_$
+DECLARE
+  v_journal_id UUID := gen_random_uuid();
+  v_next_num INTEGER;
+  v_entry_number TEXT;
+  v_total_debit NUMERIC := 0;
+  v_total_credit NUMERIC := 0;
+  v_line RECORD;
+  v_line_number INT := 0;
+  v_account_exists BOOLEAN;
+BEGIN
+  -- Validate branch_id
+  IF p_branch_id IS NULL THEN
+    RETURN QUERY SELECT FALSE, NULL::UUID, NULL::TEXT, 'Branch ID wajib diisi'::TEXT;
+    RETURN;
+  END IF;
+
+  -- Validate lines
+  IF p_lines IS NULL OR jsonb_array_length(p_lines) < 2 THEN
+    RETURN QUERY SELECT FALSE, NULL::UUID, NULL::TEXT, 'Minimal 2 baris jurnal diperlukan'::TEXT;
+    RETURN;
+  END IF;
+
+  -- Calculate totals and validate accounts
+  FOR v_line IN SELECT * FROM jsonb_to_recordset(p_lines) AS x(
+    account_id TEXT,
+    account_code TEXT,
+    debit_amount NUMERIC,
+    credit_amount NUMERIC,
+    description TEXT
+  )
+  LOOP
+    v_total_debit := v_total_debit + COALESCE(v_line.debit_amount, 0);
+    v_total_credit := v_total_credit + COALESCE(v_line.credit_amount, 0);
+
+    -- Validate account exists
+    IF v_line.account_id IS NOT NULL THEN
+      SELECT EXISTS(SELECT 1 FROM accounts WHERE id = v_line.account_id AND branch_id = p_branch_id) INTO v_account_exists;
+    ELSIF v_line.account_code IS NOT NULL THEN
+      SELECT EXISTS(SELECT 1 FROM accounts WHERE code = v_line.account_code AND branch_id = p_branch_id) INTO v_account_exists;
+    ELSE
+      v_account_exists := FALSE;
+    END IF;
+
+    IF NOT v_account_exists THEN
+      RETURN QUERY SELECT FALSE, NULL::UUID, NULL::TEXT,
+        format('Akun tidak ditemukan: %s', COALESCE(v_line.account_id, v_line.account_code, 'NULL'))::TEXT;
+      RETURN;
+    END IF;
+  END LOOP;
+
+  -- Validate balance
+  IF ABS(v_total_debit - v_total_credit) > 0.01 THEN
+    RETURN QUERY SELECT FALSE, NULL::UUID, NULL::TEXT,
+      format('Jurnal tidak balance. Debit: %s, Credit: %s', v_total_debit, v_total_credit)::TEXT;
+    RETURN;
+  END IF;
+
+  -- Generate entry number (Global across all branches)
+  -- Generate entry number (Global across all branches)
+  -- Uses Loop to prevent Duplicate Key Exception
+  v_next_num := COALESCE(
+      (SELECT MAX(CAST(SUBSTRING(je.entry_number FROM '-(\d+)$') AS INTEGER))
+       FROM journal_entries je
+       WHERE DATE(je.entry_date) = p_entry_date),
+      0
+  );
+
+  LOOP
+    v_next_num := v_next_num + 1;
+    v_entry_number := 'JE-' || TO_CHAR(p_entry_date, 'YYYYMMDD') || '-' || LPAD(v_next_num::TEXT, 4, '0');
+    
+    -- Exit loop if this entry number does NOT exist
+    EXIT WHEN NOT EXISTS (SELECT 1 FROM journal_entries je WHERE je.entry_number = v_entry_number);
+  END LOOP;
+
+  -- Create journal entry
+  INSERT INTO journal_entries (
+    id,
+    entry_number,
+    entry_date,
+    description,
+    reference_type,
+    reference_id,
+    status,
+    total_debit,
+    total_credit,
+    branch_id,
+    created_by,
+    created_at,
+    is_voided
+  ) VALUES (
+    v_journal_id,
+    v_entry_number,
+    p_entry_date,
+    p_description,
+    p_reference_type,
+    p_reference_id,
+    CASE WHEN p_auto_post THEN 'posted' ELSE 'draft' END,
+    v_total_debit,
+    v_total_credit,
+    p_branch_id,
+    p_created_by,
+    NOW(),
+    FALSE
+  );
+
+  -- Create journal lines with account_code and account_name from accounts table
+  FOR v_line IN SELECT * FROM jsonb_to_recordset(p_lines) AS x(
+    account_id TEXT,
+    account_code TEXT,
+    debit_amount NUMERIC,
+    credit_amount NUMERIC,
+    description TEXT
+  )
+  LOOP
+    v_line_number := v_line_number + 1;
+
+    INSERT INTO journal_entry_lines (
+      journal_entry_id,
+      line_number,
+      account_id,
+      account_code,
+      account_name,
+      description,
+      debit_amount,
+      credit_amount
+    )
+    SELECT
+      v_journal_id,
+      v_line_number,
+      a.id,
+      a.code,
+      a.name,
+      COALESCE(v_line.description, p_description),
+      COALESCE(v_line.debit_amount, 0),
+      COALESCE(v_line.credit_amount, 0)
+    FROM accounts a
+    WHERE a.branch_id = p_branch_id
+      AND (
+        (v_line.account_id IS NOT NULL AND a.id = v_line.account_id)
+        OR (v_line.account_id IS NULL AND a.code = v_line.account_code)
+      )
+    LIMIT 1;
+  END LOOP;
+
+  -- Post if auto_post
+  IF p_auto_post THEN
+    UPDATE journal_entries SET status = 'posted' WHERE id = v_journal_id;
+  END IF;
+
+  RETURN QUERY SELECT TRUE, v_journal_id, v_entry_number, NULL::TEXT;
+EXCEPTION WHEN OTHERS THEN
+  RETURN QUERY SELECT FALSE, NULL::UUID, NULL::TEXT, SQLERRM::TEXT;
+END;
+$_$;
+
+
+-- =====================================================
+-- Function: create_journal_atomic
+-- =====================================================
+
 
 
 -- =====================================================
 -- Function: create_manual_cash_in_journal_rpc
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.create_manual_cash_in_journal_rpc(p_branch_id uuid, p_reference_id text, p_transaction_date date, p_amount numeric, p_description text, p_cash_account_id text)
- RETURNS TABLE(success boolean, journal_id uuid, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.create_manual_cash_in_journal_rpc(p_branch_id uuid, p_reference_id text, p_transaction_date date, p_amount numeric, p_description text, p_cash_account_id text) RETURNS TABLE(success boolean, journal_id uuid, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_journal_id UUID;
   v_entry_number TEXT;
@@ -1110,18 +1085,15 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, NULL::UUID, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: create_manual_cash_out_journal_rpc
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.create_manual_cash_out_journal_rpc(p_branch_id uuid, p_reference_id text, p_transaction_date date, p_amount numeric, p_description text, p_cash_account_id text)
- RETURNS TABLE(success boolean, journal_id uuid, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.create_manual_cash_out_journal_rpc(p_branch_id uuid, p_reference_id text, p_transaction_date date, p_amount numeric, p_description text, p_cash_account_id text) RETURNS TABLE(success boolean, journal_id uuid, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_journal_id UUID;
   v_entry_number TEXT;
@@ -1177,18 +1149,15 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, NULL::UUID, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: create_material_payment_journal_rpc
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.create_material_payment_journal_rpc(p_branch_id uuid, p_reference_id text, p_transaction_date date, p_amount numeric, p_material_id uuid, p_material_name text, p_description text, p_cash_account_id text)
- RETURNS TABLE(success boolean, journal_id uuid, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.create_material_payment_journal_rpc(p_branch_id uuid, p_reference_id text, p_transaction_date date, p_amount numeric, p_material_id uuid, p_material_name text, p_description text, p_cash_account_id text) RETURNS TABLE(success boolean, journal_id uuid, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_journal_id UUID;
   v_entry_number TEXT;
@@ -1250,18 +1219,15 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, NULL::UUID, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: create_migration_debt_journal_rpc
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.create_migration_debt_journal_rpc(p_branch_id uuid, p_debt_id text, p_debt_date date, p_amount numeric, p_creditor_name text, p_creditor_type text DEFAULT 'other'::text, p_description text DEFAULT NULL::text)
- RETURNS TABLE(success boolean, journal_id uuid, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.create_migration_debt_journal_rpc(p_branch_id uuid, p_debt_id text, p_debt_date date, p_amount numeric, p_creditor_name text, p_creditor_type text DEFAULT 'other'::text, p_description text DEFAULT NULL::text) RETURNS TABLE(success boolean, journal_id uuid, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_journal_id UUID;
   v_entry_number TEXT;
@@ -1342,18 +1308,15 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, NULL::UUID, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: create_migration_receivable_journal_rpc
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.create_migration_receivable_journal_rpc(p_branch_id uuid, p_receivable_id text, p_receivable_date date, p_amount numeric, p_customer_name text, p_description text DEFAULT NULL::text)
- RETURNS TABLE(success boolean, journal_id uuid, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.create_migration_receivable_journal_rpc(p_branch_id uuid, p_receivable_id text, p_receivable_date date, p_amount numeric, p_customer_name text, p_description text DEFAULT NULL::text) RETURNS TABLE(success boolean, journal_id uuid, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_journal_id UUID;
   v_entry_number TEXT;
@@ -1445,18 +1408,15 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, NULL::UUID, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: create_receivable_payment_journal_rpc
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.create_receivable_payment_journal_rpc(p_branch_id uuid, p_transaction_id text, p_payment_date date, p_amount numeric, p_customer_name text DEFAULT 'Pelanggan'::text, p_payment_account_id text DEFAULT NULL::text)
- RETURNS TABLE(success boolean, journal_id uuid, entry_number text, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.create_receivable_payment_journal_rpc(p_branch_id uuid, p_transaction_id text, p_payment_date date, p_amount numeric, p_customer_name text DEFAULT 'Pelanggan'::text, p_payment_account_id text DEFAULT NULL::text) RETURNS TABLE(success boolean, journal_id uuid, entry_number text, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_journal_id UUID;
   v_entry_number TEXT;
@@ -1553,18 +1513,106 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, NULL::UUID, NULL::TEXT, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
+
+
+CREATE OR REPLACE FUNCTION public.create_receivable_payment_journal_rpc(p_branch_id uuid, p_transaction_id text, p_payment_date date, p_amount numeric, p_customer_name text DEFAULT 'Pelanggan'::text, p_payment_account_id uuid DEFAULT NULL::uuid) RETURNS TABLE(success boolean, journal_id uuid, entry_number text, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
+DECLARE
+  v_journal_id UUID;
+  v_entry_number TEXT;
+  v_kas_account_id UUID;
+  v_piutang_account_id UUID;
+BEGIN
+  -- Validate
+  IF p_branch_id IS NULL THEN
+    RETURN QUERY SELECT FALSE, NULL::UUID, NULL::TEXT, 'Branch ID is required'::TEXT;
+    RETURN;
+  END IF;
+  IF p_amount <= 0 THEN
+    RETURN QUERY SELECT FALSE, NULL::UUID, NULL::TEXT, 'Amount must be positive'::TEXT;
+    RETURN;
+  END IF;
+  -- Get account IDs
+  IF p_payment_account_id IS NOT NULL THEN
+    v_kas_account_id := p_payment_account_id;
+  ELSE
+    SELECT id INTO v_kas_account_id FROM accounts
+    WHERE branch_id = p_branch_id AND code = '1110' AND is_active = TRUE LIMIT 1;
+  END IF;
+  SELECT id INTO v_piutang_account_id FROM accounts
+  WHERE branch_id = p_branch_id AND code = '1210' AND is_active = TRUE LIMIT 1;
+  IF v_kas_account_id IS NULL OR v_piutang_account_id IS NULL THEN
+    RETURN QUERY SELECT FALSE, NULL::UUID, NULL::TEXT, 'Required accounts not found'::TEXT;
+    RETURN;
+  END IF;
+  -- Generate entry number
+  SELECT 'JE-' || TO_CHAR(NOW(), 'YYYYMMDD') || '-' || LPAD(
+    (COALESCE(
+      (SELECT COUNT(*) + 1 FROM journal_entries
+       WHERE branch_id = p_branch_id
+       AND DATE(created_at) = CURRENT_DATE),
+      1
+    ))::TEXT, 4, '0')
+  INTO v_entry_number;
+  -- Create journal entry header
+  INSERT INTO journal_entries (
+    id,
+    branch_id,
+    entry_number,
+    entry_date,
+    description,
+    reference_type,
+    reference_id,
+    status,
+    is_voided,
+    created_at,
+    updated_at
+  ) VALUES (
+    gen_random_uuid(),
+    p_branch_id,
+    v_entry_number,
+    p_payment_date,
+    'Pembayaran Piutang - ' || p_transaction_id || ' - ' || p_customer_name,
+    'receivable',
+    p_transaction_id,
+    'posted',
+    FALSE,
+    NOW(),
+    NOW()
+  ) RETURNING id INTO v_journal_id;
+  -- Dr. Kas
+  INSERT INTO journal_entry_lines (
+    journal_entry_id, account_id, account_name,
+    debit_amount, credit_amount, description, line_number
+  ) VALUES (
+    v_journal_id, v_kas_account_id,
+    (SELECT name FROM accounts WHERE id = v_kas_account_id),
+    p_amount, 0, 'Penerimaan kas pembayaran piutang', 1
+  );
+  -- Cr. Piutang
+  INSERT INTO journal_entry_lines (
+    journal_entry_id, account_id, account_name,
+    debit_amount, credit_amount, description, line_number
+  ) VALUES (
+    v_journal_id, v_piutang_account_id,
+    (SELECT name FROM accounts WHERE id = v_piutang_account_id),
+    0, p_amount, 'Pelunasan piutang usaha', 2
+  );
+  RETURN QUERY SELECT TRUE, v_journal_id, v_entry_number, NULL::TEXT;
+EXCEPTION WHEN OTHERS THEN
+  RETURN QUERY SELECT FALSE, NULL::UUID, NULL::TEXT, SQLERRM::TEXT;
+END;
+$function$;
 
 
 -- =====================================================
 -- Function: create_sales_journal_rpc
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.create_sales_journal_rpc(p_branch_id uuid, p_transaction_id text, p_transaction_date date, p_total_amount numeric, p_paid_amount numeric DEFAULT 0, p_customer_name text DEFAULT 'Umum'::text, p_hpp_amount numeric DEFAULT 0, p_hpp_bonus_amount numeric DEFAULT 0, p_ppn_enabled boolean DEFAULT false, p_ppn_amount numeric DEFAULT 0, p_subtotal numeric DEFAULT 0, p_is_office_sale boolean DEFAULT false, p_payment_account_id uuid DEFAULT NULL::uuid)
- RETURNS TABLE(success boolean, journal_id uuid, entry_number text, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.create_sales_journal_rpc(p_branch_id uuid, p_transaction_id text, p_transaction_date date, p_total_amount numeric, p_paid_amount numeric DEFAULT 0, p_customer_name text DEFAULT 'Umum'::text, p_hpp_amount numeric DEFAULT 0, p_hpp_bonus_amount numeric DEFAULT 0, p_ppn_enabled boolean DEFAULT false, p_ppn_amount numeric DEFAULT 0, p_subtotal numeric DEFAULT 0, p_is_office_sale boolean DEFAULT false, p_payment_account_id uuid DEFAULT NULL::uuid) RETURNS TABLE(success boolean, journal_id uuid, entry_number text, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_journal_id UUID;
   v_entry_number TEXT;
@@ -1767,18 +1815,15 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, NULL::UUID, NULL::TEXT, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: create_transfer_journal_rpc
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.create_transfer_journal_rpc(p_branch_id uuid, p_transfer_id text, p_transfer_date date, p_amount numeric, p_from_account_id text, p_to_account_id text, p_description text DEFAULT NULL::text)
- RETURNS TABLE(success boolean, journal_id uuid, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.create_transfer_journal_rpc(p_branch_id uuid, p_transfer_id text, p_transfer_date date, p_amount numeric, p_from_account_id text, p_to_account_id text, p_description text DEFAULT NULL::text) RETURNS TABLE(success boolean, journal_id uuid, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_journal_id UUID;
   v_entry_number TEXT;
@@ -1862,18 +1907,15 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, NULL::UUID, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: delete_account
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.delete_account(p_account_id text)
- RETURNS TABLE(success boolean, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.delete_account(p_account_id text) RETURNS TABLE(success boolean, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_has_transactions BOOLEAN;
   v_has_children BOOLEAN;
@@ -1905,18 +1947,15 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, SQLERRM;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: delete_accounts_payable_atomic
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.delete_accounts_payable_atomic(p_payable_id text, p_branch_id uuid)
- RETURNS TABLE(success boolean, journals_voided integer, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.delete_accounts_payable_atomic(p_payable_id text, p_branch_id uuid) RETURNS TABLE(success boolean, journals_voided integer, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE v_journals_voided INTEGER := 0;
 BEGIN
   IF EXISTS (SELECT 1 FROM accounts_payable_payments WHERE accounts_payable_id = p_payable_id) THEN RETURN QUERY SELECT FALSE, 0, 'Ada pembayaran'::TEXT; RETURN; END IF;
@@ -1926,17 +1965,15 @@ BEGIN
   RETURN QUERY SELECT TRUE, v_journals_voided, NULL::TEXT;
 EXCEPTION WHEN OTHERS THEN RETURN QUERY SELECT FALSE, 0, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: demo_balance_sheet
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.demo_balance_sheet()
- RETURNS TABLE(section text, code character varying, account_name text, amount numeric)
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.demo_balance_sheet() RETURNS TABLE(section text, code character varying, account_name text, amount numeric)
+    LANGUAGE plpgsql
+    AS $function$
 BEGIN
   RETURN QUERY
   -- ASET
@@ -1981,17 +2018,15 @@ BEGIN
     
   ORDER BY section, code;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: demo_show_chart_of_accounts
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.demo_show_chart_of_accounts()
- RETURNS TABLE(level_indent text, code character varying, account_name text, account_type text, normal_bal character varying, current_balance numeric, is_header_account boolean)
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.demo_show_chart_of_accounts() RETURNS TABLE(level_indent text, code character varying, account_name text, account_type text, normal_bal character varying, current_balance numeric, is_header_account boolean)
+    LANGUAGE plpgsql
+    AS $function$
 BEGIN
   RETURN QUERY
   SELECT 
@@ -2011,17 +2046,15 @@ BEGIN
     AND (a.code IS NOT NULL OR a.id LIKE 'acc-%')
   ORDER BY a.sort_order, a.code;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: demo_trial_balance
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.demo_trial_balance()
- RETURNS TABLE(code character varying, account_name text, debit_balance numeric, credit_balance numeric)
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.demo_trial_balance() RETURNS TABLE(code character varying, account_name text, debit_balance numeric, credit_balance numeric)
+    LANGUAGE plpgsql
+    AS $function$
 BEGIN
   RETURN QUERY
   SELECT 
@@ -2046,18 +2079,15 @@ BEGIN
     AND a.balance != 0
   ORDER BY a.code;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: execute_closing_entry_atomic
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.execute_closing_entry_atomic(p_branch_id uuid, p_year integer)
- RETURNS TABLE(success boolean, journal_id uuid, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.execute_closing_entry_atomic(p_branch_id uuid, p_year integer) RETURNS TABLE(success boolean, journal_id uuid, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_journal_id UUID;
   v_entry_number TEXT;
@@ -2144,17 +2174,15 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, NULL::UUID, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: generate_journal_number
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.generate_journal_number()
- RETURNS text
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.generate_journal_number() RETURNS text
+    LANGUAGE plpgsql
+    AS $function$
 DECLARE
     current_year TEXT;
     next_number INTEGER;
@@ -2172,17 +2200,12 @@ BEGIN
     new_entry_number := 'JE-' || current_year || '-' || LPAD(next_number::TEXT, 6, '0');
     RETURN new_entry_number;
 END;
-$function$
-;
+$function$;
 
 
--- =====================================================
--- Function: generate_journal_number
--- =====================================================
-CREATE OR REPLACE FUNCTION public.generate_journal_number(entry_date date)
- RETURNS text
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.generate_journal_number(entry_date date) RETURNS text
+    LANGUAGE plpgsql
+    AS $function$
 DECLARE
   date_str TEXT;
   sequence_num INTEGER;
@@ -2206,18 +2229,21 @@ BEGIN
   
   RETURN journal_number;
 END;
-$function$
-;
+$function$;
+
+
+-- =====================================================
+-- Function: generate_journal_number
+-- =====================================================
+
 
 
 -- =====================================================
 -- Function: get_account_balance
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.get_account_balance(p_account_id text)
- RETURNS numeric
- LANGUAGE plpgsql
- STABLE
-AS $function$
+CREATE OR REPLACE FUNCTION public.get_account_balance(p_account_id text) RETURNS numeric
+    LANGUAGE plpgsql STABLE
+    AS $function$
 DECLARE
     v_balance NUMERIC;
     v_account_type TEXT;
@@ -2245,17 +2271,15 @@ BEGIN
 
     RETURN v_balance;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: get_account_balance_analysis
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.get_account_balance_analysis(p_account_id text)
- RETURNS TABLE(account_id text, account_name text, account_type text, current_balance numeric, calculated_balance numeric, difference numeric, transaction_breakdown jsonb, needs_reconciliation boolean)
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.get_account_balance_analysis(p_account_id text) RETURNS TABLE(account_id text, account_name text, account_type text, current_balance numeric, calculated_balance numeric, difference numeric, transaction_breakdown jsonb, needs_reconciliation boolean)
+    LANGUAGE plpgsql
+    AS $function$
 DECLARE
   v_account RECORD;
   v_pos_sales NUMERIC := 0;
@@ -2334,18 +2358,15 @@ BEGIN
     )::JSONB,
     (ABS(v_account.current_balance - v_calculated) > 1000);
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: get_account_balance_at_date
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.get_account_balance_at_date(p_account_id text, p_as_of_date date)
- RETURNS numeric
- LANGUAGE plpgsql
- STABLE
-AS $function$
+CREATE OR REPLACE FUNCTION public.get_account_balance_at_date(p_account_id text, p_as_of_date date) RETURNS numeric
+    LANGUAGE plpgsql STABLE
+    AS $function$
 DECLARE
     v_balance NUMERIC;
     v_account_type TEXT;
@@ -2374,17 +2395,15 @@ BEGIN
 
     RETURN v_balance;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: get_account_balance_with_children
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.get_account_balance_with_children(account_id text)
- RETURNS numeric
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.get_account_balance_with_children(account_id text) RETURNS numeric
+    LANGUAGE plpgsql
+    AS $function$
 DECLARE
   total_balance NUMERIC := 0;
 BEGIN
@@ -2404,18 +2423,15 @@ BEGIN
   
   RETURN total_balance;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: get_account_opening_balance
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.get_account_opening_balance(p_account_id text, p_branch_id uuid)
- RETURNS TABLE(opening_balance numeric, journal_id uuid, journal_date date, last_updated timestamp with time zone)
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.get_account_opening_balance(p_account_id text, p_branch_id uuid) RETURNS TABLE(opening_balance numeric, journal_id uuid, journal_date date, last_updated timestamp with time zone)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $function$
 DECLARE
   v_account RECORD;
   v_journal_balance NUMERIC;
@@ -2468,17 +2484,15 @@ BEGIN
   -- No opening balance found
   RETURN QUERY SELECT 0::NUMERIC, NULL::UUID, NULL::DATE, NULL::TIMESTAMPTZ;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: get_all_accounts_balance_analysis
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.get_all_accounts_balance_analysis()
- RETURNS TABLE(account_id text, account_name text, account_type text, current_balance numeric, calculated_balance numeric, difference numeric, needs_reconciliation boolean, last_updated timestamp with time zone)
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.get_all_accounts_balance_analysis() RETURNS TABLE(account_id text, account_name text, account_type text, current_balance numeric, calculated_balance numeric, difference numeric, needs_reconciliation boolean, last_updated timestamp with time zone)
+    LANGUAGE plpgsql
+    AS $function$
 BEGIN
   RETURN QUERY
   SELECT 
@@ -2494,17 +2508,15 @@ BEGIN
   LATERAL get_account_balance_analysis(acc.id) analysis
   ORDER BY ABS(analysis.difference) DESC;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: get_next_journal_number
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.get_next_journal_number(p_prefix text DEFAULT 'JU'::text)
- RETURNS text
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.get_next_journal_number(p_prefix text DEFAULT 'JU'::text) RETURNS text
+    LANGUAGE plpgsql
+    AS $_$
 DECLARE
   v_date_part TEXT;
   v_last_number INTEGER;
@@ -2527,18 +2539,15 @@ BEGIN
   v_new_number := p_prefix || '-' || v_date_part || '-' || LPAD((v_last_number + 1)::TEXT, 3, '0');
   RETURN v_new_number;
 END;
-$function$
-;
+$_$;
 
 
 -- =====================================================
 -- Function: import_standard_coa
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.import_standard_coa(p_branch_id uuid, p_items jsonb)
- RETURNS TABLE(success boolean, imported_count integer, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.import_standard_coa(p_branch_id uuid, p_items jsonb) RETURNS TABLE(success boolean, imported_count integer, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_item JSONB;
   v_count INTEGER := 0;
@@ -2605,19 +2614,16 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, 0, SQLERRM;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: insert_journal_entry
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.insert_journal_entry(p_entry_number text, p_entry_date date, p_description text, p_reference_type text, p_reference_id text DEFAULT NULL::text, p_status text DEFAULT 'draft'::text, p_total_debit numeric DEFAULT 0, p_total_credit numeric DEFAULT 0, p_branch_id uuid DEFAULT NULL::uuid, p_created_by uuid DEFAULT NULL::uuid, p_approved_by uuid DEFAULT NULL::uuid, p_approved_at timestamp with time zone DEFAULT NULL::timestamp with time zone)
- RETURNS TABLE(id uuid, entry_number text, entry_date date, description text, reference_type text, reference_id text, status text, total_debit numeric, total_credit numeric, branch_id uuid, created_by uuid, approved_by uuid, approved_at timestamp with time zone, created_at timestamp with time zone)
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+CREATE OR REPLACE FUNCTION public.insert_journal_entry(p_entry_number text, p_entry_date date, p_description text, p_reference_type text, p_reference_id text DEFAULT NULL::text, p_status text DEFAULT 'draft'::text, p_total_debit numeric DEFAULT 0, p_total_credit numeric DEFAULT 0, p_branch_id uuid DEFAULT NULL::uuid, p_created_by uuid DEFAULT NULL::uuid, p_approved_by uuid DEFAULT NULL::uuid, p_approved_at timestamp with time zone DEFAULT NULL::timestamp with time zone) RETURNS TABLE(id uuid, entry_number text, entry_date date, description text, reference_type text, reference_id text, status text, total_debit numeric, total_credit numeric, branch_id uuid, created_by uuid, approved_by uuid, approved_at timestamp with time zone, created_at timestamp with time zone)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $function$
 DECLARE
   new_id UUID;
 BEGIN
@@ -2669,18 +2675,15 @@ BEGIN
   FROM journal_entries j
   WHERE j.id = new_id;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: post_journal_atomic
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.post_journal_atomic(p_journal_id uuid, p_branch_id uuid)
- RETURNS TABLE(success boolean, message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.post_journal_atomic(p_journal_id uuid, p_branch_id uuid) RETURNS TABLE(success boolean, message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_journal RECORD;
 BEGIN
@@ -2713,18 +2716,15 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: preview_closing_entry
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.preview_closing_entry(p_branch_id uuid, p_year integer)
- RETURNS TABLE(total_pendapatan numeric, total_beban numeric, laba_rugi_bersih numeric, pendapatan_accounts jsonb, beban_accounts jsonb)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.preview_closing_entry(p_branch_id uuid, p_year integer) RETURNS TABLE(total_pendapatan numeric, total_beban numeric, laba_rugi_bersih numeric, pendapatan_accounts jsonb, beban_accounts jsonb)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_closing_date DATE := (p_year || '-12-31')::DATE;
   v_total_pendapatan NUMERIC := 0;
@@ -2782,18 +2782,15 @@ BEGIN
     v_pendapatan_json,
     v_beban_json;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: reconcile_account_balance
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.reconcile_account_balance(p_account_id text, p_new_balance numeric, p_reason text, p_user_id uuid, p_user_name text)
- RETURNS TABLE(success boolean, message text, old_balance numeric, new_balance numeric, adjustment_amount numeric)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.reconcile_account_balance(p_account_id text, p_new_balance numeric, p_reason text, p_user_id uuid, p_user_name text) RETURNS TABLE(success boolean, message text, old_balance numeric, new_balance numeric, adjustment_amount numeric)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_old_balance NUMERIC;
   v_adjustment NUMERIC;
@@ -2861,18 +2858,15 @@ BEGIN
     p_new_balance as new_balance,
     v_adjustment as adjustment_amount;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: set_account_initial_balance
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.set_account_initial_balance(p_account_id text, p_initial_balance numeric, p_reason text, p_user_id uuid, p_user_name text)
- RETURNS TABLE(success boolean, message text, old_initial_balance numeric, new_initial_balance numeric)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.set_account_initial_balance(p_account_id text, p_initial_balance numeric, p_reason text, p_user_id uuid, p_user_name text) RETURNS TABLE(success boolean, message text, old_initial_balance numeric, new_initial_balance numeric)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_old_initial NUMERIC;
   v_account_name TEXT;
@@ -2934,17 +2928,15 @@ BEGIN
     v_old_initial as old_initial_balance,
     p_initial_balance as new_initial_balance;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: sync_account_balances
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.sync_account_balances()
- RETURNS TABLE(account_id text, account_code character varying, account_name text, old_balance numeric, new_balance numeric, difference numeric)
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.sync_account_balances() RETURNS TABLE(account_id text, account_code character varying, account_name text, old_balance numeric, new_balance numeric, difference numeric)
+    LANGUAGE plpgsql
+    AS $function$
 BEGIN
     RETURN QUERY
     WITH updated AS (
@@ -2962,17 +2954,15 @@ BEGIN
     SELECT u.id, u.code, u.name, u.old_bal, u.new_bal, u.new_bal - u.old_bal as diff
     FROM updated u;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: test_balance_reconciliation_functions
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.test_balance_reconciliation_functions()
- RETURNS TABLE(test_name text, status text, message text)
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.test_balance_reconciliation_functions() RETURNS TABLE(test_name text, status text, message text)
+    LANGUAGE plpgsql
+    AS $function$
 DECLARE
   v_account_id TEXT;
   v_test_user_id UUID;
@@ -3042,18 +3032,15 @@ BEGIN
   END;
   
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: update_account
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.update_account(p_account_id text, p_branch_id text, p_name text, p_code text, p_type text, p_initial_balance numeric, p_is_payment_account boolean, p_parent_id text, p_level integer, p_is_header boolean, p_is_active boolean, p_sort_order integer, p_employee_id text)
- RETURNS TABLE(success boolean, account_id text, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.update_account(p_account_id text, p_branch_id text, p_name text, p_code text, p_type text, p_initial_balance numeric, p_is_payment_account boolean, p_parent_id text, p_level integer, p_is_header boolean, p_is_active boolean, p_sort_order integer, p_employee_id text) RETURNS TABLE(success boolean, account_id text, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_code_exists BOOLEAN;
   v_current_code TEXT;
@@ -3101,17 +3088,15 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, NULL::TEXT, SQLERRM;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: update_account_balance_from_journal
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.update_account_balance_from_journal()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.update_account_balance_from_journal() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $function$
 DECLARE
     line_record RECORD;
     account_record RECORD;
@@ -3163,18 +3148,15 @@ BEGIN
     END IF;
     RETURN NEW;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: update_account_initial_balance_atomic
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.update_account_initial_balance_atomic(p_account_id text, p_new_initial_balance numeric, p_branch_id uuid, p_user_id uuid DEFAULT NULL::uuid, p_user_name text DEFAULT 'System'::text)
- RETURNS TABLE(success boolean, journal_id uuid, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.update_account_initial_balance_atomic(p_account_id text, p_new_initial_balance numeric, p_branch_id uuid, p_user_id uuid DEFAULT NULL::uuid, p_user_name text DEFAULT 'System'::text) RETURNS TABLE(success boolean, journal_id uuid, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_account RECORD;
   v_old_journal_id UUID;
@@ -3344,17 +3326,15 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, NULL::UUID, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: validate_journal_balance
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.validate_journal_balance(journal_id uuid)
- RETURNS boolean
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.validate_journal_balance(journal_id uuid) RETURNS boolean
+    LANGUAGE plpgsql
+    AS $function$
 DECLARE
   total_debits NUMERIC;
   total_credits NUMERIC;
@@ -3370,17 +3350,15 @@ BEGIN
   -- Return true if balanced (difference less than 0.01 for rounding)
   RETURN ABS(total_debits - total_credits) < 0.01;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: validate_journal_entry
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.validate_journal_entry(p_journal_id uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.validate_journal_entry(p_journal_id uuid) RETURNS jsonb
+    LANGUAGE plpgsql
+    AS $function$
 DECLARE
     total_dr NUMERIC;
     total_cr NUMERIC;
@@ -3413,18 +3391,15 @@ BEGIN
     );
     RETURN result;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: void_closing_entry_atomic
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.void_closing_entry_atomic(p_branch_id uuid, p_year integer)
- RETURNS TABLE(success boolean, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.void_closing_entry_atomic(p_branch_id uuid, p_year integer) RETURNS TABLE(success boolean, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_journal_id UUID;
 BEGIN
@@ -3449,17 +3424,15 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: void_journal_by_reference
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.void_journal_by_reference(p_reference_id text, p_reference_type text, p_user_id uuid DEFAULT NULL::uuid, p_user_name text DEFAULT NULL::text, p_reason text DEFAULT 'Cancelled'::text)
- RETURNS TABLE(success boolean, journals_voided integer, message text)
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.void_journal_by_reference(p_reference_id text, p_reference_type text, p_user_id uuid DEFAULT NULL::uuid, p_user_name text DEFAULT NULL::text, p_reason text DEFAULT 'Cancelled'::text) RETURNS TABLE(success boolean, journals_voided integer, message text)
+    LANGUAGE plpgsql
+    AS $function$
 DECLARE
   v_count INTEGER := 0;
 BEGIN
@@ -3481,18 +3454,15 @@ BEGIN
     RETURN QUERY SELECT FALSE, 0, format('No journals found for %s: %s', p_reference_type, p_reference_id)::TEXT;
   END IF;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: void_journal_entry
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.void_journal_entry(p_journal_id uuid, p_branch_id uuid, p_reason text DEFAULT NULL::text)
- RETURNS TABLE(success boolean, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.void_journal_entry(p_journal_id uuid, p_branch_id uuid, p_reason text DEFAULT NULL::text) RETURNS TABLE(success boolean, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_journal RECORD;
 BEGIN
@@ -3539,7 +3509,6 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE AS success, SQLERRM::TEXT AS error_message;
 END;
-$function$
-;
+$function$;
 
 

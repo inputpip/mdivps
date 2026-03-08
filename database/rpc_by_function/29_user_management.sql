@@ -10,12 +10,10 @@
 -- =====================================================
 -- Function: handle_new_user
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.handle_new_user()
- RETURNS trigger
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+CREATE OR REPLACE FUNCTION public.handle_new_user() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $function$
 BEGIN
   INSERT INTO public.profiles (id, full_name, email, role, status)
   VALUES (
@@ -27,7 +25,6 @@ BEGIN
   );
   RETURN new;
 END;
-$function$
-;
+$function$;
 
 

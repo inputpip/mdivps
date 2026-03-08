@@ -13,17 +13,9 @@
 -- =====================================================
 -- Function: get_payment_history_rpc
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.get_payment_history_rpc(
-    p_branch_id uuid, 
-    p_limit integer DEFAULT 100, 
-    p_date_from date DEFAULT NULL, 
-    p_date_to date DEFAULT NULL, 
-    p_account_id text DEFAULT NULL
-)
- RETURNS TABLE(id uuid, payment_date timestamp with time zone, amount numeric, transaction_id text, customer_name text, payment_method text, notes text, account_name text, user_name text, created_at timestamp with time zone)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.get_payment_history_rpc(p_branch_id uuid, p_limit integer DEFAULT 100) RETURNS TABLE(id uuid, payment_date timestamp with time zone, amount numeric, transaction_id text, customer_name text, payment_method text, notes text, account_name text, user_name text, created_at timestamp with time zone)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 BEGIN
     RETURN QUERY
     SELECT 
@@ -31,7 +23,34 @@ BEGIN
         ph.payment_date,
         ph.amount,
         ph.transaction_id,
-        COALESCE(t.customer_name, 'Non-transaction Payment') as customer_name,
+        t.customer_name,
+        ph.payment_method,
+        ph.notes,
+        COALESCE(a.name, 'Kas Besar') as account_name,
+        COALESCE(pr.full_name, ph.recorded_by_name, 'System') as user_name,
+        ph.created_at
+    FROM payment_history ph
+    LEFT JOIN transactions t ON ph.transaction_id = t.id
+    LEFT JOIN accounts a ON ph.account_id = a.id
+    LEFT JOIN profiles pr ON ph.recorded_by = pr.id
+    WHERE ph.branch_id = p_branch_id
+    ORDER BY ph.payment_date DESC
+    LIMIT p_limit;
+END;
+$function$;
+
+
+CREATE OR REPLACE FUNCTION public.get_payment_history_rpc(p_branch_id uuid, p_limit integer DEFAULT 100, p_date_from date DEFAULT NULL::date, p_date_to date DEFAULT NULL::date, p_account_id text DEFAULT NULL::text) RETURNS TABLE(id uuid, payment_date timestamp with time zone, amount numeric, transaction_id text, customer_name text, payment_method text, notes text, account_name text, user_name text, created_at timestamp with time zone)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        ph.id,
+        ph.payment_date,
+        ph.amount,
+        ph.transaction_id,
+        t.customer_name,
         ph.payment_method,
         ph.notes,
         COALESCE(a.name, 'Kas Besar') as account_name,
@@ -48,18 +67,15 @@ BEGIN
     ORDER BY ph.payment_date DESC
     LIMIT p_limit;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: record_payment_history
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.record_payment_history()
- RETURNS trigger
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.record_payment_history() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 BEGIN
   -- Only trigger if paid_amount increased
   IF NEW.paid_amount > OLD.paid_amount THEN
@@ -79,17 +95,15 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: update_payment_status
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.update_payment_status()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.update_payment_status() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $function$
 BEGIN
   -- Auto-update payment status based on paid amount vs total
   IF NEW.paid_amount >= NEW.total THEN
@@ -103,18 +117,15 @@ BEGIN
   
   RETURN NEW;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: void_payment_history_rpc
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.void_payment_history_rpc(p_payment_id uuid, p_branch_id uuid, p_reason text DEFAULT 'Pembayaran dibatalkan'::text)
- RETURNS TABLE(success boolean, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.void_payment_history_rpc(p_payment_id uuid, p_branch_id uuid, p_reason text DEFAULT 'Pembayaran dibatalkan'::text) RETURNS TABLE(success boolean, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
     v_payment RECORD;
     v_transaction RECORD;
@@ -188,5 +199,4 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
     RETURN QUERY SELECT FALSE, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;

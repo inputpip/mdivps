@@ -13,11 +13,9 @@
 -- =====================================================
 -- Function: disable_rls
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.disable_rls(table_name text)
- RETURNS boolean
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.disable_rls(table_name text) RETURNS boolean
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 BEGIN
   -- Check if user has permission (only owner role)
   IF NOT EXISTS (
@@ -35,18 +33,15 @@ EXCEPTION
   WHEN OTHERS THEN
     RAISE EXCEPTION 'Failed to disable RLS on table %: %', table_name, SQLERRM;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: enable_rls
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.enable_rls(table_name text)
- RETURNS boolean
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.enable_rls(table_name text) RETURNS boolean
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 BEGIN
   -- Check if user has permission (only owner role)
   IF NOT EXISTS (
@@ -64,18 +59,15 @@ EXCEPTION
   WHEN OTHERS THEN
     RAISE EXCEPTION 'Failed to enable RLS on table %: %', table_name, SQLERRM;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: get_rls_policies
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.get_rls_policies(table_name text DEFAULT NULL::text)
- RETURNS TABLE(schema_name text, table_name text, policy_name text, cmd text, roles text, qual text)
- LANGUAGE sql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.get_rls_policies(table_name text DEFAULT NULL::text) RETURNS TABLE(schema_name text, table_name text, policy_name text, cmd text, roles text, qual text)
+    LANGUAGE sql SECURITY DEFINER
+    AS $function$
   SELECT 
     schemaname::text as schema_name,
     tablename::text as table_name,
@@ -87,18 +79,15 @@ AS $function$
   WHERE schemaname = 'public'
     AND (table_name IS NULL OR tablename = table_name)
   ORDER BY tablename, policyname;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: get_rls_status
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.get_rls_status()
- RETURNS TABLE(schema_name text, table_name text, rls_enabled boolean)
- LANGUAGE sql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.get_rls_status() RETURNS TABLE(schema_name text, table_name text, rls_enabled boolean)
+    LANGUAGE sql SECURITY DEFINER
+    AS $function$
   SELECT 
     schemaname::text as schema_name,
     tablename::text as table_name,
@@ -106,7 +95,6 @@ AS $function$
   FROM pg_tables 
   WHERE schemaname = 'public'
   ORDER BY tablename;
-$function$
-;
+$function$;
 
 

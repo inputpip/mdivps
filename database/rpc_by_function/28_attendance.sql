@@ -12,10 +12,9 @@
 -- =====================================================
 -- Function: sync_attendance_checkin
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.sync_attendance_checkin()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.sync_attendance_checkin() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $function$
 BEGIN
     -- If check_in_time is provided, use it for check_in
     IF NEW.check_in_time IS NOT NULL AND NEW.check_in IS NULL THEN
@@ -34,17 +33,15 @@ BEGIN
     
     RETURN NEW;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: sync_attendance_ids
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.sync_attendance_ids()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.sync_attendance_ids() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $function$
 BEGIN
     -- Sync user_id and employee_id
     IF NEW.user_id IS NOT NULL AND NEW.employee_id IS NULL THEN
@@ -60,17 +57,15 @@ BEGIN
     
     RETURN NEW;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: sync_attendance_user_id
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.sync_attendance_user_id()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.sync_attendance_user_id() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $function$
 BEGIN
     -- If date is not provided, set to today
     IF NEW.date IS NULL THEN
@@ -78,7 +73,6 @@ BEGIN
     END IF;
     RETURN NEW;
 END;
-$function$
-;
+$function$;
 
 

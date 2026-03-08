@@ -18,6 +18,8 @@ const ALL_ROLES: { value: string; label: string }[] = [
   { value: 'sales', label: 'Sales' },
   { value: 'driver', label: 'Driver / Supir' },
   { value: 'helper', label: 'Helper / Kenek' },
+  { value: 'delivery_2_helpers', label: 'Pengantaran 2 Helper (Supir + 2 Kenek / Bagi 3)' },
+  { value: 'delivery_3_helpers', label: 'Pengantaran 3 Helper (Supir + 3 Kenek / Bagi 4)' },
   { value: 'cashier', label: 'Kasir' },
   { value: 'designer', label: 'Designer' },
   { value: 'operator', label: 'Operator' },
@@ -347,7 +349,9 @@ export function RoleCommissionSetup() {
               <li>• Masukkan nilai komisi per qty untuk setiap produk</li>
               <li>• Gunakan "Terapkan Rate" untuk mengisi semua produk dengan nilai yang sama</li>
               <li>• Komisi akan otomatis dihitung saat transaksi/pengantaran berdasarkan role karyawan</li>
-              <li>• <strong>Driver & Helper:</strong> Komisi dihitung saat pengantaran selesai</li>
+              <li>• <strong>Pengantaran 2 Helper:</strong> Masukkan total komisi 3 orang, akan dibagi 3 otomatis (1 Supir + 2 Kenek)</li>
+              <li>• <strong>Pengantaran 3 Helper:</strong> Masukkan total komisi 4 orang, akan dibagi 4 otomatis (1 Supir + 3 Kenek)</li>
+              <li>• <strong>Driver & Helper:</strong> Berlaku jika Pengantaran hanya 1 Kenek. Komisi dihitung di akhir</li>
               <li>• <strong>Sales:</strong> Komisi dihitung saat transaksi dibuat</li>
               <li>• <strong>Operator:</strong> Mendapatkan komisi dari produk yang laku dengan aturan produksi</li>
               <li>• <strong>Supervisor:</strong> Mendapatkan komisi dari setiap produk yang dijual di luar bonus</li>

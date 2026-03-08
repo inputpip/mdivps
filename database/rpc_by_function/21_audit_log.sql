@@ -15,10 +15,9 @@
 -- =====================================================
 -- Function: audit_profiles_changes
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.audit_profiles_changes()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.audit_profiles_changes() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $function$
 BEGIN
   IF TG_OP = 'DELETE' THEN
     PERFORM public.create_audit_log(
@@ -57,17 +56,15 @@ BEGIN
   END IF;
   RETURN NULL;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: cleanup_old_audit_logs
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.cleanup_old_audit_logs()
- RETURNS integer
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.cleanup_old_audit_logs() RETURNS integer
+    LANGUAGE plpgsql
+    AS $function$
 DECLARE
   deleted_count INTEGER;
 BEGIN
@@ -88,18 +85,15 @@ BEGIN
   
   RETURN deleted_count;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: create_audit_log
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.create_audit_log(p_table_name text, p_operation text, p_record_id text, p_old_data jsonb DEFAULT NULL::jsonb, p_new_data jsonb DEFAULT NULL::jsonb, p_additional_info jsonb DEFAULT NULL::jsonb)
- RETURNS uuid
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.create_audit_log(p_table_name text, p_operation text, p_record_id text, p_old_data jsonb DEFAULT NULL::jsonb, p_new_data jsonb DEFAULT NULL::jsonb, p_additional_info jsonb DEFAULT NULL::jsonb) RETURNS uuid
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   audit_id UUID;
   current_user_id UUID;
@@ -153,17 +147,15 @@ BEGIN
   
   RETURN audit_id;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: enable_audit_for_table
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.enable_audit_for_table(target_table text)
- RETURNS void
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.enable_audit_for_table(target_table text) RETURNS void
+    LANGUAGE plpgsql
+    AS $function$
 DECLARE
   trigger_name text;
 BEGIN
@@ -175,17 +167,15 @@ BEGIN
   );
   RAISE NOTICE 'Audit trigger enabled for table: %', target_table;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: get_record_history
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.get_record_history(p_table_name text, p_record_id text)
- RETURNS TABLE(audit_time timestamp with time zone, operation text, user_email text, changed_fields jsonb, old_data jsonb, new_data jsonb)
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.get_record_history(p_table_name text, p_record_id text) RETURNS TABLE(audit_time timestamp with time zone, operation text, user_email text, changed_fields jsonb, old_data jsonb, new_data jsonb)
+    LANGUAGE plpgsql
+    AS $function$
 BEGIN
   RETURN QUERY
   SELECT al.created_at, al.operation, al.user_email, al.changed_fields, al.old_data, al.new_data
@@ -193,18 +183,15 @@ BEGIN
   WHERE al.table_name = p_table_name AND al.record_id = p_record_id
   ORDER BY al.created_at DESC;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: log_performance
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.log_performance(p_operation_name text, p_duration_ms integer, p_table_name text DEFAULT NULL::text, p_record_count integer DEFAULT NULL::integer, p_query_type text DEFAULT NULL::text, p_metadata jsonb DEFAULT NULL::jsonb)
- RETURNS uuid
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.log_performance(p_operation_name text, p_duration_ms integer, p_table_name text DEFAULT NULL::text, p_record_count integer DEFAULT NULL::integer, p_query_type text DEFAULT NULL::text, p_metadata jsonb DEFAULT NULL::jsonb) RETURNS uuid
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   log_id UUID;
 BEGIN
@@ -228,7 +215,6 @@ BEGIN
   
   RETURN log_id;
 END;
-$function$
-;
+$function$;
 
 

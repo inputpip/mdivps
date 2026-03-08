@@ -19,20 +19,16 @@ DROP FUNCTION IF EXISTS public.process_retasi_atomic(jsonb, jsonb, uuid, uuid, t
 -- =====================================================
 -- Function: create_retasi_atomic
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.create_retasi_atomic(p_branch_id uuid, p_driver_name text, p_helper_name text DEFAULT NULL::text, p_truck_number text DEFAULT NULL::text, p_route text DEFAULT NULL::text, p_departure_date date DEFAULT CURRENT_DATE, p_departure_time text DEFAULT NULL::text, p_notes text DEFAULT NULL::text, p_items jsonb DEFAULT '[]'::jsonb, p_created_by uuid DEFAULT NULL::uuid, p_helper_id uuid DEFAULT NULL::uuid, p_helper_name_2 text DEFAULT NULL::text, p_helper_id_2 uuid DEFAULT NULL::uuid, p_helper_name_3 text DEFAULT NULL::text, p_helper_id_3 uuid DEFAULT NULL::uuid)
- RETURNS TABLE(success boolean, retasi_id uuid, retasi_number text, retasi_ke integer, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.create_retasi_atomic(p_branch_id uuid, p_driver_name text, p_helper_name text DEFAULT NULL::text, p_truck_number text DEFAULT NULL::text, p_route text DEFAULT NULL::text, p_departure_date date DEFAULT CURRENT_DATE, p_departure_time text DEFAULT NULL::text, p_notes text DEFAULT NULL::text, p_items jsonb DEFAULT '[]'::jsonb, p_created_by uuid DEFAULT NULL::uuid, p_helper_id uuid DEFAULT NULL::uuid, p_helper_name_2 text DEFAULT NULL::text, p_helper_id_2 uuid DEFAULT NULL::uuid, p_helper_name_3 text DEFAULT NULL::text, p_helper_id_3 uuid DEFAULT NULL::uuid) RETURNS TABLE(success boolean, retasi_id uuid, retasi_number text, retasi_ke integer, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_retasi_id UUID := gen_random_uuid();
   v_retasi_number TEXT;
   v_retasi_ke INTEGER;
   v_item RECORD;
 BEGIN
-  -- ==================== VALIDASI ====================
-  
-  -- Check if driver has active retasi
+  -- Validasi: Supir tidak boleh punya retasi aktif
   IF EXISTS (
     SELECT 1 FROM retasi 
     WHERE driver_name = p_driver_name 
@@ -44,93 +40,35 @@ BEGIN
     RETURN;
   END IF;
 
-  -- Generate Retasi Number: RET-YYYYMMDD-HHMISS
+  -- Generate Nomor Retasi
   v_retasi_number := 'RET-' || TO_CHAR(p_departure_date, 'YYYYMMDD') || '-' || TO_CHAR(NOW(), 'HH24MISS');
 
-  -- Count retasi_ke for today
+  -- Hitung Retasi Ke-berapa hari ini
   SELECT COALESCE(COUNT(*), 0) + 1 INTO v_retasi_ke
   FROM retasi
   WHERE driver_name = p_driver_name
     AND departure_date = p_departure_date
     AND (branch_id = p_branch_id OR branch_id IS NULL);
 
-  -- ==================== INSERT RETASI ====================
-  
+  -- Insert Header Retasi
   INSERT INTO retasi (
-    id,
-    branch_id,
-    retasi_number,
-    truck_number,
-    driver_name,
-    helper_id,
-    helper_name,
-    helper_id_2,
-    helper_name_2,
-    helper_id_3,
-    helper_name_3,
-    departure_date,
-    departure_time,
-    route,
-    total_items,
-    notes,
-    retasi_ke,
-    is_returned,
-    created_by,
-    created_at,
-    updated_at
+    id, branch_id, retasi_number, truck_number, driver_name,
+    helper_id, helper_name, helper_id_2, helper_name_2, helper_id_3, helper_name_3,
+    departure_date, departure_time, route, total_items, notes, retasi_ke, is_returned, created_by, created_at, updated_at
   ) VALUES (
-    v_retasi_id,
-    p_branch_id,
-    v_retasi_number,
-    p_truck_number,
-    p_driver_name,
-    p_helper_id,
-    p_helper_name,
-    p_helper_id_2,
-    p_helper_name_2,
-    p_helper_id_3,
-    p_helper_name_3,
-    p_departure_date,
-    CASE WHEN p_departure_time IS NOT NULL AND p_departure_time != ''
-         THEN p_departure_time::TIME
-         ELSE NULL
-    END,
-    p_route,
+    v_retasi_id, p_branch_id, v_retasi_number, p_truck_number, p_driver_name,
+    p_helper_id, p_helper_name, p_helper_id_2, p_helper_name_2, p_helper_id_3, p_helper_name_3,
+    p_departure_date, 
+    CASE WHEN p_departure_time IS NOT NULL AND p_departure_time != '' THEN p_departure_time::TIME ELSE NULL END,
+    p_route, 
     (SELECT COALESCE(SUM((item->>'quantity')::NUMERIC), 0) FROM jsonb_array_elements(p_items) AS item),
-    p_notes,
-    v_retasi_ke,
-    FALSE,
-    p_created_by,
-    NOW(),
-    NOW()
+    p_notes, v_retasi_ke, FALSE, p_created_by, NOW(), NOW()
   );
 
-  -- ==================== INSERT ITEMS ====================
-  
-  FOR v_item IN SELECT * FROM jsonb_to_recordset(p_items) AS x(
-    product_id UUID, 
-    product_name TEXT, 
-    quantity NUMERIC, 
-    weight NUMERIC, 
-    notes TEXT
-  ) LOOP
-    INSERT INTO retasi_items (
-      retasi_id,
-      product_id,
-      product_name,
-      quantity,
-      weight,
-      notes,
-      created_at
-    ) VALUES (
-      v_retasi_id,
-      v_item.product_id,
-      v_item.product_name,
-      v_item.quantity,
-      v_item.weight,
-      v_item.notes,
-      NOW()
-    );
+  -- Insert Detail Item
+  FOR v_item IN SELECT * FROM jsonb_to_recordset(p_items) AS x(product_id UUID, product_name TEXT, quantity NUMERIC, weight NUMERIC, notes TEXT) LOOP
+    INSERT INTO retasi_items (retasi_id, product_id, product_name, quantity, weight, notes, created_at)
+    VALUES (v_retasi_id, v_item.product_id, v_item.product_name, v_item.quantity, v_item.weight, v_item.notes, NOW());
   END LOOP;
 
   RETURN QUERY SELECT TRUE, v_retasi_id, v_retasi_number, v_retasi_ke, NULL::TEXT;
@@ -138,17 +76,15 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, NULL::UUID, NULL::TEXT, NULL::INTEGER, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: driver_has_unreturned_retasi
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.driver_has_unreturned_retasi(driver text)
- RETURNS boolean
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.driver_has_unreturned_retasi(driver text) RETURNS boolean
+    LANGUAGE plpgsql
+    AS $function$
 DECLARE
   count_unreturned INTEGER;
 BEGIN
@@ -160,17 +96,15 @@ BEGIN
   
   RETURN count_unreturned > 0;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: generate_retasi_number
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.generate_retasi_number()
- RETURNS text
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.generate_retasi_number() RETURNS text
+    LANGUAGE plpgsql
+    AS $function$
 DECLARE
   new_number TEXT;
   counter INTEGER;
@@ -184,17 +118,15 @@ BEGIN
   
   RETURN new_number;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: get_next_retasi_counter
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.get_next_retasi_counter(driver text, target_date date DEFAULT CURRENT_DATE)
- RETURNS integer
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.get_next_retasi_counter(driver text, target_date date DEFAULT CURRENT_DATE) RETURNS integer
+    LANGUAGE plpgsql
+    AS $function$
 DECLARE
   counter INTEGER;
 BEGIN
@@ -207,17 +139,15 @@ BEGIN
   
   RETURN counter;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: mark_retasi_returned
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.mark_retasi_returned(retasi_id uuid, returned_count integer DEFAULT 0, error_count integer DEFAULT 0, notes text DEFAULT NULL::text)
- RETURNS boolean
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.mark_retasi_returned(retasi_id uuid, returned_count integer DEFAULT 0, error_count integer DEFAULT 0, notes text DEFAULT NULL::text) RETURNS boolean
+    LANGUAGE plpgsql
+    AS $function$
 BEGIN
   UPDATE public.retasi 
   SET 
@@ -230,18 +160,15 @@ BEGIN
   
   RETURN FOUND;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: mark_retasi_returned_atomic
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.mark_retasi_returned_atomic(p_branch_id uuid, p_retasi_id uuid, p_return_notes text, p_item_returns jsonb, p_manual_kembali numeric DEFAULT NULL::numeric, p_manual_laku numeric DEFAULT NULL::numeric, p_manual_tidak_laku numeric DEFAULT NULL::numeric, p_manual_error numeric DEFAULT NULL::numeric)
- RETURNS TABLE(success boolean, barang_laku numeric, barang_tidak_laku numeric, returned_items_count numeric, error_items_count numeric, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.mark_retasi_returned_atomic(p_branch_id uuid, p_retasi_id uuid, p_return_notes text, p_item_returns jsonb, p_manual_kembali numeric DEFAULT NULL::numeric, p_manual_laku numeric DEFAULT NULL::numeric, p_manual_tidak_laku numeric DEFAULT NULL::numeric, p_manual_error numeric DEFAULT NULL::numeric) RETURNS TABLE(success boolean, barang_laku numeric, barang_tidak_laku numeric, returned_items_count numeric, error_items_count numeric, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_item RECORD;
   v_total_kembali NUMERIC := 0;    -- SUM of returned_qty (barang kembali utuh)
@@ -320,8 +247,7 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, 0::NUMERIC, 0::NUMERIC, 0::NUMERIC, 0::NUMERIC, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
 
@@ -329,10 +255,9 @@ $function$
 -- =====================================================
 -- Function: set_retasi_ke
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.set_retasi_ke()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.set_retasi_ke() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $function$
 BEGIN
   -- Auto-generate retasi number if not provided
   IF NEW.retasi_number IS NULL OR NEW.retasi_number = '' THEN
@@ -346,17 +271,15 @@ BEGIN
   
   RETURN NEW;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: set_retasi_ke_and_number
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.set_retasi_ke_and_number()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION public.set_retasi_ke_and_number() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $function$
 BEGIN
   -- Auto-generate retasi number if not provided
   IF NEW.retasi_number IS NULL OR NEW.retasi_number = '' THEN
@@ -370,18 +293,15 @@ BEGIN
   
   RETURN NEW;
 END;
-$function$
-;
+$function$;
 
 
 -- =====================================================
 -- Function: void_retasi_atomic
 -- =====================================================
-CREATE OR REPLACE FUNCTION public.void_retasi_atomic(p_retasi_id uuid, p_branch_id uuid, p_reason text DEFAULT 'Dibatalkan'::text, p_user_id uuid DEFAULT NULL::uuid)
- RETURNS TABLE(success boolean, batches_removed integer, journals_voided integer, error_message text)
- LANGUAGE plpgsql
- SECURITY DEFINER
-AS $function$
+CREATE OR REPLACE FUNCTION public.void_retasi_atomic(p_retasi_id uuid, p_branch_id uuid, p_reason text DEFAULT 'Dibatalkan'::text, p_user_id uuid DEFAULT NULL::uuid) RETURNS TABLE(success boolean, batches_removed integer, journals_voided integer, error_message text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $function$
 DECLARE
   v_retasi RECORD;
   v_batches_removed INTEGER := 0;
@@ -435,7 +355,6 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN QUERY SELECT FALSE, 0, 0, SQLERRM::TEXT;
 END;
-$function$
-;
+$function$;
 
 
