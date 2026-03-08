@@ -140,7 +140,7 @@ The system relies on **PostgreSQL RPCs** for data integrity. Frontend calls `sup
 
 ### 🍱 Sidebar Enhancements
 *   **Sticky Full-Height**: Sidebar diset ke `h-screen` dan `sticky`, memastikan sidebar tetap terlihat penuh dan tidak terpotong saat scroll halaman panjang.
-*   **Lock Menu Feature**: Penambahan fitur "Lock Expand" (ikon gembok) di sidebar untuk menjaga semua sub-menu tetap terbuka. State fitur ini disimpan di `localStorage`.
+*   **Lock Menu Feature**: Penambahan fitur "Lock Expand" (ikon gembok) di bagian bawah sidebar (footer) untuk menjaga semua sub-menu tetap terbuka. State fitur ini disimpan di `localStorage`.
 
 # v5.1 (2026-03-06) - Commission System Audit & UI Enhancement
 

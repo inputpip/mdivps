@@ -177,9 +177,10 @@ interface SidebarProps {
    * should call this to shrink or expand the sidebar.
    */
   setCollapsed: (isCollapsed: boolean) => void;
+  onHoverChange?: (isHovering: boolean) => void;
 }
 
-export function Sidebar({ isCollapsed, setCollapsed }: SidebarProps) {
+export function Sidebar({ isCollapsed, setCollapsed, onHoverChange }: SidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { settings } = useCompanySettings();
@@ -244,6 +245,7 @@ export function Sidebar({ isCollapsed, setCollapsed }: SidebarProps) {
       // Expand after 150ms delay
       hoverTimeoutRef.current = setTimeout(() => {
         setIsHoverExpanded(true);
+        onHoverChange?.(true);
         // Auto focus search input after expand
         setTimeout(() => {
           searchInputRef.current?.focus();
@@ -263,7 +265,8 @@ export function Sidebar({ isCollapsed, setCollapsed }: SidebarProps) {
       // Collapse after 300ms delay
       leaveTimeoutRef.current = setTimeout(() => {
         setIsHoverExpanded(false);
-      }, 300);
+        onHoverChange?.(false);
+      }, 150);
     }
   }, [isHoverExpanded]);
 
@@ -336,8 +339,9 @@ export function Sidebar({ isCollapsed, setCollapsed }: SidebarProps) {
   return (
     <div
       className={cn(
-        "border-r bg-amber-50/60 dark:bg-slate-900/90 backdrop-blur-sm transition-all duration-200 ease-in-out dark:border-slate-700",
-        isHoverExpanded && isCollapsed && "absolute left-0 top-0 z-[100] h-full shadow-2xl bg-white dark:bg-slate-950 border-r-indigo-500/50"
+        "h-full border-r bg-slate-50 dark:bg-slate-900 transition-all duration-200 ease-in-out dark:border-slate-700",
+        showExpanded ? "w-[220px] lg:w-[280px]" : "w-[60px]",
+        isHoverExpanded && isCollapsed && "shadow-2xl bg-white dark:bg-slate-950 border-r-indigo-500/50"
       )}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
@@ -393,20 +397,6 @@ export function Sidebar({ isCollapsed, setCollapsed }: SidebarProps) {
                 </div>
               )}
 
-              {/* Lock Toggle Button */}
-              <div className="mt-2 flex items-center justify-between px-1">
-                <span className="text-[10px] uppercase font-bold text-slate-400">Lock Menu</span>
-                <button
-                  onClick={toggleLock}
-                  className={cn(
-                    "p-1 rounded-md transition-all",
-                    isLocked ? "bg-indigo-100 text-indigo-600 dark:bg-indigo-900/50" : "text-slate-400 hover:text-slate-600"
-                  )}
-                  title={isLocked ? "Unlock Sub-menus" : "Lock All Sub-menus (Always Expand)"}
-                >
-                  {isLocked ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
-                </button>
-              </div>
             </div>
           )}
 
@@ -483,7 +473,7 @@ export function Sidebar({ isCollapsed, setCollapsed }: SidebarProps) {
             })}
           </nav>
           <div className="mt-auto border-t p-2">
-            <div className={cn("flex", !showExpanded && "justify-center")}>
+            <div className={cn("flex items-center gap-2", !showExpanded ? "flex-col" : "justify-between")}>
               <Button
                 size="icon"
                 variant="outline"
@@ -496,6 +486,25 @@ export function Sidebar({ isCollapsed, setCollapsed }: SidebarProps) {
                 {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
                 <span className="sr-only">Toggle Sidebar</span>
               </Button>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="icon"
+                    variant={isLocked ? "default" : "outline"}
+                    className={cn(
+                      "h-8 w-8 transition-all",
+                      isLocked && "bg-indigo-600 hover:bg-indigo-700 text-white shadow-md"
+                    )}
+                    onClick={toggleLock}
+                  >
+                    {isLocked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                  {isLocked ? "Unlock Sub-menus" : "Lock Expand All Sub-menus"}
+                </TooltipContent>
+              </Tooltip>
             </div>
           </div>
         </div >

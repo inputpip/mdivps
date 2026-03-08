@@ -32,19 +32,24 @@ function IdleWarningBanner() {
 
 export function Layout() {
   const [isCollapsed, setIsCollapsed] = useState(true) // Default minimize
+  const [isHovering, setIsHovering] = useState(false);
 
-
+  const isExpanded = !isCollapsed || isHovering;
 
   return (
-    <div className="grid min-h-screen w-full grid-cols-[auto_1fr]">
+    <div className="flex min-h-screen w-full bg-background">
       <IdleWarningBanner />
       <div className={cn(
-        "hidden border-r bg-muted/40 md:block transition-all duration-300 sticky top-0 h-screen",
-        isCollapsed ? "w-[60px]" : "w-[220px] lg:w-[280px]"
+        "hidden border-r bg-slate-50 dark:bg-slate-900 md:block transition-all duration-300 ease-in-out sticky top-0 h-screen",
+        isExpanded ? "w-[220px] lg:w-[280px]" : "w-[60px]"
       )}>
-        <Sidebar isCollapsed={isCollapsed} setCollapsed={setIsCollapsed} />
+        <Sidebar
+          isCollapsed={isCollapsed}
+          setCollapsed={setIsCollapsed}
+          onHoverChange={setIsHovering}
+        />
       </div>
-      <div className="flex flex-col min-w-0">
+      <div className="flex flex-1 flex-col min-w-0">
         <Header />
         <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6 overflow-auto min-w-0">
           <Outlet />
