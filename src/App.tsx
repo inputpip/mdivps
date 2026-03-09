@@ -303,6 +303,7 @@ function WebApp() {
                       <Route path="/quotations" element={<QuotationsPage />} />
                       <Route path="/quotations/new" element={<QuotationsPage />} />
                       <Route path="/journal" element={<JournalPage />} />
+                      <Route path="/employees" element={<EmployeePage />} />
 
                       <Route path="*" element={<NotFound />} />
                     </Route>

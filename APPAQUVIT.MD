@@ -1,5 +1,5 @@
 # AQUVIT SYSTEM CURRENT STATE
-**Last Updated:** Monday, March 9, 2026 02:45 (WIT)
+**Last Updated:** Monday, March 9, 2026 13:30 (WIT)
 
 ## 1. 🌐 VPS Connection Information
 
@@ -15,6 +15,7 @@ Semua perubahan penting pada proyek AQUVIT ERP System didokumentasikan di file i
 3. [Server Architecture](#server-architecture-diagram)
 4. [VPS Server Information](#vps-server-information)
 5. [Version History](#v51-2026-03-06---commission-system-audit--ui-enhancement)
+   - [v5.3] **POS Mobile Fixes: Bonus, Sales & Photo Upload** 🛡️ CRITICAL
    - [v5.2] **Commission Split Logic & Sidebar UI** 🚀 NEW
    - [v5.1] **Commission Duplication Fix & UI Refinement** 🛡️ CRITICAL
    - [v5.0] **Delivery & PO Infrastructure Fixes** 🚚 CRITICAL
@@ -118,7 +119,7 @@ The system relies on **PostgreSQL RPCs** for data integrity. Frontend calls `sup
 
 ## 4. ⚠️ Current Focus & Next Steps
 **Active Task**: Auditing Stock & Validating Retasi Logic.
-**Recently Completed**: Multi-Helper Commission Split (Bagi 3/4) & Sidebar UI Enhancements.
+**Recently Completed**: POS Mobile High-Priority Fixes (Bonus Calculation, Sales Auto-fill, Photo Upload, Transaction ID).
 
 1.  **Frontend**: Modifying `src/hooks/useRetasi.ts` to ensure correct data is sent to RPC.
 2.  **Database**: 
@@ -130,6 +131,28 @@ The system relies on **PostgreSQL RPCs** for data integrity. Frontend calls `sup
 ---
 
 ---
+
+---
+# v5.3 (2026-03-09) - POS Mobile Fixes: Bonus, Sales & Photo Upload
+
+### 🎁 POS Mobile Bonus Optimization
+*   **Proportional Bonus (Kelipatan)**: Bonus dihitung secara kelipatan (misal: Beli 1000 dapat 10, maka Beli 2000 dapat 20).
+*   **Real-time Recalculation**: Bonus otomatis muncul dan terupdate saat jumlah (qty) diinput manual (mengetik), bukan hanya lewat tombol plus/minus.
+*   **Reset Bug Fix**: Memperbaiki bug di mana angka input qty kembali ke "1" saat proses background bonus berjalan (race condition fix).
+*   **Routing Fix**: Menambah rute `/employees` pada mobile layout di `App.tsx` untuk mencegah error 404 (Not Found) saat akses halaman karyawan dari HP.
+
+### 👤 Salesperson & Identity Fixes
+*   **Auto-select Sales**: Sistem otomatis mendeteksi jika user login terdaftar di tabel `sales_employees` (apa pun role utamanya) untuk mengisi field Sales di POS.
+*   **Transaction ID with Branch Context**: Update penomoran transaksi (`AQVPOSSUP`) agar menyertakan ID Cabang untuk mencegah bentrokan nomor urut antar cabang.
+*   **Submission Fix**: Penambahan field wajib (`branch_id`, `subtotal`, PPN logic) pada payload POS Mobile agar transaksi berhasil disimpan ke database.
+
+### 🍱 Database & Commission Logic
+*   **Constraint Fix**: Memperluas batasan `commission_rules_role_check` di database agar mengizinkan role baru seperti `delivery_2_helpers` (Bagi 3) dan `delivery_3_helpers` (Bagi 4). Script perbaikan tersedia di `database/fix_commission_rules_constraint.sql`.
+
+### 📸 Photo Upload & Connectivity
+*   **Network Error Fix**: Mengizinkan *Cleartext Traffic* dan *Mixed Content* di Android & Capacitor untuk koneksi ke server VPS berbasis IP (non-HTTPS).
+*   **CSP Security Update**: Penambahan alamat IP VPS (`103.197.190.54`) ke dalam Content Security Policy (`index.html`) agar koneksi fetch tidak diblokir browser.
+*   **Link Sanitization**: Otomatis menambahkan protokol `http://` pada konfigurasi VPS jika user lupa memasukkannya di Pengaturan.
 
 # v5.2 (2026-03-09) - Commission Split Logic & Sidebar UI
 
@@ -497,6 +520,6 @@ const { data: rpcResultRaw, error: rpcError } = await supabase
 
 ---
 
-Last Updated: 2026-03-09 02:45 WIT
+Last Updated: 2026-03-09 13:30 WIT
 
 
