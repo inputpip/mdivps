@@ -102,6 +102,12 @@ const SERVER_STORAGE_KEY = 'aquvit_selected_server';
 // Server Selection Screen Component
 function ServerSelector({ onSelect }: { onSelect: (url: string) => void }) {
   const [selected, setSelected] = useState<string | null>(null);
+  const [cachedLogo, setCachedLogo] = useState<string | null>(localStorage.getItem('company_logo_cached'));
+
+  useEffect(() => {
+    // Check for cached logo periodically or on mount
+    setCachedLogo(localStorage.getItem('company_logo_cached'));
+  }, []);
 
   const handleSelect = (server: typeof SERVERS[0]) => {
     setSelected(server.id);
@@ -117,8 +123,12 @@ function ServerSelector({ onSelect }: { onSelect: (url: string) => void }) {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-full mb-4">
-            <Building2 className="w-8 h-8 text-white" />
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-white rounded-2xl mb-4 shadow-md overflow-hidden border border-gray-100 p-2">
+            {cachedLogo ? (
+              <img src={cachedLogo} alt="Logo" className="w-full h-full object-contain" />
+            ) : (
+              <Building2 className="w-10 h-10 text-blue-600" />
+            )}
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Pilih Server</h1>
           <p className="text-gray-600 mt-2">Pilih lokasi usaha yang ingin diakses</p>
@@ -187,9 +197,11 @@ function App() {
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    // For APK: ALWAYS show server selector on app start (no memory)
+    // For APK: ALWAYS show server selector on app start (no memory) unless hardcoded
     // For Web: skip selector, use current domain
-    if (isCapacitorApp()) {
+    const hardcodedServer = import.meta.env.VITE_APK_SERVER;
+
+    if (isCapacitorApp() && !hardcodedServer) {
       // Clear previous selection so user always picks
       localStorage.removeItem('aquvit_selected_server');
       setShowSelector(true);

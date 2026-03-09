@@ -43,7 +43,7 @@ export const useCompanySettings = () => {
         return acc;
       }, {} as any);
 
-      return {
+      const settings = {
         name: settingsObj.company_name || '',
         address: settingsObj.company_address || '',
         phone: settingsObj.company_phone || '',
@@ -65,6 +65,13 @@ export const useCompanySettings = () => {
         telegramChatId: settingsObj.telegram_chat_id || '',
         telegramEnabled: settingsObj.telegram_enabled === 'true',
       };
+
+      // Cache logo for early loading screens (like APK server selector)
+      if (settings.logo) {
+        localStorage.setItem('company_logo_cached', settings.logo);
+      }
+
+      return settings;
     },
     staleTime: 60 * 60 * 1000, // 1 hour (settings rarely change)
     gcTime: 2 * 60 * 60 * 1000, // 2 hours cache

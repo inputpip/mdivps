@@ -57,10 +57,24 @@ export class PhotoUploadService {
 
   /**
    * Update VPS configuration (called from settings page)
-   * @param baseUrl - Full base URL (e.g., https://upload.aquvit.id)
+   * @param baseUrlOrUrl - Full base URL or server IP/domain
+   * @param port - Optional port (if first arg is just IP/domain)
    */
-  static updateConfig(baseUrl: string): void {
+  static updateConfig(baseUrlOrUrl: string, port?: string): void {
     try {
+      let baseUrl = baseUrlOrUrl;
+
+      // If it looks like an IP or domain without protocol, add http://
+      if (baseUrl && !baseUrl.startsWith('http')) {
+        baseUrl = `http://${baseUrl}`;
+        if (port) {
+          baseUrl = `${baseUrl}:${port}`;
+        }
+      } else if (baseUrl && port && !baseUrl.includes(':', baseUrl.indexOf('//') + 2)) {
+        // If it has protocol but no port, and port is provided
+        baseUrl = `${baseUrl}:${port}`;
+      }
+
       localStorage.setItem(VPS_SETTINGS_KEY, JSON.stringify({ baseUrl }));
       console.log(`VPS config updated: ${baseUrl}`);
     } catch (error) {

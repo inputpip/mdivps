@@ -107,9 +107,17 @@ export class PricingService {
         }
       } else if (bestBonus.bonusType === 'quantity') {
         // For quantity bonus, we don't change price but calculate bonus quantity
+        // Proportional Calculation: e.g. if buy 10 get 1, then buy 30 get 3
+        const ruleMin = bestBonus.minQuantity || 1;
+        const multiplier = Math.floor(quantity / ruleMin);
+
+        // Use bonusQuantity if available, otherwise fallback to bonusValue
+        const baseBonusQty = bestBonus.bonusQuantity > 0 ? bestBonus.bonusQuantity : bestBonus.bonusValue;
+        const totalBonusQty = baseBonusQty * multiplier;
+
         calculatedBonus = {
           rule: bestBonus,
-          bonusQuantity: bestBonus.bonusValue,
+          bonusQuantity: totalBonusQty,
           discountAmount: 0
         }
       }

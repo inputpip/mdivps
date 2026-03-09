@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Aquvit ERP</string>
-    <string name="title_activity_main">Aquvit ERP</string>
+    <string name="app_name">Aquvit ERP MKW</string>
+    <string name="title_activity_main">Aquvit ERP MKW</string>
     <string name="package_name">id.aquvit.app</string>
     <string name="custom_url_scheme">id.aquvit.app</string>
 </resources>

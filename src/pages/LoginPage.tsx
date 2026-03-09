@@ -111,15 +111,14 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-muted/40">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
-          {settingsLoading ? (
+          {settingsLoading && !localStorage.getItem('company_logo_cached') ? (
             <Skeleton className="mx-auto h-16 w-32" />
-          ) : settings?.logo ? (
-            <img 
-              src={settings.logo} 
-              alt="Company Logo" 
+          ) : settings?.logo || localStorage.getItem('company_logo_cached') ? (
+            <img
+              src={settings?.logo || localStorage.getItem('company_logo_cached') || ''}
+              alt="Company Logo"
               className="mx-auto h-16 object-contain"
               onError={(e) => {
-                console.error('Failed to load logo:', settings.logo);
                 e.currentTarget.style.display = 'none';
               }}
             />

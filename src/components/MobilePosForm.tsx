@@ -34,6 +34,7 @@ import { PricingService } from '@/services/pricingService'
 import { useTimezone } from '@/contexts/TimezoneContext'
 import { getOfficeTime } from '@/utils/officeTime'
 import { usePermissions, PERMISSIONS } from '@/hooks/usePermissions'
+import { useBranch } from '@/contexts/BranchContext'
 
 interface FormTransactionItem {
   id: number;
@@ -65,6 +66,7 @@ export const MobilePosForm = ({ preselectedCustomerId }: MobilePosFormProps) => 
   const { customers } = useCustomers();
   const { data: salesEmployees } = useSalesEmployees();
   const { hasPermission } = usePermissions();
+  const { currentBranch } = useBranch();
   const canEditPrice = true; // Default to true for all roles in mobile view as requested
 
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
@@ -114,13 +116,14 @@ export const MobilePosForm = ({ preselectedCustomerId }: MobilePosFormProps) => 
     setPaidAmount(totalTagihan);
   }, [totalTagihan]);
 
-  // Auto-select sales jika user login dengan role sales
+  // Auto-select sales jika user login adalah salah satu dari karyawan sales
   useEffect(() => {
-    if (currentUser?.role?.toLowerCase() === 'sales' && currentUser?.id) {
-      // Cek apakah user ada di daftar salesEmployees
-      const userAsSales = salesEmployees?.find(s => s.id === currentUser.id);
+    if (currentUser?.id && salesEmployees && salesEmployees.length > 0) {
+      // Cek apakah user ada di daftar salesEmployees (berdasarkan ID)
+      const userAsSales = salesEmployees.find(s => s.id === currentUser.id);
       if (userAsSales) {
         setSelectedSales(currentUser.id);
+        console.log('[MobilePOS] Auto-selected salesperson logged in:', userAsSales.name);
       }
     }
   }, [currentUser, salesEmployees]);
@@ -165,19 +168,29 @@ export const MobilePosForm = ({ preselectedCustomerId }: MobilePosFormProps) => 
 
   const handleItemChange = (index: number, field: keyof FormTransactionItem, value: any) => {
     const newItems = [...items];
-    (newItems[index] as any)[field] = value;
+    const item = newItems[index];
+    if (!item) return;
+
+    // Update the field immediately (Sync)
+    item[field as keyof FormTransactionItem] = value;
 
     if (field === 'product' && value) {
       const selectedProduct = value as Product;
-      newItems[index].harga = selectedProduct.basePrice || 0;
-      newItems[index].unit = selectedProduct.unit || 'pcs';
+      item.harga = selectedProduct.basePrice || 0;
+      item.unit = selectedProduct.unit || 'pcs';
     }
 
     if (field === 'harga') {
-      newItems[index].isManualPrice = true;
+      item.isManualPrice = true;
     }
 
+    // Set state immediately for responsive UI
     setItems(newItems);
+
+    // If it's quantity change, trigger background bonus calculation (Async)
+    if (field === 'qty') {
+      updateItemWithBonuses(item, Number(value) || 0);
+    }
   };
 
   const handleNumberInputChange = (index: number, field: 'qty' | 'harga', e: React.ChangeEvent<HTMLInputElement>) => {
@@ -310,10 +323,11 @@ export const MobilePosForm = ({ preselectedCustomerId }: MobilePosFormProps) => 
 
     // Use functional update to get latest items state
     setItems(prevItems => {
-      // Update main item
+      // Update main item's price and metadata, but do NOT overwrite qty from prevItems 
+      // as it might have been changed by another sync event in the meantime.
       let newItems = prevItems.map(item =>
         item.id === existingItem.id
-          ? { ...item, qty: newQty, harga: calculation?.finalPrice || item.harga }
+          ? { ...item, harga: calculation?.finalPrice || item.harga }
           : item
       );
 
@@ -630,7 +644,7 @@ export const MobilePosForm = ({ preselectedCustomerId }: MobilePosFormProps) => 
     const paymentStatus: PaymentStatus = sisaTagihan <= 0 ? 'Lunas' : 'Belum Lunas';
 
     // Generate sequential transaction ID: AQVPOSSUP-DDMM-NNN
-    const transactionId = await generateTransactionId('supir');
+    const transactionId = await generateTransactionId('supir', currentBranch?.id);
 
     const newTransaction: Omit<Transaction, 'createdAt'> = {
       id: transactionId,
@@ -643,9 +657,14 @@ export const MobilePosForm = ({ preselectedCustomerId }: MobilePosFormProps) => 
       designerId: designerId || null,
       operatorId: operatorId || null,
       paymentAccountId: finalPaymentAccountId || null,
+      branchId: currentBranch?.id,
       orderDate: orderDate || getOfficeTime(timezone),
       finishDate: finishDate || null,
       items: transactionItems,
+      subtotal: totalTagihan,
+      ppnEnabled: false,
+      ppnPercentage: 0,
+      ppnAmount: 0,
       total: totalTagihan,
       paidAmount: paidAmount,
       paymentStatus: paymentStatus,
@@ -969,7 +988,7 @@ export const MobilePosForm = ({ preselectedCustomerId }: MobilePosFormProps) => 
                               handleItemChange(index, 'qty', 0);
                             } else {
                               const num = parseInt(val);
-                              if (!isNaN(num) && num >= 0) {
+                              if (!isNaN(num)) {
                                 handleItemChange(index, 'qty', num);
                               }
                             }

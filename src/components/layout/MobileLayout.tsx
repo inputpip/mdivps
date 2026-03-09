@@ -3,7 +3,7 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { ShoppingCart, Clock, User, LogOut, Menu, X, List, Truck, Package, Users, ArrowLeft, Home, Sun, Moon, Building2, Check, ChevronsUpDown, Factory, Warehouse, Navigation, Coins, MapPin, FileText, RefreshCw, Receipt, Wrench } from 'lucide-react'
+import { ShoppingCart, Clock, User, LogOut, Menu, X, List, Truck, Package, Users, ArrowLeft, Home, Sun, Moon, Building2, Check, ChevronsUpDown, Factory, Warehouse, Navigation, Coins, MapPin, FileText, RefreshCw, Receipt, Wrench, Search } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useCompanySettings } from '@/hooks/useCompanySettings'
 import { cn } from '@/lib/utils'
@@ -13,6 +13,8 @@ import { useTheme } from 'next-themes'
 import { useBranch } from '@/contexts/BranchContext'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { usePermissions } from '@/hooks/usePermissions'
 import { useGranularPermission } from '@/hooks/useGranularPermission'
 
 
@@ -27,7 +29,9 @@ const MobileLayout = () => {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const { theme, setTheme } = useTheme()
   const { currentBranch, availableBranches, canAccessAllBranches, switchBranch } = useBranch()
+  const { hasPermission } = usePermissions();
   const { hasGranularPermission } = useGranularPermission()
+  const [searchQuery, setSearchQuery] = useState('')
 
 
 
@@ -68,6 +72,38 @@ const MobileLayout = () => {
       }
     }
   }, [isSidebarOpen])
+
+  // Hardware Back Button Handler for Capacitor
+  useEffect(() => {
+    let handler: any;
+
+    const setupBackButton = async () => {
+      try {
+        const { App: CapApp } = await import('@capacitor/app');
+
+        handler = await CapApp.addListener('backButton', (data) => {
+          // If we are on the main dashboard or login page, we can exit the app
+          if (location.pathname === '/' || location.pathname === '/login') {
+            CapApp.exitApp();
+          } else {
+            // For all other pages, we try to go back in history
+            // Use navigate(-1) instead of window.history.back() for better React Router integration
+            navigate(-1);
+          }
+        });
+      } catch (e) {
+        console.log('Mobile back button hardware listener inactive:', e);
+      }
+    };
+
+    setupBackButton();
+
+    return () => {
+      if (handler) {
+        handler.remove();
+      }
+    };
+  }, [location.pathname, navigate]);
 
   const toggleTheme = () => {
     setTheme(theme === 'dark' ? 'light' : 'dark')
@@ -334,20 +370,23 @@ const MobileLayout = () => {
 
   const handleBack = () => {
     if (currentPath === '/') {
-      // Already at home, can't go back further
       return
     }
 
-    // Smart navigation based on current path
+    // Smart navigation for detail pages
     if (currentPath.startsWith('/transactions/')) {
-      // From transaction detail, go back to transactions list
       navigate('/transactions')
     } else if (currentPath.startsWith('/customers/')) {
-      // From customer detail, go back to customers list
       navigate('/customers')
     } else {
-      // From any other page, go back to home
-      navigate('/')
+      // Use history back for most pages to behave like a real mobile app
+      // This prevents always jumping back to home if we are in a sub-category
+      // But we check history length to avoid exiting the app if possible
+      if (window.history.length > 1) {
+        navigate(-1)
+      } else {
+        navigate('/')
+      }
     }
   }
 
@@ -365,28 +404,33 @@ const MobileLayout = () => {
         <div className="flex items-center justify-between px-4 py-3">
           {/* Left - Logo */}
           <div className="flex items-center space-x-2">
-            {settings?.logo ? (
-              <img src={settings.logo} alt="Company Logo" className="h-8 w-8 object-contain" />
+            {settings?.logo || localStorage.getItem('company_logo_cached') ? (
+              <img
+                src={settings?.logo || localStorage.getItem('company_logo_cached') || ''}
+                alt="Company Logo"
+                className="h-8 w-8 object-contain"
+              />
             ) : (
               <Package className="h-8 w-8 text-primary" />
             )}
           </div>
 
           {/* Center - Title */}
-          <div className="flex-1 text-center px-4">
+          <div className="flex-1 text-center px-4 overflow-hidden">
             <h1 className="text-lg font-bold text-gray-900 dark:text-white truncate">
               {currentPath === '/' ? (settings?.name || 'ERP System') : getPageTitle(currentPath)}
             </h1>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
+            <div className="flex items-center justify-center gap-1 text-[10px] text-gray-500 dark:text-gray-400">
               {canAccessAllBranches && currentBranch ? (
-                <span className="flex items-center justify-center gap-1">
-                  <Building2 className="h-3 w-3" />
+                <span className="flex items-center justify-center gap-1 truncate">
+                  <Building2 className="h-2.5 w-2.5" />
                   {currentBranch.name}
                 </span>
               ) : (
-                format(new Date(), "eeee, d MMM yyyy", { locale: id })
+                <span className="truncate">{format(new Date(), "eeee, d MMM yyyy", { locale: id })}</span>
               )}
-            </p>
+              {settings?.name && <span className="flex items-center gap-1 truncate"><Building2 className="h-2.5 w-2.5 ml-1" />{settings.name}</span>}
+            </div>
           </div>
 
           {/* Right - User Actions */}
@@ -459,6 +503,25 @@ const MobileLayout = () => {
           }}
           onTouchMove={resetAutoCloseTimer}
         >
+          {/* Search Bar in Sidebar */}
+          <div className="relative mb-4">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Cari..."
+              className="w-full pl-9 pr-9 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary text-sm"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
           {/* Back/Home Button */}
           {currentPath !== '/' && (
             <Button
@@ -532,7 +595,10 @@ const MobileLayout = () => {
             </div>
           </Button>
 
-          {menuItems.map((item) => {
+          {menuItems.filter(item =>
+            item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            item.description.toLowerCase().includes(searchQuery.toLowerCase())
+          ).map((item) => {
             const Icon = item.icon
             const isActive = currentPath === item.path
 
@@ -689,11 +755,37 @@ const MobileLayout = () => {
 
             {/* Quick Actions */}
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                Pilih Aplikasi
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Pilih Aplikasi
+                </h3>
+              </div>
+
+              {/* Search Bar for Mobile Menu */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Cari menu atau aplikasi..."
+                  className="w-full pl-10 pr-10 py-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary shadow-sm text-sm"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+
               <div className="grid gap-4">
-                {menuItems.map((item) => {
+                {menuItems.filter(item =>
+                  item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                  item.description.toLowerCase().includes(searchQuery.toLowerCase())
+                ).map((item) => {
                   const Icon = item.icon
                   return (
                     <Card

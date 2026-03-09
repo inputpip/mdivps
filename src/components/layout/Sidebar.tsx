@@ -355,7 +355,11 @@ export function Sidebar({ isCollapsed, setCollapsed, onHoverChange }: SidebarPro
             )}
           >
             <Link to="/" className="flex items-center gap-2 font-semibold">
-              <Package className="h-6 w-6 text-primary" />
+              {settings?.logo ? (
+                <img src={settings.logo} alt="Logo" className="h-6 w-6 object-contain" />
+              ) : (
+                <Package className="h-6 w-6 text-primary" />
+              )}
               <span className={cn(!showExpanded && "hidden")}>{settings?.name || 'Aquvit POS'}</span>
             </Link>
           </div>
