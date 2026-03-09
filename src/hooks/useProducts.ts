@@ -57,18 +57,24 @@ const fromDb = (dbProduct: any): Product => ({
   updatedAt: new Date(dbProduct.updated_at),
 });
 
-// App to DB mapping
+// App to DB mapping (Explicit Whitelist to prevent 400 Bad Request)
 const toDb = (appProduct: Partial<Product>) => {
-  const { id, createdAt, updatedAt, basePrice, costPrice, minOrder, initialStock, currentStock, minStock, isActive, ...rest } = appProduct;
-  const dbData: any = { ...rest };
-  if (basePrice !== undefined) dbData.base_price = basePrice;
-  if (costPrice !== undefined) dbData.cost_price = costPrice;
-  if (minOrder !== undefined) dbData.min_order = minOrder;
-  if (initialStock !== undefined) dbData.initial_stock = initialStock;
-  if (currentStock !== undefined) dbData.current_stock = currentStock;
-  if (minStock !== undefined) dbData.min_stock = minStock;
+  const dbData: any = {};
+
+  if (appProduct.name !== undefined) dbData.name = appProduct.name;
+  if (appProduct.type !== undefined) dbData.type = appProduct.type;
+  if (appProduct.basePrice !== undefined) dbData.base_price = appProduct.basePrice;
+  if (appProduct.costPrice !== undefined) dbData.cost_price = appProduct.costPrice;
+  if (appProduct.unit !== undefined) dbData.unit = appProduct.unit;
+  if (appProduct.minOrder !== undefined) dbData.min_order = appProduct.minOrder;
+  if (appProduct.initialStock !== undefined) dbData.initial_stock = appProduct.initialStock;
+  if (appProduct.minStock !== undefined) dbData.min_stock = appProduct.minStock;
+  if (appProduct.description !== undefined) dbData.description = appProduct.description;
+  if (appProduct.specifications !== undefined) dbData.specifications = appProduct.specifications;
   if (appProduct.isActive !== undefined) dbData.is_active = appProduct.isActive;
-  delete dbData.category;
+  if (appProduct.isShared !== undefined) dbData.is_shared = appProduct.isShared;
+  if (appProduct.branchId !== undefined) dbData.branch_id = appProduct.branchId;
+
   return dbData;
 };
 
@@ -267,6 +273,23 @@ export const useProducts = () => {
     }
   });
 
+  const toggleProductActive = useMutation({
+    mutationFn: async ({ productId, isActive }: { productId: string, isActive: boolean }) => {
+      const { data, error } = await supabase
+        .from('products')
+        .update({ is_active: isActive })
+        .eq('id', productId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return fromDb(data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+    },
+  });
+
   useEffect(() => {
     const handleProductionComplete = () => {
       console.log('Production completed, refreshing products...');
@@ -276,5 +299,5 @@ export const useProducts = () => {
     return () => window.removeEventListener('production-completed', handleProductionComplete);
   }, [queryClient]);
 
-  return { products, isLoading, upsertProduct, updateStock, deleteProduct }
+  return { products, isLoading, upsertProduct, updateStock, deleteProduct, toggleProductActive }
 }

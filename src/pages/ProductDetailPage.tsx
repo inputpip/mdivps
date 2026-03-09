@@ -16,22 +16,22 @@ import { formatCurrency } from '@/utils/currency'
 export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { products, isLoading, upsertProduct } = useProducts()
+  const { products, isLoading, toggleProductActive } = useProducts()
   const { toast } = useToast()
 
   const product = products?.find(p => p.id === id)
 
   const handleToggleActive = async (checked: boolean) => {
-    if (!product) return
+    if (!product?.id) return
 
     try {
-      await upsertProduct.mutateAsync({
-        id: product.id,
+      await toggleProductActive.mutateAsync({
+        productId: product.id,
         isActive: checked
       })
       toast({
-        title: checked ? "Produk Diaktifkan" : "Produk Dinonaktifkan",
-        description: `Produk ${product.name} sekarang ${checked ? 'tampil' : 'tidak tampil'} di POS.`
+        title: "Status Diperbarui",
+        description: `Produk sekarang ${checked ? 'Aktif' : 'Non-Aktif'}`
       })
     } catch (error: any) {
       toast({
@@ -131,12 +131,12 @@ export default function ProductDetailPage() {
                     id="product-active"
                     checked={product.isActive}
                     onCheckedChange={handleToggleActive}
-                    disabled={upsertProduct.isPending}
+                    disabled={toggleProductActive.isPending}
                   />
                   <Label htmlFor="product-active" className="cursor-pointer">
                     {product.isActive ? 'Status: Aktif' : 'Status: Tidak Aktif'}
                   </Label>
-                  {upsertProduct.isPending && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+                  {toggleProductActive.isPending && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
                 </div>
               </div>
             </div>
