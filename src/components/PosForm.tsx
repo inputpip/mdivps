@@ -674,7 +674,8 @@ export const PosForm = () => {
 
   const filteredProducts = useMemo(() => {
     const allItems = [...(products || []), ...materialsAsProducts];
-    return allItems.filter(product =>
+    const activeItems = allItems.filter(p => (p as any).isActive !== false);
+    return activeItems.filter(product =>
       product.name?.toLowerCase().includes(productSearch.toLowerCase())
     ) || [];
   }, [products, materialsAsProducts, productSearch]);

@@ -119,7 +119,7 @@ export default function DriverPosPage() {
   // Products sorted by stock
   const availableProducts = useMemo(() => {
     return products
-      ?.filter(p => p?.id && p.id.trim() !== '' && (p.currentStock || 0) > 0)
+      ?.filter(p => p?.id && p.id.trim() !== '' && (p.currentStock || 0) > 0 && p.isActive !== false)
       ?.sort((a, b) => (b.currentStock || 0) - (a.currentStock || 0)) || [];
   }, [products]);
 

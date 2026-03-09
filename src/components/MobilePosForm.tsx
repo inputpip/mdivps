@@ -106,8 +106,10 @@ export const MobilePosForm = ({ preselectedCustomerId }: MobilePosFormProps) => 
   // Filter produk berdasarkan pencarian
   const filteredProducts = useMemo(() => {
     if (!products) return [];
-    if (!productSearch) return products;
-    return products.filter(p =>
+    // Filter only active products
+    const activeProducts = products.filter(p => p.isActive !== false);
+    if (!productSearch) return activeProducts;
+    return activeProducts.filter(p =>
       p.name.toLowerCase().includes(productSearch.toLowerCase())
     );
   }, [products, productSearch]);

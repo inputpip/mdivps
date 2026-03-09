@@ -48,6 +48,7 @@ const fromDb = (dbProduct: any): Product => ({
   initialStock: Number(dbProduct.initial_stock || 0),
   currentStock: Number(dbProduct.current_stock || 0),
   minStock: Number(dbProduct.min_stock || 0),
+  isActive: dbProduct.is_active !== false, // default true
   minOrder: Number(dbProduct.min_order) || 1,
   description: dbProduct.description || '',
   specifications: dbProduct.specifications || [],
@@ -66,6 +67,7 @@ const toDb = (appProduct: Partial<Product>) => {
   if (initialStock !== undefined) dbData.initial_stock = initialStock;
   if (currentStock !== undefined) dbData.current_stock = currentStock;
   if (minStock !== undefined) dbData.min_stock = minStock;
+  if (appProduct.isActive !== undefined) dbData.is_active = appProduct.isActive;
   delete dbData.category;
   return dbData;
 };

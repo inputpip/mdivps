@@ -140,6 +140,7 @@ The system relies on **PostgreSQL RPCs** for data integrity. Frontend calls `sup
 *   **Real-time Recalculation**: Bonus otomatis muncul dan terupdate saat jumlah (qty) diinput manual (mengetik), bukan hanya lewat tombol plus/minus.
 *   **Reset Bug Fix**: Memperbaiki bug di mana angka input qty kembali ke "1" saat proses background bonus berjalan (race condition fix).
 *   **Routing Fix**: Menambah rute `/employees` pada mobile layout di `App.tsx` untuk mencegah error 404 (Not Found) saat akses halaman karyawan dari HP.
+*   **Product Toggle**: Menambahkan fitur Aktif/Non-Aktif produk (Visibility Toggle). Produk yang non-aktif tidak akan muncul di POS manapun. Script SQL tersedia di `database/add_product_active_status.sql`.
 
 ### 👤 Salesperson & Identity Fixes
 *   **Auto-select Sales**: Sistem otomatis mendeteksi jika user login terdaftar di tabel `sales_employees` (apa pun role utamanya) untuk mengisi field Sales di POS.

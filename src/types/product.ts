@@ -21,6 +21,7 @@ export interface Product {
   materials: ProductMaterial[]; // Ini adalah BOM (Bill of Materials)
   branchId?: string; // Branch ID untuk multi-branch support
   isShared?: boolean; // True jika produk dapat digunakan oleh semua cabang
+  isActive: boolean; // True jika produk aktif (tampil di POS)
   createdAt: Date;
   updatedAt: Date;
 }

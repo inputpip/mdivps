@@ -122,6 +122,15 @@ export function ProductManagement() {
         </span>
       ),
     },
+    {
+      key: "isActive",
+      header: "Status",
+      render: (row: any) => (
+        <Badge variant={row.isActive !== false ? "success" : "destructive"}>
+          {row.isActive !== false ? "Aktif" : "Non-Aktif"}
+        </Badge>
+      )
+    },
   ]
 
   const columns = useMemo(() => {

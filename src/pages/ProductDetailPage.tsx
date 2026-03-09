@@ -4,8 +4,11 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, Package, Edit } from 'lucide-react'
+import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
+import { ArrowLeft, Package, Edit, Loader2 } from 'lucide-react'
 import { useProducts } from '@/hooks/useProducts'
+import { useToast } from '@/components/ui/use-toast'
 import { ProductPricingManagement } from '@/components/ProductPricingManagement'
 import { CustomerPricingManagement } from '@/components/CustomerPricingManagement'
 import { formatCurrency } from '@/utils/currency'
@@ -13,9 +16,31 @@ import { formatCurrency } from '@/utils/currency'
 export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { products, isLoading } = useProducts()
-  
+  const { products, isLoading, upsertProduct } = useProducts()
+  const { toast } = useToast()
+
   const product = products?.find(p => p.id === id)
+
+  const handleToggleActive = async (checked: boolean) => {
+    if (!product) return
+
+    try {
+      await upsertProduct.mutateAsync({
+        id: product.id,
+        isActive: checked
+      })
+      toast({
+        title: checked ? "Produk Diaktifkan" : "Produk Dinonaktifkan",
+        description: `Produk ${product.name} sekarang ${checked ? 'tampil' : 'tidak tampil'} di POS.`
+      })
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Gagal Update",
+        description: error.message
+      })
+    }
+  }
 
   if (isLoading) {
     return (
@@ -101,9 +126,21 @@ export default function ProductDetailPage() {
                   <span className="text-sm text-muted-foreground">Satuan:</span>
                   <span className="text-sm font-medium">{product.unit}</span>
                 </div>
+                <div className="flex items-center gap-2 pt-2 border-t mt-2">
+                  <Switch
+                    id="product-active"
+                    checked={product.isActive}
+                    onCheckedChange={handleToggleActive}
+                    disabled={upsertProduct.isPending}
+                  />
+                  <Label htmlFor="product-active" className="cursor-pointer">
+                    {product.isActive ? 'Status: Aktif' : 'Status: Tidak Aktif'}
+                  </Label>
+                  {upsertProduct.isPending && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+                </div>
               </div>
             </div>
-            
+
             <div>
               <h4 className="font-semibold mb-3">Harga & Stock</h4>
               <div className="space-y-2">
