@@ -59,7 +59,7 @@ const fromDb = (dbProduct: any): Product => ({
 
 // App to DB mapping
 const toDb = (appProduct: Partial<Product>) => {
-  const { id, createdAt, updatedAt, basePrice, costPrice, minOrder, initialStock, currentStock, minStock, ...rest } = appProduct;
+  const { id, createdAt, updatedAt, basePrice, costPrice, minOrder, initialStock, currentStock, minStock, isActive, ...rest } = appProduct;
   const dbData: any = { ...rest };
   if (basePrice !== undefined) dbData.base_price = basePrice;
   if (costPrice !== undefined) dbData.cost_price = costPrice;
