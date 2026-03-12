@@ -80,7 +80,7 @@ const getMenuItems = (hasPermission: (permission: Permission) => boolean, hasGra
     items: [
       { href: "/", label: "Dashboard", icon: Home },
       { href: "/pos", label: "Point of Sale (POS)", icon: ShoppingCart, permission: PERMISSIONS.TRANSACTIONS },
-      // POS Supir removed from web sidebar - only available in mobile view
+      { href: "/driver-pos", label: "POS Supir", icon: Truck, permission: PERMISSIONS.TRANSACTIONS },
       { href: "/transactions", label: "Data Transaksi", icon: List, permission: PERMISSIONS.TRANSACTIONS },
       { href: "/quotations", label: "Penawaran", icon: FileText, granularPermission: 'quotations_view' },
       { href: "/delivery", label: "Pengantaran", icon: Truck, permission: PERMISSIONS.DELIVERIES },

@@ -295,12 +295,47 @@ export const useTransactions = (filters?: {
 
       console.log('🔄 Updating Transaction via Atomic RPC...', updatedTransaction.id);
 
+      // Prepare items data (snake_case for RPC JSONB)
+      const itemsData = updatedTransaction.items.map((item: any) => {
+        const product = item.product;
+        return {
+          productId: product?.id || item.productId,
+          product_name: product?.name || item.productName || 'Unknown Product',
+          quantity: item.quantity || 0,
+          price: item.price || 0,
+          discount: item.discount || 0,
+          isBonus: item.isBonus || false,
+          cost_price: product?.costPrice || 0,
+          unit: item.unit || 'pcs',
+          width: item.width || null,
+          height: item.height || null,
+          hppAmount: item.hppAmount || 0,
+          notes: item.notes || null,
+        };
+      });
+
       const transactionData = {
         total: updatedTransaction.total,
+        subtotal: updatedTransaction.subtotal || updatedTransaction.total,
         paid_amount: updatedTransaction.paidAmount || 0,
-        payment_method: updatedTransaction.paymentMethod || 'Tunai',
+        customer_id: updatedTransaction.customerId,
         customer_name: updatedTransaction.customerName,
-        notes: updatedTransaction.notes
+        payment_account_id: updatedTransaction.paymentAccountId || null,
+        sales_id: updatedTransaction.salesId || null,
+        sales_name: updatedTransaction.salesName || null,
+        order_date: updatedTransaction.orderDate instanceof Date
+          ? updatedTransaction.orderDate.toISOString()
+          : updatedTransaction.orderDate,
+        due_date: updatedTransaction.dueDate instanceof Date
+          ? updatedTransaction.dueDate.toISOString()
+          : updatedTransaction.dueDate || null,
+        items: itemsData,
+        ppn_enabled: updatedTransaction.ppnEnabled || false,
+        ppn_mode: updatedTransaction.ppnMode || 'exclude',
+        ppn_percentage: updatedTransaction.ppnPercentage || 0,
+        ppn_amount: updatedTransaction.ppnAmount || 0,
+        is_office_sale: updatedTransaction.isOfficeSale || false,
+        notes: updatedTransaction.notes || null,
       };
 
       const { data: rpcResultRaw, error: rpcError } = await supabase
@@ -331,6 +366,7 @@ export const useTransactions = (filters?: {
       queryClient.invalidateQueries({ queryKey: ['accounts'] })
       queryClient.invalidateQueries({ queryKey: ['journalEntries'] })
       queryClient.invalidateQueries({ queryKey: ['cashFlow'] })
+      queryClient.invalidateQueries({ queryKey: ['commissions'] })
     }
   })
 

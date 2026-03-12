@@ -18,6 +18,7 @@ import { calculatePPNWithMode, getDefaultPPNPercentage } from '@/utils/ppnCalcul
 import { Trash2, Plus } from 'lucide-react'
 import { useTimezone } from '@/contexts/TimezoneContext'
 import { getOfficeTime } from '@/utils/officeTime'
+import { useSalesEmployees } from '@/hooks/useSalesCommission'
 
 interface EditTransactionDialogProps {
   open: boolean
@@ -41,11 +42,14 @@ export function EditTransactionDialog({ open, onOpenChange, transaction }: EditT
   const { products } = useProducts()
   const { accounts } = useAccounts()
   const { timezone } = useTimezone()
+  const { data: salesEmployees } = useSalesEmployees()
 
   const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null)
   const [orderDate, setOrderDate] = useState<Date | undefined>(getOfficeTime(timezone))
   const [dueDate, setDueDate] = useState('')
   const [paymentAccountId, setPaymentAccountId] = useState<string>('')
+  const [salesId, setSalesId] = useState<string>('')
+  const [salesName, setSalesName] = useState<string>('')
   const [items, setItems] = useState<FormTransactionItem[]>([])
   const [diskon, setDiskon] = useState(0)
   const [paidAmount, setPaidAmount] = useState(0)
@@ -69,7 +73,9 @@ export function EditTransactionDialog({ open, onOpenChange, transaction }: EditT
       setPpnMode(transaction.ppnMode || 'include')
       setPpnPercentage(transaction.ppnPercentage)
       setIsOfficeSale(transaction.isOfficeSale || false)
-      
+      setSalesId(transaction.salesId || '')
+      setSalesName(transaction.salesName || '')
+
       // Convert transaction items to form items (skip items without valid product)
       const formItems: FormTransactionItem[] = transaction.items
         .filter(item => item.product?.id) // Skip items without valid product
@@ -82,7 +88,7 @@ export function EditTransactionDialog({ open, onOpenChange, transaction }: EditT
           unit: item.unit,
         }))
       setItems(formItems)
-      
+
       // Calculate discount from subtotal difference (only for items with valid product)
       const itemsTotal = transaction.items
         .filter(item => item.product?.id)
@@ -128,7 +134,7 @@ export function EditTransactionDialog({ open, onOpenChange, transaction }: EditT
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     const validItems = items.filter(item => item.product && item.qty > 0)
 
     if (!selectedCustomer || validItems.length === 0) {
@@ -146,8 +152,8 @@ export function EditTransactionDialog({ open, onOpenChange, transaction }: EditT
       quantity: item.qty,
       price: item.harga,
       unit: item.unit,
-      width: 0, 
-      height: 0, 
+      width: 0,
+      height: 0,
       notes: item.keterangan,
     }))
 
@@ -158,8 +164,10 @@ export function EditTransactionDialog({ open, onOpenChange, transaction }: EditT
       customerId: selectedCustomer.id,
       customerName: selectedCustomer.name,
       paymentAccountId: paymentAccountId || null,
+      salesId: salesId || null,
+      salesName: salesName || null,
       orderDate: orderDate || getOfficeTime(timezone),
-      dueDate: sisaTagihan > 0 ? new Date(dueDate) : null,
+      dueDate: sisaTagihan > 0 && dueDate ? new Date(dueDate) : null,
       items: transactionItems,
       subtotal: ppnCalculation.subtotal,
       ppnEnabled: ppnEnabled,
@@ -199,8 +207,8 @@ export function EditTransactionDialog({ open, onOpenChange, transaction }: EditT
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label>Pelanggan</Label>
-              <Select 
-                value={selectedCustomer?.id || ''} 
+              <Select
+                value={selectedCustomer?.id || ''}
                 onValueChange={(value) => {
                   const customer = customers?.find(c => c.id === value)
                   setSelectedCustomer(customer || null)
@@ -224,17 +232,50 @@ export function EditTransactionDialog({ open, onOpenChange, transaction }: EditT
             </div>
           </div>
 
-          {/* Office Sale Checkbox */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <label className="flex items-center space-x-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={isOfficeSale}
-                onChange={(e) => setIsOfficeSale(e.target.checked)}
-                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
-              />
-              <span className="text-sm font-medium text-blue-900">Laku Kantor</span>
-            </label>
+          {/* Sales Selection */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Sales</Label>
+              <Select
+                value={salesId || 'none'}
+                onValueChange={(value) => {
+                  if (value === 'none') {
+                    setSalesId('')
+                    setSalesName('')
+                  } else {
+                    const sales = salesEmployees?.find(s => s.id === value)
+                    setSalesId(value)
+                    setSalesName(sales?.name || '')
+                  }
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Pilih sales..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Tanpa Sales</SelectItem>
+                  {salesEmployees?.map(sales => (
+                    <SelectItem key={sales.id} value={sales.id}>
+                      {sales.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-end">
+              {/* Office Sale Checkbox */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 w-full">
+                <label className="flex items-center space-x-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isOfficeSale}
+                    onChange={(e) => setIsOfficeSale(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                  />
+                  <span className="text-sm font-medium text-blue-900">Laku Kantor</span>
+                </label>
+              </div>
+            </div>
           </div>
 
           {/* Items */}
@@ -263,8 +304,8 @@ export function EditTransactionDialog({ open, onOpenChange, transaction }: EditT
                   {items.map((item, index) => (
                     <tr key={item.id} className="border-t">
                       <td className="p-2">
-                        <Select 
-                          value={item.product?.id || ''} 
+                        <Select
+                          value={item.product?.id || ''}
                           onValueChange={(value) => {
                             const product = products?.find(p => p.id === value)
                             handleItemChange(index, 'product', product || null)
@@ -312,10 +353,10 @@ export function EditTransactionDialog({ open, onOpenChange, transaction }: EditT
                         {new Intl.NumberFormat("id-ID").format(item.qty * item.harga)}
                       </td>
                       <td className="p-2">
-                        <Button 
-                          type="button" 
-                          size="sm" 
-                          variant="outline" 
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
                           onClick={() => handleRemoveItem(index)}
                         >
                           <Trash2 className="w-4 h-4" />
