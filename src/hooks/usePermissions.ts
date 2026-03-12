@@ -57,7 +57,9 @@ const mapGranularToSimplified = (granularPerms: Record<string, boolean>): Record
     // Deliveries - need POS driver access OR delivery view
     deliveries: granularPerms.pos_driver_access === true ||
       granularPerms.delivery_view === true ||
-      granularPerms.retasi_view === true,
+      granularPerms.retasi_view === true ||
+      granularPerms.delivery_report_view === true ||
+      granularPerms.mobile_delivery_report === true,
 
     // Attendance - need attendance access or view
     attendance: granularPerms.attendance_access === true ||

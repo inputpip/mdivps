@@ -115,6 +115,8 @@ const FEATURES = [
       { id: 'retasi_create', name: 'Buat Retasi', icon: Plus },
       { id: 'retasi_edit', name: 'Edit Retasi', icon: Edit },
       { id: 'retasi_delete', name: 'Hapus Retasi', icon: Trash2 },
+      { id: 'delivery_report_view', name: 'Lihat Laporan Pengantaran', icon: Eye },
+      { id: 'delivery_report_create', name: 'Buat Laporan Pengantaran', icon: Plus },
     ]
   },
   {
@@ -212,6 +214,7 @@ const FEATURES = [
       { id: 'mobile_attendance', name: 'Menu: Absensi (Clock In)', icon: Clock },
       { id: 'mobile_maintenance', name: 'Menu: Maintenance Aset', icon: Wrench },
       { id: 'mobile_sales_report', name: 'Menu: Laporan Sales (Kunjungan)', icon: MapPin },
+      { id: 'mobile_delivery_report', name: 'Menu: Lapor Antar', icon: MapPin },
     ]
   },
   {

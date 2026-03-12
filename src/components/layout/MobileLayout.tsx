@@ -30,7 +30,7 @@ const MobileLayout = () => {
   const { theme, setTheme } = useTheme()
   const { currentBranch, availableBranches, canAccessAllBranches, switchBranch } = useBranch()
   const { hasPermission } = usePermissions();
-  const { hasGranularPermission } = useGranularPermission()
+  const { hasGranularPermission, canViewDeliveryReport: canViewDR } = useGranularPermission()
   const [searchQuery, setSearchQuery] = useState('')
 
 
@@ -113,7 +113,11 @@ const MobileLayout = () => {
   const isOwner = user?.role?.toLowerCase() === 'owner'
 
   // Check if user is helper - helper only gets limited menu access
-  const isHelper = user?.role?.toLowerCase() === 'helper'
+  const isHelper = !isOwner && (
+    user?.role?.toLowerCase()?.trim() === 'helper' ||
+    user?.role?.toLowerCase()?.trim() === 'supir' ||
+    hasGranularPermission('pos_driver_access')
+  )
 
   // Permission checks for mobile features (Specific mobile dashboard toggles)
   const canAccessPOS = hasGranularPermission('mobile_pos')
@@ -132,6 +136,7 @@ const MobileLayout = () => {
   const canAccessAttendance = hasGranularPermission('mobile_attendance')
   const canViewMaintenance = hasGranularPermission('mobile_maintenance')
   const canViewSalesReport = hasGranularPermission('mobile_sales_report')
+  const canViewDeliveryReport = hasGranularPermission('mobile_delivery_report') || hasGranularPermission('delivery_report_view')
 
   // Helper gets limited menu: POS Supir, Pelanggan Terdekat, Komisi Saya
   const helperMenuItems = [
@@ -157,6 +162,22 @@ const MobileLayout = () => {
       path: '/my-commission',
       description: 'Lihat laporan komisi',
       color: 'bg-yellow-500 hover:bg-yellow-600',
+      textColor: 'text-white'
+    },
+    {
+      title: 'Penawaran',
+      icon: FileText,
+      path: '/quotations',
+      description: 'Kelola penawaran harga',
+      color: 'bg-violet-500 hover:bg-violet-600',
+      textColor: 'text-white'
+    },
+    {
+      title: 'Lapor Antar',
+      icon: MapPin,
+      path: '/delivery-report',
+      description: 'Laporkan status pengantaran',
+      color: 'bg-teal-500 hover:bg-teal-600',
       textColor: 'text-white'
     }
   ]
@@ -306,12 +327,20 @@ const MobileLayout = () => {
       description: 'Kunjungan & Penagihan',
       color: 'bg-indigo-600 hover:bg-indigo-700',
       textColor: 'text-white'
+    }] : []),
+    // Lapor Antar - controlled by mobile_delivery_report permission
+    ...(canViewDeliveryReport ? [{
+      title: 'Lapor Antar',
+      icon: MapPin,
+      path: '/delivery-report',
+      description: 'Laporkan status pengantaran',
+      color: 'bg-teal-500 hover:bg-teal-600',
+      textColor: 'text-white'
     }] : [])
   ]
 
-  // Use helper menu ONLY if role is explicitly helper (backward compatibility)
-  // But generally we should use regularMenuItems filtered by permissions
-  const menuItems = isHelper ? helperMenuItems : regularMenuItems
+  // Consolidate all menu items to use permission-based regularMenuItems
+  const menuItems = regularMenuItems
 
   const handleLogout = async () => {
     try {
@@ -361,6 +390,8 @@ const MobileLayout = () => {
         return 'Penawaran'
       case '/delivery':
         return 'Pengantaran'
+      case '/delivery-report':
+        return 'Lapor Antar'
       case '/expenses':
         return 'Pengeluaran'
       default:

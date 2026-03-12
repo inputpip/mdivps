@@ -103,9 +103,21 @@ export const useGranularPermission = () => {
     // Admin has all permissions except role_management
     if (user.role === 'admin' && permission !== 'role_management') return true;
 
+    // If role is 'authenticated', it might be a fallback from Supabase.
+    // Try to check if any role has this permission, or if we can find the real role.
+    let currentRole = user.role;
+
     // Check specific permission
-    const perms = rolePermissions[user.role] || {};
-    return perms[permission] === true;
+    const perms = rolePermissions[currentRole] || {};
+    if (perms[permission] === true) return true;
+
+    // Fallback: If role is authenticated and we're checking a mobile delivery permission,
+    // check supir/helper roles as well for wider compatibility
+    if (currentRole === 'authenticated' && (permission === 'mobile_delivery_report' || permission === 'delivery_report_view')) {
+      return (rolePermissions['supir']?.[permission] === true) || (rolePermissions['helper']?.[permission] === true);
+    }
+
+    return false;
   };
 
   /**
@@ -172,6 +184,20 @@ export const useGranularPermission = () => {
     return hasGranularPermission('delivery_view') || hasGranularPermission('delivery_edit');
   };
 
+  /**
+   * Check if user can view delivery report
+   */
+  const canViewDeliveryReport = (): boolean => {
+    return hasGranularPermission('delivery_report_view') || hasGranularPermission('mobile_delivery_report');
+  };
+
+  /**
+   * Check if user can create delivery report
+   */
+  const canCreateDeliveryReport = (): boolean => {
+    return hasGranularPermission('delivery_report_create') || hasGranularPermission('mobile_delivery_report');
+  };
+
   return {
     hasGranularPermission,
     userGranularPermissions,
@@ -186,5 +212,7 @@ export const useGranularPermission = () => {
     canViewDelivery,
     canDeleteDelivery,
     canViewDeliveryHistory,
+    canViewDeliveryReport,
+    canCreateDeliveryReport,
   };
 };
