@@ -84,6 +84,7 @@ const getMenuItems = (hasPermission: (permission: Permission) => boolean, hasGra
       { href: "/transactions", label: "Data Transaksi", icon: List, permission: PERMISSIONS.TRANSACTIONS },
       { href: "/quotations", label: "Penawaran", icon: FileText, granularPermission: 'quotations_view' },
       { href: "/delivery", label: "Pengantaran", icon: Truck, permission: PERMISSIONS.DELIVERIES },
+      { href: "/delivery-report", label: "Lapor Antar", icon: MapPin, permission: PERMISSIONS.DELIVERIES },
       { href: "/retasi", label: "Retasi", icon: Package, permission: PERMISSIONS.DELIVERIES },
       { href: "/transaction-items-report", label: "Laporan Produk Laku", icon: PackageOpen, permission: PERMISSIONS.REPORTS },
       { href: "/sales-reports", label: "Laporan Sales", icon: MapPin, permission: PERMISSIONS.REPORTS },

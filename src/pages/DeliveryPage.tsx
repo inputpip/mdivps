@@ -2,7 +2,7 @@
 
 import React from "react"
 import { useState, useEffect } from "react"
-import { useSearchParams } from "react-router-dom"
+import { useSearchParams, useNavigate } from "react-router-dom"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -17,7 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Truck, Package, Search, RefreshCw, Clock, CheckCircle, AlertCircle, Plus, History, Eye, Camera, Download, Filter, Calendar, Trash2, Loader2, Pencil, ChevronDown, ChevronUp, X, FileText } from "lucide-react"
+import { Truck, Package, Search, RefreshCw, Clock, CheckCircle, AlertCircle, Plus, History, Eye, Camera, Download, Filter, Calendar, Trash2, Loader2, Pencil, ChevronDown, ChevronUp, X, FileText, MapPin } from "lucide-react"
 import { format } from "date-fns"
 import { id as idLocale } from "date-fns/locale/id"
 import { useTransactionsReadyForDelivery, useDeliveryHistory, useDeliveries } from "@/hooks/useDeliveries"
@@ -49,6 +49,7 @@ import { PhotoUploadService } from "@/services/photoUploadService"
 export default function DeliveryPage() {
   const { toast } = useToast()
   const { user } = useAuth()
+  const navigate = useNavigate()
   const { canCreateDelivery, canDeleteDelivery, canEditDelivery, canViewDeliveryHistory } = useGranularPermission()
   const { data: transactions, isLoading, refetch } = useTransactionsReadyForDelivery()
   const { data: deliveryHistory, isLoading: isLoadingHistory, refetch: refetchHistory } = useDeliveryHistory()
@@ -558,6 +559,15 @@ export default function DeliveryPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
+          <Button
+            onClick={() => navigate('/delivery-report')}
+            variant="outline"
+            size="sm"
+            className="hidden sm:flex items-center gap-2"
+          >
+            <MapPin className="h-4 w-4" />
+            Detail Laporan
+          </Button>
           <Button
             onClick={() => refetch()}
             variant="outline"
