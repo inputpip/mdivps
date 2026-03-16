@@ -88,7 +88,7 @@ const fromDb = (dbTransaction: any): Transaction => {
     orderDate: new Date(dbTransaction.order_date),
     finishDate: dbTransaction.finish_date ? new Date(dbTransaction.finish_date) : null,
     items: formattedItems,
-    subtotal: dbTransaction.subtotal ?? dbTransaction.total ?? 0,
+    subtotal: dbTransaction.subtotal || dbTransaction.total || 0,
     ppnEnabled: dbTransaction.ppn_enabled ?? false,
     ppnMode: dbTransaction.ppn_mode || 'exclude',
     ppnPercentage: dbTransaction.ppn_percentage ?? 11,
