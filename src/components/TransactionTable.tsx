@@ -416,10 +416,10 @@ export function TransactionTable() {
           <td colspan="5" style="border-bottom: 1px solid #000; padding-bottom: 2mm;">
             <table style="width: 100%;">
               <tr>
-                <td style="width: 40%; vertical-align: top;">
+                <td style="width: 35%; vertical-align: top; overflow: hidden;">
                   <div style="font-size: 17pt; font-weight: bold;">FAKTUR PENJUALAN</div>
                   <div style="font-size: 13pt; font-weight: bold;">${info?.name || ''}</div>
-                  <div style="font-size: 11pt;">
+                  <div style="font-size: 10pt; word-wrap: break-word; overflow-wrap: break-word;">
                     ${info?.address || ''}<br/>
                     KANTOR: ${String(info?.phone || '').replace(/,/g, '')}
                   </div>

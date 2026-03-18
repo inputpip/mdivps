@@ -40,6 +40,7 @@ import { useAuth } from "@/hooks/useAuth"
 import { useGranularPermission } from "@/hooks/useGranularPermission"
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import * as XLSX from 'xlsx'
 import { DeliveryNotePDF } from "@/components/DeliveryNotePDF"
 import { DeliveryCompletionDialog } from "@/components/DeliveryCompletionDialog"
 import { EditDeliveryDialog } from "@/components/EditDeliveryDialog"
@@ -257,6 +258,143 @@ export default function DeliveryPage() {
     }
   }
 
+  // Build aggregated remaining items breakdown (per product across all transactions)
+  const getRemainingItemsBreakdown = () => {
+    const breakdown: Record<string, { productName: string; remaining: number; unit: string }> = {}
+    filteredTransactions.forEach(t => {
+      t.deliverySummary.forEach(item => {
+        if (item.remainingQuantity > 0) {
+          const key = `${item.productId}-${item.isBonus ? 'bonus' : 'regular'}`
+          if (!breakdown[key]) {
+            breakdown[key] = { productName: item.productName, remaining: 0, unit: item.unit }
+          }
+          breakdown[key].remaining += item.remainingQuantity
+        }
+      })
+    })
+    return Object.values(breakdown).sort((a, b) => b.remaining - a.remaining)
+  }
+
+  const generateActiveDeliveriesExcel = () => {
+    if (!filteredTransactions || filteredTransactions.length === 0) {
+      toast({
+        title: "Tidak ada data",
+        description: "Tidak ada data pengantaran aktif untuk di-export",
+        variant: "destructive"
+      })
+      return
+    }
+
+    try {
+      const wb = XLSX.utils.book_new()
+
+      // ===== Sheet 1: Ringkasan per Transaksi =====
+      const summaryData = filteredTransactions.map((t, index) => {
+        const remainingItems = t.deliverySummary
+          .filter(item => item.remainingQuantity > 0)
+          .map(item => `${item.productName}: ${item.remainingQuantity} ${item.unit}`)
+          .join(', ')
+
+        return {
+          'No': index + 1,
+          'Order ID': t.id,
+          'Pelanggan': t.customerName,
+          'Alamat': t.customerAddress || '-',
+          'Telepon': t.customerPhone || '-',
+          'Tanggal Order': format(new Date(t.orderDate), 'dd/MM/yyyy HH:mm'),
+          'Total Order': t.total,
+          'Status': getOverallStatus(t).status,
+          'Kasir': t.cashierName || '-',
+          'Jumlah Pengantaran': t.deliveries.length,
+          'Sisa Item': t.deliverySummary.reduce((sum, item) => sum + item.remainingQuantity, 0),
+          'Detail Sisa': remainingItems || 'Tidak ada sisa'
+        }
+      })
+
+      const ws1 = XLSX.utils.json_to_sheet(summaryData)
+      // Set column widths
+      ws1['!cols'] = [
+        { wch: 5 },   // No
+        { wch: 15 },  // Order ID
+        { wch: 25 },  // Pelanggan
+        { wch: 35 },  // Alamat
+        { wch: 15 },  // Telepon
+        { wch: 18 },  // Tanggal Order
+        { wch: 15 },  // Total Order
+        { wch: 15 },  // Status
+        { wch: 15 },  // Kasir
+        { wch: 12 },  // Jumlah Pengantaran
+        { wch: 10 },  // Sisa Item
+        { wch: 50 },  // Detail Sisa
+      ]
+      XLSX.utils.book_append_sheet(wb, ws1, 'Ringkasan Pesanan')
+
+      // ===== Sheet 2: Detail Item per Transaksi =====
+      const detailData: any[] = []
+      filteredTransactions.forEach((t) => {
+        t.deliverySummary.forEach((item) => {
+          detailData.push({
+            'Order ID': t.id,
+            'Pelanggan': t.customerName,
+            'Nama Barang': item.productName,
+            'Satuan': item.unit,
+            'Jumlah Dipesan': item.orderedQuantity,
+            'Sudah Diantar': item.deliveredQuantity,
+            'Sisa': item.remainingQuantity,
+            'Status': item.remainingQuantity <= 0 ? 'Selesai' : item.deliveredQuantity > 0 ? 'Sebagian' : 'Belum Diantar',
+          })
+        })
+      })
+
+      const ws2 = XLSX.utils.json_to_sheet(detailData)
+      ws2['!cols'] = [
+        { wch: 15 },  // Order ID
+        { wch: 25 },  // Pelanggan
+        { wch: 30 },  // Nama Barang
+        { wch: 10 },  // Satuan
+        { wch: 15 },  // Jumlah Dipesan
+        { wch: 15 },  // Sudah Diantar
+        { wch: 10 },  // Sisa
+        { wch: 15 },  // Status
+      ]
+      XLSX.utils.book_append_sheet(wb, ws2, 'Detail Item')
+
+      // ===== Sheet 3: Rekap Sisa Per Produk =====
+      const breakdown = getRemainingItemsBreakdown()
+      const rekapData = breakdown.map((item, index) => ({
+        'No': index + 1,
+        'Nama Produk': item.productName,
+        'Total Sisa': item.remaining,
+        'Satuan': item.unit,
+      }))
+
+      const ws3 = XLSX.utils.json_to_sheet(rekapData)
+      ws3['!cols'] = [
+        { wch: 5 },   // No
+        { wch: 35 },  // Nama Produk
+        { wch: 12 },  // Total Sisa
+        { wch: 10 },  // Satuan
+      ]
+      XLSX.utils.book_append_sheet(wb, ws3, 'Rekap Sisa Per Produk')
+
+      // Save
+      const fileName = `pengantaran-aktif-${format(new Date(), 'yyyy-MM-dd-HHmm')}.xlsx`
+      XLSX.writeFile(wb, fileName)
+
+      toast({
+        title: "Excel Berhasil Dibuat",
+        description: `Laporan berhasil diunduh: ${fileName}`
+      })
+    } catch (error) {
+      console.error('Error generating Excel:', error)
+      toast({
+        variant: "destructive",
+        title: "Gagal Membuat Excel",
+        description: "Terjadi kesalahan saat membuat file Excel."
+      })
+    }
+  }
+
   const generateActiveDeliveriesPDF = async () => {
     if (!filteredTransactions || filteredTransactions.length === 0) {
       toast({
@@ -306,20 +444,24 @@ export default function DeliveryPage() {
 
       // Summary
       const totalOrders = filteredTransactions.length
-      const totalItems = filteredTransactions.reduce((acc, t) => acc + t.deliverySummary.reduce((sum, item) => sum + item.remainingQuantity, 0), 0)
+      const totalRemainingItems = filteredTransactions.reduce((acc, t) => acc + t.deliverySummary.reduce((sum, item) => sum + item.remainingQuantity, 0), 0)
       const totalValue = filteredTransactions.reduce((acc, t) => acc + t.total, 0)
 
       doc.setFont(undefined, 'bold')
       doc.text(`Total Pesanan: ${totalOrders}`, margin, yPos)
       yPos += 6
-      doc.text(`Total Sisa Item: ${totalItems}`, margin, yPos)
+      doc.text(`Total Sisa Item Belum Dikirim: ${totalRemainingItems}`, margin, yPos)
       yPos += 6
       doc.text(`Total Nilai Order: ${new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(totalValue)}`, margin, yPos)
 
       yPos += 10
 
-      // Table data
+      // Table data - now includes detail sisa per item
       const tableData = filteredTransactions.map((t, index) => {
+        const remainingDetail = t.deliverySummary
+          .filter(item => item.remainingQuantity > 0)
+          .map(item => `${item.productName}: ${item.remainingQuantity} ${item.unit}`)
+          .join('\n')
         const remaining = t.deliverySummary.reduce((sum, item) => sum + item.remainingQuantity, 0)
         const status = getOverallStatus(t).status
 
@@ -330,6 +472,7 @@ export default function DeliveryPage() {
           format(new Date(t.orderDate), 'dd/MM/yyyy HH:mm'),
           new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(t.total),
           remaining.toString(),
+          remainingDetail || '-',
           status,
           t.cashierName || '-'
         ]
@@ -337,21 +480,22 @@ export default function DeliveryPage() {
 
       // Table
       autoTable(doc, {
-        head: [['No', 'Order ID', 'Pelanggan', 'Tanggal Order', 'Total Order', 'Sisa Item', 'Status', 'Kasir']],
+        head: [['No', 'Order ID', 'Pelanggan', 'Tanggal Order', 'Total Order', 'Sisa', 'Detail Barang Sisa', 'Status', 'Kasir']],
         body: tableData,
         startY: yPos,
         margin: { left: margin, right: margin },
-        styles: { fontSize: 9, cellPadding: 3 },
-        headStyles: { fillColor: [22, 163, 74], textColor: 255, fontStyle: 'bold' }, // Green header to differentiate with history (blue)
+        styles: { fontSize: 8, cellPadding: 3 },
+        headStyles: { fillColor: [22, 163, 74], textColor: 255, fontStyle: 'bold' },
         columnStyles: {
-          0: { halign: 'center', cellWidth: 15 },
-          1: { halign: 'center', cellWidth: 35 },
-          2: { halign: 'left' },
-          3: { halign: 'center', cellWidth: 35 },
-          4: { halign: 'right', cellWidth: 40 },
-          5: { halign: 'center', cellWidth: 25 },
-          6: { halign: 'center', cellWidth: 30 },
-          7: { halign: 'left', cellWidth: 30 }
+          0: { halign: 'center', cellWidth: 12 },
+          1: { halign: 'center', cellWidth: 25 },
+          2: { halign: 'left', cellWidth: 30 },
+          3: { halign: 'center', cellWidth: 30 },
+          4: { halign: 'right', cellWidth: 30 },
+          5: { halign: 'center', cellWidth: 15 },
+          6: { halign: 'left', cellWidth: 60 },
+          7: { halign: 'center', cellWidth: 25 },
+          8: { halign: 'left', cellWidth: 25 }
         },
         didDrawPage: (data) => {
           // Footer
@@ -620,43 +764,82 @@ export default function DeliveryPage() {
             {filteredTransactions.length} dari {transactions?.length || 0} pengantaran
           </div>
 
-          {!isLoading && filteredTransactions.length > 0 && !isMobile && (
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 p-4 bg-muted/30 rounded-lg border">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 w-full md:w-auto">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground mb-1">Total Pesanan</p>
-                  <p className="text-2xl font-bold">{filteredTransactions.length}</p>
+          {!isLoading && filteredTransactions.length > 0 && !isMobile && (() => {
+            const remainingBreakdown = getRemainingItemsBreakdown()
+            const totalRemainingItems = filteredTransactions.reduce((acc, t) => acc + t.deliverySummary.reduce((sum, item) => sum + item.remainingQuantity, 0), 0)
+            return (
+              <div className="space-y-3">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 p-4 bg-muted/30 rounded-lg border">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 w-full md:w-auto">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground mb-1">Total Pesanan</p>
+                      <p className="text-2xl font-bold">{filteredTransactions.length}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground mb-1">Total Sisa Item (Belum Dikirim)</p>
+                      <p className="text-2xl font-bold text-orange-600">
+                        {totalRemainingItems}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground mb-1">Total Nilai Order</p>
+                      <p className="text-2xl font-bold text-green-600">
+                        {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(
+                          filteredTransactions.reduce((acc, t) => acc + t.total, 0)
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+                    <Button
+                      variant="outline"
+                      className="w-full md:w-auto gap-2 border-green-200 hover:bg-green-50 hover:text-green-700 dark:border-green-900 dark:hover:bg-green-900/20"
+                      onClick={generateActiveDeliveriesExcel}
+                    >
+                      <Download className="h-4 w-4 text-green-600" />
+                      Export Excel
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="w-full md:w-auto gap-2 border-red-200 hover:bg-red-50 hover:text-red-700 dark:border-red-900 dark:hover:bg-red-900/20"
+                      onClick={generateActiveDeliveriesPDF}
+                      disabled={isGeneratingPDF}
+                    >
+                      {isGeneratingPDF ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <FileText className="h-4 w-4 text-red-600" />
+                      )}
+                      Export PDF
+                    </Button>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground mb-1">Total Sisa Item</p>
-                  <p className="text-2xl font-bold text-orange-600">
-                    {filteredTransactions.reduce((acc, t) => acc + t.deliverySummary.reduce((sum, item) => sum + item.remainingQuantity, 0), 0)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground mb-1">Total Nilai Order</p>
-                  <p className="text-2xl font-bold text-green-600">
-                    {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(
-                      filteredTransactions.reduce((acc, t) => acc + t.total, 0)
-                    )}
-                  </p>
-                </div>
-              </div>
-              <Button
-                variant="outline"
-                className="w-full md:w-auto gap-2 border-red-200 hover:bg-red-50 hover:text-red-700 dark:border-red-900 dark:hover:bg-red-900/20"
-                onClick={generateActiveDeliveriesPDF}
-                disabled={isGeneratingPDF}
-              >
-                {isGeneratingPDF ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <FileText className="h-4 w-4 text-red-600" />
+
+                {/* Breakdown sisa item per produk */}
+                {remainingBreakdown.length > 0 && (
+                  <div className="p-4 bg-orange-50 dark:bg-orange-950/20 rounded-lg border border-orange-200 dark:border-orange-900">
+                    <h4 className="text-sm font-semibold text-orange-700 dark:text-orange-400 mb-2 flex items-center gap-2">
+                      <Package className="h-4 w-4" />
+                      Rincian Barang Belum Dikirim
+                    </h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+                      {remainingBreakdown.map((item, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between bg-white dark:bg-gray-800 rounded px-3 py-2 border text-sm"
+                        >
+                          <span className="truncate mr-2 text-gray-700 dark:text-gray-300">{item.productName}</span>
+                          <span className="font-bold text-orange-600 dark:text-orange-400 whitespace-nowrap">
+                            {item.remaining} {item.unit}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
-                Export PDF
-              </Button>
-            </div>
-          )}
+              </div>
+            )
+          })()}
 
           {/* Mobile View - Card List */}
           {isMobile ? (
