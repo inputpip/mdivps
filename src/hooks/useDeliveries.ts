@@ -165,10 +165,14 @@ export const useDeliveries = (transactionId?: string) => {
 
       // Filter out material items - materials are sold directly and don't go through delivery
       // Materials are processed at transaction time: record revenue + consume raw material stock
-      const nonMaterialItems = input.items.filter(item => !item.productId?.startsWith('material-'));
+      // Detection: product_id starts with 'material-' OR product name contains '(Bahan)'
+      const isMaterialItem = (item: { productId: string; productName?: string }) =>
+        item.productId?.startsWith('material-') ||
+        (item.productName || '').toLowerCase().includes('(bahan)');
+      const nonMaterialItems = input.items.filter(item => !isMaterialItem(item));
 
       if (nonMaterialItems.length === 0 && input.items.length > 0) {
-        throw new Error('Item ini adalah material. Material langsung dijual tanpa pengantaran.');
+        throw new Error('Item ini adalah material/bahan. Material langsung dijual tanpa pengantaran.');
       }
 
       const { data, error } = await supabase.rpc('process_delivery_atomic', {
@@ -215,10 +219,13 @@ export const useDeliveries = (transactionId?: string) => {
 
       // Filter out material items - materials are sold directly and don't go through delivery
       // Materials are processed at transaction time: record revenue + consume raw material stock
-      const nonMaterialItems = input.items.filter(item => !item.productId?.startsWith('material-'));
+      const isMaterialItem = (item: { productId: string; productName?: string }) =>
+        item.productId?.startsWith('material-') ||
+        (item.productName || '').toLowerCase().includes('(bahan)');
+      const nonMaterialItems = input.items.filter(item => !isMaterialItem(item));
 
       if (nonMaterialItems.length === 0 && input.items.length > 0) {
-        throw new Error('Item ini adalah material. Material langsung dijual tanpa pengantaran.');
+        throw new Error('Item ini adalah material/bahan. Material langsung dijual tanpa pengantaran.');
       }
 
       const { data, error } = await supabase.rpc('process_delivery_atomic_no_stock', {
@@ -263,10 +270,13 @@ export const useDeliveries = (transactionId?: string) => {
 
       // Filter out material items - materials are sold directly and don't go through delivery
       // Materials are processed at transaction time: record revenue + consume raw material stock
-      const nonMaterialItems = input.items.filter(item => !item.productId?.startsWith('material-'));
+      const isMaterialItem = (item: { productId: string; productName?: string }) =>
+        item.productId?.startsWith('material-') ||
+        (item.productName || '').toLowerCase().includes('(bahan)');
+      const nonMaterialItems = input.items.filter(item => !isMaterialItem(item));
 
       if (nonMaterialItems.length === 0 && input.items.length > 0) {
-        throw new Error('Item ini adalah material. Material langsung dijual tanpa pengantaran.');
+        throw new Error('Item ini adalah material/bahan. Material langsung dijual tanpa pengantaran.');
       }
 
       const { data, error } = await supabase.rpc('update_delivery_atomic', {
@@ -529,6 +539,13 @@ export const useTransactionsReadyForDelivery = () => {
             // Skip metadata items explicitly
             if (item._isSalesMeta || item._isMigrationMeta) return null;
 
+            // Skip material/bahan items - they are sold directly and don't go through delivery
+            const itemProductId = item.product_id || item.productId || item.product?.id || '';
+            const itemProductName = item.product_name || item.productName || item.product?.name || '';
+            if (itemProductId.startsWith('material-') || itemProductName.toLowerCase().includes('(bahan)')) {
+              return null;
+            }
+
             const productId = item.product_id || item.productId || item.product?.id;
             const productName = item.product_name || item.productName || item.product?.name || '';
             const orderedQty = Number(item.quantity || item.orderedQuantity || 0);
@@ -750,6 +767,13 @@ export const useTransactionDeliveryInfo = (transactionId: string, options?: { en
       const deliverySummary = (Array.isArray(txn.items) ? txn.items : []).map((item: any) => {
         // Skip metadata items explicitly
         if (item._isSalesMeta || item._isMigrationMeta) return null;
+
+        // Skip material/bahan items - they are sold directly and don't go through delivery
+        const itemProductId = item.product_id || item.productId || item.product?.id || '';
+        const itemProductName = item.product_name || item.productName || item.product?.name || '';
+        if (itemProductId.startsWith('material-') || itemProductName.toLowerCase().includes('(bahan)')) {
+          return null;
+        }
 
         const productId = item.product_id || item.productId || item.product?.id;
         const productName = item.product_name || item.productName || item.product?.name || 'Unknown Product';
