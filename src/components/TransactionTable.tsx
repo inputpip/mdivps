@@ -426,10 +426,11 @@ export function TransactionTable() {
                 </td>
                 <td style="width: 60%; vertical-align: top; font-size: 11pt;">
                   <table style="width: 100%;">
-                    <tr><td width="80">No</td><td>: ${transaction.id}</td><td width="50">SALES</td><td>: ${transaction.cashierName?.split(' ')[0] || 'KANTOR'}</td></tr>
+                    <tr><td width="80">No</td><td>: ${transaction.id}</td><td width="50">SALES</td><td>: ${transaction.salesName?.split(' ')[0] || 'KANTOR'}</td></tr>
                     <tr><td>Tanggal</td><td>: ${orderDate ? format(orderDate, "dd/MM/yy HH:mm", { locale: id }) : '-'}</td><td>PPN</td><td>: ${transaction.ppnEnabled ? 'Ya' : '-'}</td></tr>
                     <tr><td>Pelanggan</td><td colspan="3">: ${transaction.customerName}</td></tr>
                     <tr><td>Alamat</td><td colspan="3">: ${transaction.customerAddress || '-'}</td></tr>
+                    ${transaction.dueDate ? `<tr><td>Jt. Tempo</td><td colspan="3">: ${format(new Date(transaction.dueDate), "dd/MM/yyyy", { locale: id })}</td></tr>` : ''}
                   </table>
                 </td>
               </tr>
@@ -483,9 +484,6 @@ export function TransactionTable() {
                       </td>
                     </tr>
                   </table>
-                  <div style="font-size: 10pt; margin-top: 2mm;">
-                    ${companyInfo?.bankAccount1 ? `<strong>${companyInfo.bankAccount1}</strong> A.N ${companyInfo?.bankAccountName1 || companyInfo?.name || '-'}` : ''}
-                  </div>
                 </td>
                 <td style="width: 45%; vertical-align: top; font-size: 11pt;">
                   <table style="width: 100%;">
@@ -495,12 +493,23 @@ export function TransactionTable() {
                     ${paidAmount > 0 ? `<tr><td>Tunai</td><td style="text-align: right;">:</td><td style="text-align: right;">${formatNumber(paidAmount)}</td></tr>` : ''}
                     ${remaining > 0 ? `<tr><td>Kredit</td><td style="text-align: right;">:</td><td style="text-align: right;">${formatNumber(remaining)}</td></tr>` : ''}
                     ${paidAmount > transaction.total ? `<tr><td>Kembali</td><td style="text-align: right;">:</td><td style="text-align: right;">${formatNumber(paidAmount - transaction.total)}</td></tr>` : ''}
+                    ${transaction.dueDate && remaining > 0 ? `<tr><td>Jt. Tempo</td><td style="text-align: right;">:</td><td style="text-align: right;">${format(new Date(transaction.dueDate), "dd/MM/yyyy", { locale: id })}</td></tr>` : ''}
                   </table>
                 </td>
               </tr>
             </table>
           </td>
         </tr>
+
+        <!-- Bank Accounts - Full Width -->
+        ${(() => {
+          const banks = [
+            companyInfo?.bankAccount1 ? `${companyInfo.bankAccount1} A.N ${companyInfo?.bankAccountName1 || companyInfo?.name || '-'}` : '',
+            companyInfo?.bankAccount2 ? `${companyInfo.bankAccount2} A.N ${companyInfo?.bankAccountName2 || companyInfo?.name || '-'}` : '',
+            companyInfo?.bankAccount3 ? `${companyInfo.bankAccount3} A.N ${companyInfo?.bankAccountName3 || companyInfo?.name || '-'}` : ''
+          ].filter(Boolean);
+          return banks.length > 0 ? `<tr><td colspan="5" style="font-size: 10pt; padding-top: 1mm;">Rek: ${banks.join(' | ')}</td></tr>` : '';
+        })()}
 
         <!-- Warning Footer -->
         <tr>

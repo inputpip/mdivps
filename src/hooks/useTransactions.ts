@@ -197,7 +197,10 @@ export const useTransactions = (filters?: {
         sales_id: newTransaction.salesId || null,
         sales_name: newTransaction.salesName || null,
         retasi_id: newTransaction.retasiId || null,
-        retasi_number: newTransaction.retasiNumber || null
+        retasi_number: newTransaction.retasiNumber || null,
+        due_date: newTransaction.dueDate instanceof Date
+          ? newTransaction.dueDate.toISOString()
+          : newTransaction.dueDate || null
       };
 
       // Prepare Items Data (Snake Case for RPC JSONB)
@@ -263,6 +266,14 @@ export const useTransactions = (filters?: {
           newTransaction.cashierName,
           currentBranch.id
         ).catch(console.warn);
+      }
+
+      // Save due_date separately (RPC doesn't handle it)
+      if (newTransaction.dueDate) {
+        await supabase
+          .from('transactions')
+          .update({ due_date: newTransaction.dueDate instanceof Date ? newTransaction.dueDate.toISOString() : newTransaction.dueDate })
+          .eq('id', rpcResult.transaction_id || newTransaction.id);
       }
 
       // Return constructed transaction object (optimistic) or fetch from DB

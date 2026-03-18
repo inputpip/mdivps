@@ -179,11 +179,11 @@ export function CustomerMap({
           const markerIcon = isKiosk ? kioskIcon : homeIcon
           const distance = userLocation
             ? calculateDistance(
-                userLocation.lat,
-                userLocation.lng,
-                customer.latitude!,
-                customer.longitude!
-              )
+              userLocation.lat,
+              userLocation.lng,
+              customer.latitude!,
+              customer.longitude!
+            )
             : null
 
           return (

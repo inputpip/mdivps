@@ -706,6 +706,7 @@ export function PrintReceiptDialog({ open, onOpenChange, transaction, template, 
               <div style="font-size: 10.5pt;">Pelanggan</div>
             </td>
             <td style="width: 50%; vertical-align: top; text-align: right;">
+              <div style="font-size: 10.5pt;"><strong>Sales:</strong> ${transaction.salesName || 'KANTOR'}</div>
               <div style="font-size: 10.5pt;"><strong>Kasir:</strong> ${transaction.cashierName}</div>
               ${transaction.dueDate ? `<div style="font-size: 10.5pt;"><strong>Jatuh Tempo:</strong> ${safeFormatDate(transaction.dueDate, "dd/MM/yyyy")}</div>` : ''}
             </td>
