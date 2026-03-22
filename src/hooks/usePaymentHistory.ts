@@ -40,7 +40,7 @@ export const usePaymentHistory = (filters?: {
       // This is much faster and bypasses the complex journal entry parsing on the client side
       const { data, error } = await supabase.rpc('get_payment_history_rpc', {
         p_branch_id: currentBranch?.id,
-        p_limit: 100, // Load last 100 payments by default (or filtered)
+        p_limit: 999999, // Fetch all data
         p_date_from: filters?.date_from || null,
         p_date_to: filters?.date_to || null,
         p_account_id: filters?.account_id === 'all' ? null : filters?.account_id

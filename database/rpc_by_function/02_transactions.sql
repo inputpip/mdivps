@@ -954,26 +954,26 @@ BEGIN
   -- ==================== INSERT PAYMENT RECORD ====================
 
   IF v_paid_amount > 0 THEN
-    INSERT INTO transaction_payments (
+    INSERT INTO payment_history (
       transaction_id,
       branch_id,
       amount,
+      remaining_amount,
       payment_method,
+      account_id,
       payment_date,
-      account_name,
-      description,
       notes,
-      paid_by_user_name,
-      created_by,
+      recorded_by_name,
+      recorded_by,
       created_at
     ) VALUES (
       v_transaction_id,
       p_branch_id,
       v_paid_amount,
+      GREATEST(0, v_total - v_paid_amount),
       v_payment_method,
+      v_payment_account_id,
       v_date,
-      COALESCE(v_payment_method, 'Tunai'),
-      'Pembayaran transaksi ' || v_transaction_id,
       'Initial Payment for ' || v_transaction_id,
       COALESCE(p_cashier_name, 'System'),
       p_cashier_id,

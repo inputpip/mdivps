@@ -25,6 +25,8 @@ export function PaymentHistoryTable() {
   const { toast } = useToast()
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
+  const [limit, setLimit] = useState(20)
   const [filters, setFilters] = useState({
     date_from: '',
     date_to: '',
@@ -36,6 +38,7 @@ export function PaymentHistoryTable() {
 
   const handleFilterChange = (key: string, value: string) => {
     setFilters(prev => ({ ...prev, [key]: value }))
+    setPage(1)
   }
 
   const clearFilters = () => {
@@ -45,6 +48,7 @@ export function PaymentHistoryTable() {
       account_id: 'all'
     })
     setSearchQuery('')
+    setPage(1)
   }
 
   const filteredPaymentHistory = paymentHistory.filter(payment => {
@@ -63,6 +67,10 @@ export function PaymentHistoryTable() {
 
     return false
   })
+
+  // Pagination logic
+  const totalPages = Math.max(1, Math.ceil(filteredPaymentHistory.length / limit))
+  const paginatedHistory = filteredPaymentHistory.slice((page - 1) * limit, page * limit)
 
   const generateExcel = () => {
     const data = filteredPaymentHistory.map(payment => ({
@@ -372,14 +380,14 @@ export function PaymentHistoryTable() {
                     Loading...
                   </td>
                 </tr>
-              ) : filteredPaymentHistory.length === 0 ? (
+              ) : paginatedHistory.length === 0 ? (
                 <tr>
                   <td className="px-3 py-6 text-center text-slate-500" colSpan={7}>
                     Tidak ada data pembayaran piutang
                   </td>
                 </tr>
               ) : (
-                filteredPaymentHistory.map((payment) => (
+                paginatedHistory.map((payment) => (
                   <tr key={payment.id} className="border-t">
                     <td className="px-3 py-2">
                       {format(payment.created_at, 'dd/MM/yyyy HH:mm')}
@@ -418,6 +426,34 @@ export function PaymentHistoryTable() {
               )}
             </tbody>
           </table>
+        </div>
+        
+        {/* Pagination Controls */}
+        <div className="flex items-center justify-between px-4 py-3 bg-card border-t dark:bg-slate-900 border-border rounded-b-xl">
+          <div className="text-sm text-muted-foreground">
+            Menampilkan {paginatedHistory.length === 0 ? 0 : (page - 1) * limit + 1} - {Math.min(page * limit, filteredPaymentHistory.length)} dari {filteredPaymentHistory.length} data
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1 || isLoading}
+            >
+              Sebelumnya
+            </Button>
+            <div className="text-sm font-medium px-2">
+              Halaman {page} dari {totalPages}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage(p => p + 1)}
+              disabled={page >= totalPages || isLoading}
+            >
+              Selanjutnya
+            </Button>
+          </div>
         </div>
       </div>
 
