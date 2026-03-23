@@ -130,6 +130,7 @@ export const useTransactions = (filters?: {
         .from('transactions')
         .select(selectFields)
         .eq('is_voided', false)  // Only show non-voided transactions
+        .eq('is_cancelled', false) // Only show non-cancelled transactions
         .order('created_at', { ascending: false });
 
       // Apply branch filter - ALWAYS filter by selected branch
@@ -476,7 +477,7 @@ export const useTransactions = (filters?: {
 
   // 4. DELETE/VOID TRANSACTION (FULL RPC)
   const deleteTransaction = useMutation({
-    mutationFn: async (transactionId: string) => {
+    mutationFn: async ({ transactionId, reason, userId }: { transactionId: string, reason: string, userId?: string | null }) => {
       if (!currentBranch?.id) throw new Error('Branch ID is required');
 
       console.log('🗑️ Voiding Transaction via RPC...', transactionId);
@@ -499,8 +500,8 @@ export const useTransactions = (filters?: {
         .rpc('void_transaction_atomic', {
           p_transaction_id: transactionId,
           p_branch_id: currentBranch.id,
-          p_reason: 'Transaksi dihapus oleh user',
-          p_user_id: null
+          p_reason: reason || 'Transaksi dihapus oleh user',
+          p_user_id: userId || null
         });
 
       if (rpcError) {
@@ -585,6 +586,8 @@ export const useTransactionById = (id: string) => {
         .from('transactions')
         .select('*')
         .eq('id', id)
+        .eq('is_voided', false)
+        .eq('is_cancelled', false)
         .order('id').limit(1);
       if (error) {
         console.error(error.message);
@@ -610,7 +613,9 @@ export const useTransactionsByCustomer = (customerId: string) => {
       const { data, error } = await supabase
         .from('transactions')
         .select('*')
-        .eq('customer_id', customerId);
+        .eq('customer_id', customerId)
+        .eq('is_voided', false)
+        .eq('is_cancelled', false);
       if (error) throw new Error(error.message);
       return data ? data.map(fromDb) : [];
     },

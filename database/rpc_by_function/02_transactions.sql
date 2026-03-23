@@ -1600,9 +1600,16 @@ BEGIN
   SET status = 'cancelled', updated_at = NOW()
   WHERE transaction_id = p_transaction_id AND branch_id = p_branch_id;
 
-  -- ==================== DELETE TRANSACTION ====================
+  -- ==================== CANCEL (SOFT DELETE) TRANSACTION ====================
 
-  DELETE FROM transactions
+  UPDATE transactions
+  SET 
+    is_voided = TRUE,
+    is_cancelled = TRUE,
+    cancel_reason = p_reason,
+    cancelled_by = p_user_id,
+    cancelled_at = NOW(),
+    updated_at = NOW()
   WHERE id = p_transaction_id AND branch_id = p_branch_id;
 
   -- ==================== SUCCESS ====================

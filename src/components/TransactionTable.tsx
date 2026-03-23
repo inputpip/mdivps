@@ -165,6 +165,7 @@ export function TransactionTable() {
     return map;
   }, [deliveryHistory]);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = React.useState(false);
+  const [cancelReason, setCancelReason] = React.useState('');
   const [selectedTransaction, setSelectedTransaction] = React.useState<Transaction | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = React.useState(false);
   const [transactionToEdit, setTransactionToEdit] = React.useState<Transaction | null>(null);
@@ -362,11 +363,20 @@ export function TransactionTable() {
   };
 
   const confirmDelete = () => {
+    if (!cancelReason.trim()) {
+      toast({ variant: "destructive", title: "Validasi Gagal", description: "Alasan pembatalan wajib diisi." });
+      return;
+    }
     if (selectedTransaction) {
-      deleteTransaction.mutate(selectedTransaction.id, {
+      deleteTransaction.mutate({
+        transactionId: selectedTransaction.id,
+        reason: cancelReason,
+        userId: user?.id
+      }, {
         onSuccess: () => {
           toast({ title: "Transaksi Dihapus", description: `Transaksi ${selectedTransaction.id} berhasil dihapus.` });
           setIsDeleteDialogOpen(false);
+          setCancelReason('');
         },
         onError: (error) => {
           toast({ variant: "destructive", title: "Gagal Hapus", description: error.message });
@@ -1707,22 +1717,38 @@ export function TransactionTable() {
           <Button variant="outline" size="sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()} className="hover-glow">Next</Button>
         </div>
       )}
-      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={(open) => {
+        setIsDeleteDialogOpen(open);
+        if (!open) setCancelReason('');
+      }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Apakah Anda yakin?</AlertDialogTitle>
+            <AlertDialogTitle>Hapus Transaksi?</AlertDialogTitle>
             <AlertDialogDescription>
-              Tindakan ini tidak dapat dibatalkan. Ini akan menghapus data transaksi dengan nomor order <strong>{selectedTransaction?.id}</strong> secara permanen.
+              Tindakan ini tidak dapat dibatalkan. Ini akan membatalkan dan menghapus data transaksi dengan nomor order <strong>{selectedTransaction?.id}</strong>.
             </AlertDialogDescription>
+            <div className="mt-4 text-left">
+              <label className="text-sm font-medium">Alasan Pembatalan <span className="text-red-500">*</span></label>
+              <Input
+                placeholder="Masukkan alasan transaksi ini dihapus"
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                className="mt-1"
+                autoFocus
+              />
+            </div>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Batal</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setCancelReason('')}>Batal</AlertDialogCancel>
             <AlertDialogAction
-              className={cn(badgeVariants({ variant: "destructive" }))}
-              onClick={confirmDelete}
-              disabled={deleteTransaction.isPending}
+              className={cn(badgeVariants({ variant: "destructive", className: "cursor-pointer" }))}
+              onClick={(e) => {
+                e.preventDefault();
+                confirmDelete();
+              }}
+              disabled={deleteTransaction.isPending || !cancelReason.trim()}
             >
-              {deleteTransaction.isPending ? "Menghapus..." : "Ya, Hapus"}
+              {deleteTransaction.isPending ? "Memproses..." : "Hapus Transaksi"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
