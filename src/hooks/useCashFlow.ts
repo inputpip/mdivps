@@ -104,13 +104,23 @@ export function useCashFlow() {
       const refNumberMap: Record<string, string> = {};
       const refDetailMap: Record<string, { label?: string, description?: string }> = {};
 
+      // Helper function to safely chunk large array of IDs to avoid URI Too Long (ERR_FAILED / 414)
+      const fetchInChunks = async (table: string, columns: string, ids: string[]) => {
+        if (!ids || ids.length === 0) return [];
+        const chunkSize = 200;
+        let allData: any[] = [];
+        for (let i = 0; i < ids.length; i += chunkSize) {
+          const chunk = ids.slice(i, i + chunkSize);
+          const { data, error } = await supabase.from(table as any).select(columns).in('id', chunk);
+          if (data && !error) allData = allData.concat(data);
+        }
+        return allData;
+      };
+
       // Fetch transaction details
       if (refIdsByType['transaction']?.length) {
-        const { data: transactions } = await supabase
-          .from('transactions')
-          .select('id, customer_name')
-          .in('id', refIdsByType['transaction']);
-        transactions?.forEach((t: any) => {
+        const transactions = await fetchInChunks('transactions', 'id, customer_name', refIdsByType['transaction']);
+        transactions.forEach((t: any) => {
           refNumberMap[t.id] = t.id;
           refDetailMap[t.id] = { label: `Order ${t.id}`, description: `Penjualan ke ${t.customer_name}` };
         });
@@ -118,27 +128,20 @@ export function useCashFlow() {
 
       // Fetch expense details
       if (refIdsByType['expense']?.length) {
-        const { data: expenses } = await supabase
-          .from('expenses')
-          .select('id, description')
-          .in('id', refIdsByType['expense']);
-        expenses?.forEach((e: any) => {
+        const expenses = await fetchInChunks('expenses', 'id, description', refIdsByType['expense']);
+        expenses.forEach((e: any) => {
           refNumberMap[e.id] = e.id;
           refDetailMap[e.id] = { description: e.description };
         });
       }
 
       // Fetch employee advance details
-      // Filter hanya UUID valid (ada ID lama format 'adv-XXXXXX' yang bukan UUID)
       if (refIdsByType['advance']?.length) {
         const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         const validAdvanceIds = refIdsByType['advance'].filter(id => UUID_REGEX.test(id));
         if (validAdvanceIds.length > 0) {
-          const { data: advances } = await supabase
-            .from('employee_advances')
-            .select('id, employee_name')
-            .in('id', validAdvanceIds);
-          advances?.forEach((a: any) => {
+          const advances = await fetchInChunks('employee_advances', 'id, employee_name', validAdvanceIds);
+          advances.forEach((a: any) => {
             refNumberMap[a.id] = a.id;
             refDetailMap[a.id] = { description: `Panjar karyawan: ${a.employee_name || 'Tidak diketahui'}` };
           });
@@ -146,18 +149,12 @@ export function useCashFlow() {
       }
 
       // Fetch payroll details
-      // Dibungkus try-catch karena tabel payroll_periods tidak ada di semua database (mkw_db)
       if (refIdsByType['payroll']?.length) {
         try {
-          const { data: payrolls, error: payrollError } = await supabase
-            .from('payroll_periods')
-            .select('id, name')
-            .in('id', refIdsByType['payroll']);
-          if (!payrollError) {
-            payrolls?.forEach((p: any) => {
-              refNumberMap[p.id] = p.name || p.id;
-            });
-          }
+          const payrolls = await fetchInChunks('payroll_periods', 'id, name', refIdsByType['payroll']);
+          payrolls.forEach((p: any) => {
+            refNumberMap[p.id] = p.name || p.id;
+          });
         } catch {
           // Tabel payroll_periods tidak ada di database ini (e.g. mkw_db) — skip
         }
@@ -165,11 +162,8 @@ export function useCashFlow() {
 
       // Fetch payable details
       if (refIdsByType['payable']?.length) {
-        const { data: payables } = await supabase
-          .from('accounts_payable')
-          .select('id, supplier_name')
-          .in('id', refIdsByType['payable']);
-        payables?.forEach((p: any) => {
+        const payables = await fetchInChunks('accounts_payable', 'id, supplier_name', refIdsByType['payable']);
+        payables.forEach((p: any) => {
           refDetailMap[p.id] = {
             label: `Bayar Hutang: ${p.id}`,
             description: `Pembayaran hutang ke ${p.supplier_name}`
@@ -179,12 +173,8 @@ export function useCashFlow() {
 
       // Fetch receivable payment details (to get customer names for payments)
       if (refIdsByType['receivable']?.length) {
-        const { data: payments } = await supabase
-          .from('payment_history')
-          .select('id, transaction_id, transactions(customer_name)')
-          .in('id', refIdsByType['receivable']);
-
-        payments?.forEach((p: any) => {
+        const payments = await fetchInChunks('payment_history', 'id, transaction_id, transactions(customer_name)', refIdsByType['receivable']);
+        payments.forEach((p: any) => {
           const customerName = p.transactions?.customer_name || 'Pelanggan';
           refDetailMap[p.id] = {
             label: `Bayar Piutang: ${p.transaction_id}`,

@@ -1,5 +1,5 @@
 # AQUVIT SYSTEM CURRENT STATE
-**Last Updated:** Monday, March 9, 2026 13:30 (WIT)
+**Last Updated:** Tuesday, March 24, 2026 11:42 (WIT)
 
 ## 1. 🌐 VPS Connection Information
 
@@ -14,7 +14,9 @@ Semua perubahan penting pada proyek AQUVIT ERP System didokumentasikan di file i
 2. [Local Development Setup](#local-development-setup)
 3. [Server Architecture](#server-architecture-diagram)
 4. [VPS Server Information](#vps-server-information)
-5. [Version History](#v51-2026-03-06---commission-system-audit--ui-enhancement)
+5. [Version History](#v55-2026-03-24---cash-flow-performance--receivable-filter)
+   - [v5.5] **Cash Flow Performance & Receivable Filter** 🚀 NEW
+   - [v5.4] **Transaction Voiding & Photo Naming Fixes** 🛡️ CRITICAL
    - [v5.3] **POS Mobile Fixes: Bonus, Sales & Photo Upload** 🛡️ CRITICAL
    - [v5.2] **Commission Split Logic & Sidebar UI** 🚀 NEW
    - [v5.1] **Commission Duplication Fix & UI Refinement** 🛡️ CRITICAL
@@ -67,6 +69,7 @@ pm2 restart postgrest-aquvit postgrest-mkw
 | Metric | Status | Details |
 |--------|--------|---------|
 | **Disk Usage** | ✅ **Healthy** | 11% Used (6.1GB / 58GB) on `/` |
+| **PostgreSQL** | 🟢 **Active** | `aquvit_new` (Nabire) & `mkw_db` (Manokwari) |
 | **PostgREST** | 🟢 **Online** | Port 3000 (Nabire), Port 3007 (Manokwari) |
 | **Auth Servers**| 🟢 **Online** | Port 3006 (Nabire), Port 3003 (Manokwari) |
 
@@ -131,6 +134,27 @@ The system relies on **PostgreSQL RPCs** for data integrity. Frontend calls `sup
 ---
 
 ---
+
+---
+
+# v5.5 (2026-03-24) - Cash Flow Performance & Receivable Filter
+
+### 🚀 Frontend Performance Fix
+*   **Cash Flow Chunking**: Memperbaiki error `net::ERR_FAILED` / `414 URI Too Long` saat memuat halaman Arus Kas (Cash Flow) yang memiliki ribuan data. Pencarian referensi data kini dipecah (*chunked*) menjadi kelompok per 200 ID per *request* secara estafet, menghindari limitasi ukuran maksimum URL pada *browser* dan Supabase.
+
+### 📑 UI Filter Enhancement
+*   **Receivable UI Toggle**: Menambahkan dropdown "Tipe Tampil" (Hanya Piutang / Semua Transaksi) di halaman Manajemen Piutang (`PaymentHistoryTable.tsx`). Opsi bawaan (*default*) diset untuk menghilangkan slip tunai reguler (`Initial Payment`) dari daftar agar fokus tepat pada histori pelunasan piutang saja, sepenuhnya lewat UI tanpa memodifikasi *raw payload* dari *database*.
+
+---
+# v5.4 (2026-03-24) - Transaction Voiding & Photo Naming Fixes
+
+### 🛡️ Core Database Fixes
+*   **Transaction Voiding Fix (`void_transaction_atomic`)**: Memperbaiki bug `TR-UNKNOWN` tersembunyi yang tertinggal di `product_stock_movements` saat mengembalikan/void transaksi barang.
+*   **Multiple Functions Cleaning**: Menghapus seluruh kloningan ganda fungsi `void_transaction_atomic` agar bebas dari error `400 Bad Request` saat kasir ingin membatalkan transaksi. Reload schema API postgREST juga telah sukses dilakukan ke Server Nabire dan Manokwari.
+
+### 📸 Photo Upload Formats
+*   **Filename Format Integrity**: Membuat opsi `enableExactName` di `photoUploadService.ts` agar saat aplikasi mengupload foto, sistem tidak merusak huruf kapital, tidak membuang spasi, dan tidak menambah mili-detik ganda.
+*   **Delivery & Visit Naming**: Format baku terbaru telah diaktifkan dengan pola: `[Nomor] - [NamaPelanggan] - [Datetime]` pada laporan bukti foto Pengantaran dan Kunjungan Sales.
 
 ---
 # v5.3 (2026-03-09) - POS Mobile Fixes: Bonus, Sales & Photo Upload

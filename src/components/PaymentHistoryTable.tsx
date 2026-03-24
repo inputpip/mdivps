@@ -30,7 +30,8 @@ export function PaymentHistoryTable() {
   const [filters, setFilters] = useState({
     date_from: '',
     date_to: '',
-    account_id: 'all'
+    account_id: 'all',
+    type: 'piutang' // Default tampilkan hanya piutang
   })
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -45,13 +46,19 @@ export function PaymentHistoryTable() {
     setFilters({
       date_from: '',
       date_to: '',
-      account_id: 'all'
+      account_id: 'all',
+      type: 'piutang'
     })
     setSearchQuery('')
     setPage(1)
   }
 
   const filteredPaymentHistory = paymentHistory.filter(payment => {
+    // Filter Piutang vs Semua Pembayaran
+    if (filters.type === 'piutang' && payment.description?.toLowerCase().includes('initial payment')) {
+      return false
+    }
+
     if (!searchQuery) return true
 
     const query = searchQuery.toLowerCase()
@@ -265,8 +272,8 @@ export function PaymentHistoryTable() {
           <h3 className="font-medium">Filter Data</h3>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <div className="md:col-span-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+          <div className="md:col-span-5">
             <div className="relative w-full">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -276,6 +283,18 @@ export function PaymentHistoryTable() {
                 className="pl-10"
               />
             </div>
+          </div>
+          <div>
+            <Label htmlFor="type" className="text-xs text-muted-foreground">Tipe Tampil</Label>
+            <Select value={filters.type} onValueChange={(value) => handleFilterChange('type', value)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Pilih tipe..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="piutang">Hanya Piutang</SelectItem>
+                <SelectItem value="all">Semua Transaksi</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <Label htmlFor="date_from" className="text-xs text-muted-foreground">Tanggal Dari</Label>
