@@ -60,6 +60,8 @@ export function useDailyReport(selectedDate: Date) {
         .select('*')
         .gte('order_date', startDate.toISOString())
         .lte('order_date', endDate.toISOString())
+        .eq('is_voided', false)
+        .eq('is_cancelled', false)
         .order('created_at', { ascending: false });
 
       // Apply branch filter - ALWAYS filter by selected branch

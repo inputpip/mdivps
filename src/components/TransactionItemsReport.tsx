@@ -386,6 +386,8 @@ export const TransactionItemsReport = () => {
           .eq('is_office_sale', true)
           .gte('order_date', fromDate.toISOString())
           .lte('order_date', toDate.toISOString())
+          .eq('is_voided', false)
+          .eq('is_cancelled', false)
 
         if (currentBranch?.id) {
           officeSaleQuery = officeSaleQuery.eq('branch_id', currentBranch.id)
@@ -405,9 +407,9 @@ export const TransactionItemsReport = () => {
               if (item._isSalesMeta || item._isMigrationMeta) return
 
               // Skip items without product info
-              if (!item.product?.name && !item.name && !item.productName) return
+              if (!item.product?.name && !item.name && !item.productName && !item.product_name) return
 
-              const productName = item.product?.name || item.name || item.productName
+              const productName = item.product?.name || item.name || item.productName || item.product_name
               const isBonus = Boolean(item.isBonus) || productName.toLowerCase().includes('bonus')
 
               const priceRaw = item.price || item.product?.basePrice || 0
@@ -463,6 +465,8 @@ export const TransactionItemsReport = () => {
           .not('retasi_id', 'is', null)
           .gte('order_date', fromDate.toISOString())
           .lte('order_date', toDate.toISOString())
+          .eq('is_voided', false)
+          .eq('is_cancelled', false)
 
         if (currentBranch?.id) {
           retasiQuery = retasiQuery.eq('branch_id', currentBranch.id)
@@ -508,9 +512,9 @@ export const TransactionItemsReport = () => {
               if (item._isSalesMeta || item._isMigrationMeta) return
 
               // Skip items without product info
-              if (!item.product?.name && !item.name && !item.productName) return
+              if (!item.product?.name && !item.name && !item.productName && !item.product_name) return
 
-              const productName = item.product?.name || item.name || item.productName
+              const productName = item.product?.name || item.name || item.productName || item.product_name
               const isBonus = Boolean(item.isBonus) || productName.toLowerCase().includes('bonus')
 
               const priceRaw = item.price || item.product?.basePrice || 0
@@ -585,6 +589,8 @@ export const TransactionItemsReport = () => {
           .is('retasi_id', null)
           .gte('order_date', fromDate.toISOString())
           .lte('order_date', toDate.toISOString())
+          .eq('is_voided', false)
+          .eq('is_cancelled', false)
 
         if (currentBranch?.id) {
           directSaleQuery = directSaleQuery.eq('branch_id', currentBranch.id)
@@ -613,9 +619,9 @@ export const TransactionItemsReport = () => {
               if (item._isSalesMeta || item._isMigrationMeta) return
 
               // Skip items without product info
-              if (!item.product?.name && !item.name && !item.productName) return
+              if (!item.product?.name && !item.name && !item.productName && !item.product_name) return
 
-              const productName = item.product?.name || item.name || item.productName
+              const productName = item.product?.name || item.name || item.productName || item.product_name
               const isBonus = Boolean(item.isBonus) || productName.toLowerCase().includes('bonus')
 
               const priceRaw = item.price || item.product?.basePrice || 0

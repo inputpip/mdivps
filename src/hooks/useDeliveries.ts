@@ -463,6 +463,8 @@ export const useTransactionsReadyForDelivery = () => {
         `)
         .eq('branch_id', currentBranch?.id)
         .neq('status', 'Dibatalkan')
+        .eq('is_voided', false)
+        .eq('is_cancelled', false)
         .order('order_date', { ascending: false });
 
       // DEBUG: Log all transactions before filtering
@@ -669,6 +671,8 @@ export const useTransactionDeliveryInfo = (transactionId: string, options?: { en
         `)
         .eq('id', transactionId)
         .eq('branch_id', currentBranch?.id)
+        .eq('is_voided', false)
+        .eq('is_cancelled', false)
         .single();
 
       if (txnError) {
