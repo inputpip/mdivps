@@ -364,13 +364,13 @@ BEGIN
            IF NOT v_transaction.is_office_sale THEN
                 IF v_material_id IS NOT NULL THEN
                   SELECT * INTO v_consume_result FROM consume_material_fifo_v2(
-                    v_material_id, v_qty, COALESCE(v_transaction.ref, 'TR-UNKNOWN'), 'delivery', p_branch_id
+                    v_material_id, v_qty, COALESCE(v_transaction.ref, p_transaction_id), 'delivery', p_branch_id
                   );
                   IF NOT v_consume_result.success THEN RAISE EXCEPTION 'Gagal potong stok material: %', v_consume_result.error_message; END IF;
                   v_total_hpp_real := v_total_hpp_real + COALESCE(v_consume_result.total_cost, 0);
                 ELSIF v_product_id IS NOT NULL THEN
                   SELECT * INTO v_consume_result FROM consume_stock_fifo_v2(
-                    v_product_id, v_qty, COALESCE(v_transaction.ref, 'TR-UNKNOWN'), 'delivery', p_branch_id
+                    v_product_id, v_qty, COALESCE(v_transaction.ref, p_transaction_id), 'delivery', p_branch_id
                   );
                   IF NOT v_consume_result.success THEN RAISE EXCEPTION 'Gagal potong stok produk: %', v_consume_result.error_message; END IF;
                   v_total_hpp_real := v_total_hpp_real + COALESCE(v_consume_result.total_hpp, 0);

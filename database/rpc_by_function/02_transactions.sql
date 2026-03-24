@@ -1240,6 +1240,7 @@ DECLARE
   v_old_transaction RECORD;
   v_new_total NUMERIC;
   v_new_paid_amount NUMERIC;
+  v_new_payment_account_id TEXT;
   v_changes TEXT[] := '{}';
   v_journal_id UUID;
   v_journal_lines JSONB := '[]'::JSONB;
@@ -1277,6 +1278,17 @@ BEGIN
 
   v_new_total := COALESCE((p_transaction->>'total')::NUMERIC, v_old_transaction.total);
   v_new_paid_amount := COALESCE((p_transaction->>'paid_amount')::NUMERIC, v_old_transaction.paid_amount);
+  
+  -- Use NULLIF handling in case the frontend sends empty string instead of null, but since it's from JSON it could be actual null.
+  v_new_payment_account_id := v_old_transaction.payment_account_id;
+  IF p_transaction ? 'payment_account_id' THEN
+    IF (p_transaction->>'payment_account_id') IS NULL OR (p_transaction->>'payment_account_id') = '' THEN
+      v_new_payment_account_id := NULL;
+    ELSE
+      v_new_payment_account_id := (p_transaction->>'payment_account_id')::TEXT;
+    END IF;
+  END IF;
+
   v_customer_name := COALESCE(p_transaction->>'customer_name', v_old_transaction.customer_name);
   v_date := COALESCE(v_old_transaction.order_date, CURRENT_DATE);
 
@@ -1287,12 +1299,16 @@ BEGIN
   IF v_new_paid_amount != v_old_transaction.paid_amount THEN
     v_changes := array_append(v_changes, 'paid_amount');
   END IF;
+  IF COALESCE(v_new_payment_account_id::TEXT, '') != COALESCE(v_old_transaction.payment_account_id::TEXT, '') THEN
+    v_changes := array_append(v_changes, 'payment_account_id');
+  END IF;
 
   -- ==================== UPDATE TRANSACTION ====================
 
   UPDATE transactions SET
     total = v_new_total,
     paid_amount = v_new_paid_amount,
+    payment_account_id = v_new_payment_account_id,
     payment_status = CASE WHEN v_new_paid_amount >= v_new_total THEN 'Lunas' ELSE 'Belum Lunas' END,
     customer_name = v_customer_name,
     notes = COALESCE(p_transaction->>'notes', notes),
@@ -1301,7 +1317,7 @@ BEGIN
 
   -- ==================== UPDATE JOURNAL IF AMOUNTS CHANGED ====================
 
-  IF 'total' = ANY(v_changes) OR 'paid_amount' = ANY(v_changes) THEN
+  IF 'total' = ANY(v_changes) OR 'paid_amount' = ANY(v_changes) OR 'payment_account_id' = ANY(v_changes) THEN
     -- Void old journal
     UPDATE journal_entries
     SET is_voided = TRUE, voided_at = NOW(), voided_reason = 'Transaction updated'
@@ -1320,14 +1336,14 @@ BEGIN
     -- Debit: Kas atau Piutang
     IF v_new_paid_amount >= v_new_total THEN
       v_journal_lines := v_journal_lines || jsonb_build_object(
-        'account_id', v_old_transaction.payment_account_id,
+        'account_id', v_new_payment_account_id,
         'debit_amount', v_new_total,
         'credit_amount', 0,
         'description', 'Penerimaan kas dari penjualan'
       );
     ELSIF v_new_paid_amount > 0 THEN
       v_journal_lines := v_journal_lines || jsonb_build_object(
-        'account_id', v_old_transaction.payment_account_id,
+        'account_id', v_new_payment_account_id,
         'debit_amount', v_new_paid_amount,
         'credit_amount', 0,
         'description', 'Penerimaan kas dari penjualan'
@@ -1363,12 +1379,21 @@ BEGIN
         'credit_amount', 0,
         'description', 'Harga Pokok Penjualan'
       );
-      v_journal_lines := v_journal_lines || jsonb_build_object(
-        'account_code', '1310',
-        'debit_amount', 0,
-        'credit_amount', v_total_hpp,
-        'description', 'Pengurangan persediaan'
-      );
+      IF COALESCE(v_old_transaction.is_office_sale, FALSE) = TRUE THEN
+        v_journal_lines := v_journal_lines || jsonb_build_object(
+          'account_code', '1310',
+          'debit_amount', 0,
+          'credit_amount', v_total_hpp,
+          'description', 'Pengurangan persediaan'
+        );
+      ELSE
+        v_journal_lines := v_journal_lines || jsonb_build_object(
+          'account_code', '2140',
+          'debit_amount', 0,
+          'credit_amount', v_total_hpp,
+          'description', 'Modal barang dagang tertahan (belum dikirim)'
+        );
+      END IF;
     END IF;
 
     -- Create new journal
@@ -1513,7 +1538,7 @@ BEGIN
                             -- Note: delivery consumption uses transaction ref in some versions, or delivery ref in others.
                             -- We use NULL ref to force Strategy 2 (Add stock back) if unsure, 
                             -- OR use the most probable ref (TransactionRef) to try Strategy 1.
-                            COALESCE(v_transaction.ref, 'TR-UNKNOWN'), 
+                            COALESCE(v_transaction.ref, p_transaction_id), 
                             'delivery',
                             p_branch_id
                         );
@@ -1523,7 +1548,7 @@ BEGIN
                             v_del_item.product_id,
                             v_del_item.quantity_delivered,
                             0, -- Cost handled by batch logic
-                            COALESCE(v_transaction.ref, 'TR-UNKNOWN'),
+                            COALESCE(v_transaction.ref, p_transaction_id),
                             'delivery',
                             p_branch_id
                         );
