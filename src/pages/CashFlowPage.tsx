@@ -108,7 +108,7 @@ export function CashFlowPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold">Buku Kas Harian</h1>
+          <h1 className="text-3xl font-bold">Cash Flow</h1>
           <p className="text-muted-foreground">
             Monitoring kas harian dan mutasi akun kas/bank
           </p>

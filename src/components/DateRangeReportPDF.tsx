@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils"
 import { CashHistory } from "@/types/cashFlow"
 import { supabase } from "@/integrations/supabase/client"
 import { useBranch } from "@/contexts/BranchContext"
+import { DateRange } from "react-day-picker"
 
 interface DateRangeReportPDFProps {
   cashHistory: CashHistory[];
@@ -93,7 +94,10 @@ const getTypeLabel = (item: CashHistory) => {
 };
 
 export function DateRangeReportPDF({ cashHistory }: DateRangeReportPDFProps) {
-  const [selectedDate, setSelectedDate] = React.useState<Date>(new Date());
+  const [dateRange, setDateRange] = React.useState<DateRange | undefined>({
+    from: new Date(),
+    to: new Date()
+  });
   const [isCalendarOpen, setIsCalendarOpen] = React.useState(false);
   const { currentBranch } = useBranch();
 
@@ -103,8 +107,14 @@ export function DateRangeReportPDF({ cashHistory }: DateRangeReportPDFProps) {
   // Rumus: Saldo Awal = Total Debit - Total Credit SEBELUM tanggal yang dipilih
   // Saldo Akhir = Saldo Awal + (Debit - Credit) pada tanggal yang dipilih
   // ============================================================================
-  const calculateDataForDate = async (targetDate: Date) => {
-    const dateStr = targetDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+  // ============================================================================
+  const calculateDataForDateRange = async (range: DateRange | undefined) => {
+    if (!range || !range.from) return null;
+    const startDate = range.from;
+    const endDate = range.to || range.from;
+
+    const startStr = format(startDate, 'yyyy-MM-dd');
+    const endStr = format(endDate, 'yyyy-MM-dd') + 'T23:59:59.999Z';
 
     // Get payment accounts (kas/bank) — filter by branch agar tidak duplikat lintas cabang
     const accountsQuery = supabase
@@ -156,7 +166,7 @@ export function DateRangeReportPDF({ cashHistory }: DateRangeReportPDFProps) {
         )
       `)
       .in('account_id', paymentAccountIds)
-      .lt('journal_entries.entry_date', dateStr);
+      .lt('journal_entries.entry_date', startStr);
 
     if (currentBranch?.id) {
       beforeQuery.eq('journal_entries.branch_id', currentBranch.id);
@@ -225,7 +235,8 @@ export function DateRangeReportPDF({ cashHistory }: DateRangeReportPDFProps) {
         )
       `)
       .in('account_id', paymentAccountIds)
-      .eq('journal_entries.entry_date', dateStr);
+      .gte('journal_entries.entry_date', startStr)
+      .lte('journal_entries.entry_date', endStr);
 
     if (currentBranch?.id) {
       dateQuery.eq('journal_entries.branch_id', currentBranch.id);
@@ -284,8 +295,9 @@ export function DateRangeReportPDF({ cashHistory }: DateRangeReportPDFProps) {
     // ============================================================================
     // 3. FILTER CASH HISTORY UNTUK DETAIL TRANSAKSI (HANYA CABANG AKTIF)
     // ============================================================================
-    const dateStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
-    const dateEnd = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate() + 1);
+    // Ensure date comparisons include the full start and end days
+    const dateStart = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+    const dateEnd = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate() + 1);
 
     // Pastikan kita juga memfilter berdasarkan branch agar transaksi dari cabang lain tidak masuk ke laporan
     // jika secara tidak sengaja data cashHistory mengandung campuran.
@@ -298,7 +310,7 @@ export function DateRangeReportPDF({ cashHistory }: DateRangeReportPDFProps) {
       return isDateValid && isBranchValid;
     });
 
-    console.log(`📊 Cash Flow Report for ${dateStr}:`);
+    console.log(`📊 Cash Flow Report for ${startStr} to ${format(endDate, 'yyyy-MM-dd')}:`);
     console.log(`   Saldo Awal Periode: Rp ${totalPreviousBalance.toLocaleString('id-ID')}`);
     console.log(`   Kas Masuk: Rp ${dateIncome.toLocaleString('id-ID')}`);
     console.log(`   Kas Keluar: Rp ${dateExpense.toLocaleString('id-ID')}`);
@@ -317,7 +329,12 @@ export function DateRangeReportPDF({ cashHistory }: DateRangeReportPDFProps) {
 
   const generatePDF = async () => {
     try {
-      const data = await calculateDataForDate(selectedDate);
+      if (!dateRange?.from) {
+        alert('Silakan pilih tanggal terlebih dahulu.');
+        return;
+      }
+      const data = await calculateDataForDateRange(dateRange);
+      if (!data) return;
       const doc = new jsPDF('p', 'mm', 'a4');
 
       // Company header
@@ -327,7 +344,10 @@ export function DateRangeReportPDF({ cashHistory }: DateRangeReportPDFProps) {
 
       doc.setFontSize(14);
       doc.setFont('helvetica', 'normal');
-      doc.text(`Tanggal: ${format(selectedDate, 'dd MMMM yyyy', { locale: id })}`, 105, 30, { align: 'center' });
+      const dateText = !dateRange.to || dateRange.from.getTime() === dateRange.to.getTime()
+        ? format(dateRange.from, 'dd MMMM yyyy', { locale: id })
+        : `${format(dateRange.from, 'dd MMM yyyy', { locale: id })} - ${format(dateRange.to, 'dd MMM yyyy', { locale: id })}`;
+      doc.text(`Periode: ${dateText}`, 105, 30, { align: 'center' });
 
       // Add line separator
       doc.setLineWidth(0.5);
@@ -416,7 +436,7 @@ export function DateRangeReportPDF({ cashHistory }: DateRangeReportPDFProps) {
       // Transactions Section
       doc.setFontSize(16);
       doc.setFont('helvetica', 'bold');
-      doc.text(`DETAIL TRANSAKSI - ${format(selectedDate, 'dd MMMM yyyy', { locale: id })}`, 20, currentY);
+      doc.text(`DETAIL TRANSAKSI - ${dateText}`, 20, currentY);
       currentY += 10;
 
       if (data.dateTransactions.length === 0) {
@@ -568,7 +588,10 @@ export function DateRangeReportPDF({ cashHistory }: DateRangeReportPDFProps) {
       }
 
       // Save the PDF
-      const fileName = `laporan-keuangan-${format(selectedDate, 'yyyy-MM-dd')}.pdf`;
+      const titleSuffix = !dateRange.to || dateRange.from.getTime() === dateRange.to.getTime()
+        ? format(dateRange.from, 'yyyy-MM-dd')
+        : `${format(dateRange.from, 'yyyy-MM-dd')}-to-${format(dateRange.to, 'yyyy-MM-dd')}`;
+      const fileName = `laporan-keuangan-${titleSuffix}.pdf`;
       saveCompressedPDF(doc, fileName, 100);
     } catch (error) {
       console.error('Error generating PDF:', error);
@@ -592,23 +615,28 @@ export function DateRangeReportPDF({ cashHistory }: DateRangeReportPDFProps) {
             variant="outline"
             className={cn(
               "justify-start text-left font-normal",
-              !selectedDate && "text-muted-foreground"
+              !dateRange && "text-muted-foreground"
             )}
           >
             <CalendarIcon className="mr-2 h-4 w-4" />
-            {selectedDate ? format(selectedDate, "dd MMM yyyy", { locale: id }) : "Pilih tanggal"}
+            {dateRange?.from ? (
+              dateRange.to && dateRange.from.getTime() !== dateRange.to.getTime() ? (
+                `${format(dateRange.from, "dd MMM yyyy", { locale: id })} - ${format(dateRange.to, "dd MMM yyyy", { locale: id })}`
+              ) : (
+                format(dateRange.from, "dd MMM yyyy", { locale: id })
+              )
+            ) : (
+              "Pilih rentang tanggal"
+            )}
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0" align="start">
           <Calendar
-            mode="single"
-            selected={selectedDate}
-            onSelect={(date) => {
-              if (date) {
-                setSelectedDate(date);
-                setIsCalendarOpen(false);
-              }
-            }}
+            mode="range"
+            defaultMonth={dateRange?.from}
+            selected={dateRange}
+            onSelect={setDateRange}
+            numberOfMonths={2}
             initialFocus
           />
         </PopoverContent>
