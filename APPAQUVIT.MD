@@ -1,5 +1,5 @@
 # AQUVIT SYSTEM CURRENT STATE
-**Last Updated:** Tuesday, March 24, 2026 11:42 (WIT)
+**Last Updated:** Thursday, March 26, 2026 02:30 (WIT)
 
 ## 1. 🌐 VPS Connection Information
 
@@ -14,7 +14,8 @@ Semua perubahan penting pada proyek AQUVIT ERP System didokumentasikan di file i
 2. [Local Development Setup](#local-development-setup)
 3. [Server Architecture](#server-architecture-diagram)
 4. [VPS Server Information](#vps-server-information)
-5. [Version History](#v55-2026-03-24---cash-flow-performance--receivable-filter)
+5. [Version History](#v56-2026-03-26---commission-report--recalculation-engine)
+   - [v5.6] **Commission Report & Recalculation Engine** 🚀 NEW
    - [v5.5] **Cash Flow Performance & Receivable Filter** 🚀 NEW
    - [v5.4] **Transaction Voiding & Photo Naming Fixes** 🛡️ CRITICAL
    - [v5.3] **POS Mobile Fixes: Bonus, Sales & Photo Upload** 🛡️ CRITICAL
@@ -132,6 +133,21 @@ The system relies on **PostgreSQL RPCs** for data integrity. Frontend calls `sup
 
 
 ---
+
+# v5.6 (2026-03-26) - Commission Report & Recalculation Engine
+
+### 🚀 Laporan Komisi (Frontend)
+*   **Generate Laporan On-Demand**: Data laporan komisi beserta perhitungan di halaman Laporan Komisi kini hanya memuat (*fetch*) dari database saat tombol "Generate Laporan" ditekan. Hal ini sangat meringankan *bandwidth* jika dibandingkan dengan sistem sebelumnya yang memuat ratusan ribu baris data secara otomatis saat *page load*.
+*   **Combobox & Branch Filter**: Pemilihan karyawan di-upgrade menjadi menu Select yang bisa diketik (Searchable Combobox) dan daftar nama yang muncul otomatis menyesuaikan Cabang (Branch) yang sedang aktif di pojok kanan layar.
+*   **Format Tabel & Export**: Kolom Ref (ID Transaksi/Pengantaran) diperinci untuk menampilkan informasi: `[Tipe] - [Nama Customer] - Nomor Referensi - Datetime`. Berlaku juga untuk PDF Export dan Excel Export.
+*   **Pencegahan Invalid Time Error**: Menambal bug layar putih dan *Unhandled Rejection: Invalid Date* yang terpicu saat ekspor PDF atau Recalculate dipanggil sebelum Laporan di *Generate*. 
+
+### ⚙️ Recalculate Engine (Backend & RPC)
+*   **Ekspansi Role Komisi**: Logika `recalculateCommissionsForPeriod` direnovasi total agar juga mendukung komisi untuk `Kasir`, `Operator`, `Designer`, dan `Supervisor`, bukan hanya Supir dan Kenek.
+*   **Branch Segmentation**: Sistem *Recalculate* yang tadinya global kini disaring menggunakan `.eq('branch_id', currentBranch?.id)` untuk mencegah bentrok/kecampur hitungan komisi antarcabang.
+*   **Constraint Database Fix**: Pembatasan kuno (*Check Constraint* `commission_entries_role_check`) otomatis dilebur/dihapus via psql langsung pada Database `aquvit_new` (Nabire) & `mkw_db` (Manokwari). Server `postgrest` VPS juga di-*restart*. Hal ini menyelesaikan masalah "Batch Insert Refused" saat mencoba menyimpan hasil hitung ulang yang ada *Operator* atau *Sales*-nya.
+*   **Backward Compatibility ID Sales**: Karena transaksi lama terkadang menaruh identitas *sales* ke dalam isi *metadata array json* (*embedded*) ketimbang di `sales_id`, skrip recalculate telah diajarkan untuk membedah element `items[0]._isSalesMeta` untuk menyelamatkan rekap uang komisi Sales lama (Bapak Arisman, Ibu Jumriah, dll.) tanpa macet.
+*   **Penyelarasan Format `product_id`**: Adaptasi pembacaan jsonb field untuk toleransi antara snake_case (`product_id`) atau camelCase (`productId`) yang menembak nilai nol / gagal simpan komisi. 
 
 ---
 
