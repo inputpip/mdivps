@@ -1,0 +1,6 @@
+ postgres
+ template1
+ template0
+ aquvit_new
+ mkw_db
+

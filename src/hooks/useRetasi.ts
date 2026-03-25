@@ -159,6 +159,7 @@ export const useActiveRetasi = (driverName?: string) => {
 export const useRetasi = (filters?: {
   is_returned?: boolean;
   driver_name?: string;
+  helper_name?: string;
   date_from?: string;
   date_to?: string;
 }) => {
@@ -202,6 +203,9 @@ export const useRetasi = (filters?: {
       }
       if (filters?.driver_name && filters.driver_name !== 'all') {
         query = query.eq('driver_name', filters.driver_name);
+      }
+      if (filters?.helper_name && filters.helper_name !== 'all') {
+        query = query.or(`helper_name.eq."${filters.helper_name}",helper_name_2.eq."${filters.helper_name}",helper_name_3.eq."${filters.helper_name}"`);
       }
       if (filters?.date_from) {
         query = query.gte('departure_date', filters.date_from);

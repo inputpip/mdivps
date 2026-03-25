@@ -427,8 +427,7 @@ export const useDeliveryHistory = () => {
           helper3:helper_id_3(full_name)
         `)
         .eq('branch_id', currentBranch?.id)
-        .order('created_at', { ascending: false })
-        .limit(500);
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
       return (data || []).map(fromDbToDelivery);

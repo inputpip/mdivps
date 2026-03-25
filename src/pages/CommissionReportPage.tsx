@@ -8,9 +8,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { useOptimizedCommissionEntries, useDeleteCommissionEntry } from "@/hooks/useOptimizedCommissions"
 import { useAuth } from "@/hooks/useAuth"
+import { useBranch } from "@/contexts/BranchContext"
 import { useUsers } from "@/hooks/useUsers"
 import { format } from "date-fns"
 import { id } from "date-fns/locale/id"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { cn } from "@/lib/utils"
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
@@ -29,14 +33,18 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  Check,
+  ChevronsUpDown,
+  Search,
 } from "lucide-react"
 import { recalculateCommissionsForPeriod } from "@/utils/commissionUtils"
 import { useToast } from "@/components/ui/use-toast"
 
 export default function CommissionReportPage() {
   const { user } = useAuth()
+  const { currentBranch } = useBranch()
   const { toast } = useToast()
-  const { users, isLoading: usersLoading } = useUsers()
+  const { users, isLoading: usersLoading } = useUsers({ filterByBranch: true })
   const deleteCommissionMutation = useDeleteCommissionEntry()
   const [deleteLoading, setDeleteLoading] = useState<string | null>(null)
   const [isRecalculating, setIsRecalculating] = useState(false)
@@ -53,35 +61,45 @@ export default function CommissionReportPage() {
   })
 
   const [selectedUser, setSelectedUser] = useState<string>("all")
+  const [userFilterOpen, setUserFilterOpen] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 50
 
+  const [queryConfig, setQueryConfig] = useState<{ start: string, end: string, user: string } | null>(null)
+
   // Use optimized commission entries with date filters
-  const start = new Date(startDate + "T00:00:00")
-  const end = new Date(endDate + "T23:59:59.999")
+  const start = queryConfig ? new Date(queryConfig.start + "T00:00:00") : undefined
+  const end = queryConfig ? new Date(queryConfig.end + "T23:59:59.999") : undefined
 
   const {
     data: entries = [],
     isLoading,
+    isFetching,
     error
-  } = useOptimizedCommissionEntries(start, end)
+  } = useOptimizedCommissionEntries(start, end, undefined, !!queryConfig)
+
+  const isGenerated = !!queryConfig;
 
 
   // Filter by user if selected
   const filteredEntries = useMemo(() => {
     let filtered = entries
 
-    if (selectedUser !== "all") {
-      filtered = filtered.filter(entry => entry.userId === selectedUser)
+    if (queryConfig?.user && queryConfig.user !== "all") {
+      filtered = filtered.filter(entry => entry.userId === queryConfig.user)
     }
 
     return filtered.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-  }, [entries, selectedUser])
+  }, [entries, queryConfig?.user])
 
   // Reset to first page when filters change
   useEffect(() => {
     setCurrentPage(1)
-  }, [selectedUser, startDate, endDate])
+  }, [queryConfig])
+
+  const handleGenerate = () => {
+    setQueryConfig({ start: startDate, end: endDate, user: selectedUser })
+  }
 
   const paginatedEntries = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage
@@ -175,13 +193,16 @@ export default function CommissionReportPage() {
 
   // Recalculate commissions for the selected period
   const handleRecalculate = async () => {
-    if (!confirm(`Recalculate komisi untuk periode ${format(start, 'dd MMM yyyy', { locale: id })} - ${format(end, 'dd MMM yyyy', { locale: id })}?\n\nIni akan:\n• Generate komisi untuk delivery yang belum ada komisinya\n• Update komisi jika rate berubah\n• Komisi yang sudah PAID tidak akan diubah`)) {
+    const recalcStart = new Date(startDate + "T00:00:00");
+    const recalcEnd = new Date(endDate + "T23:59:59.999");
+    
+    if (!confirm(`Recalculate komisi untuk periode ${format(recalcStart, 'dd MMM yyyy', { locale: id })} - ${format(recalcEnd, 'dd MMM yyyy', { locale: id })}?\n\nIni akan:\n• Generate komisi untuk delivery yang belum ada komisinya\n• Update komisi jika rate berubah\n• Komisi yang sudah PAID tidak akan diubah`)) {
       return;
     }
 
     setIsRecalculating(true);
     try {
-      const result = await recalculateCommissionsForPeriod(start, end);
+      const result = await recalculateCommissionsForPeriod(recalcStart, recalcEnd, currentBranch?.id);
 
       toast({
         title: "Recalculate Selesai",
@@ -211,6 +232,8 @@ export default function CommissionReportPage() {
     doc.setFontSize(18)
     doc.text('Laporan Komisi Karyawan', 40, 40)
 
+    if (!start || !end) return;
+    
     // Filter information
     doc.setFontSize(10)
     const filterInfo = `Periode: ${format(start, 'dd MMM yyyy', { locale: id })} - ${format(end, 'dd MMM yyyy', { locale: id })}`
@@ -249,7 +272,7 @@ export default function CommissionReportPage() {
         entry.quantity.toString(),
         new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(entry.ratePerQty),
         new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(entry.amount),
-        entry.ref,
+        `${entry.role === 'sales' ? '[Trx]' : '[Del]'} - ${entry.customerName ? `[${entry.customerName}]` : '[Walk-in]'} - ${entry.ref} - ${format(entry.createdAt, "dd/MM HH:mm")}`,
         entry.status === 'paid' ? 'Dibayar' : entry.status === 'pending' ? 'Pending' : 'Batal'
       ]
     })
@@ -297,6 +320,8 @@ export default function CommissionReportPage() {
       )
     }
 
+    if (!start || !end) return;
+
     // Save the PDF
     const fileName = `laporan-komisi-detail-${format(start, 'yyyy-MM-dd')}-${format(end, 'yyyy-MM-dd')}.pdf`
     doc.save(fileName)
@@ -315,7 +340,7 @@ export default function CommissionReportPage() {
         'Qty': entry.quantity,
         'Rate (Rp)': entry.ratePerQty,
         'Jumlah (Rp)': entry.amount,
-        'Referensi': entry.ref,
+        'Referensi': `${entry.role === 'sales' ? '[Trx]' : '[Del]'} - ${entry.customerName ? `[${entry.customerName}]` : '[Walk-in]'} - ${entry.ref} - ${format(entry.createdAt, "dd/MM/yyyy HH:mm")}`,
         'Status': entry.status === 'paid' ? 'Dibayar' : entry.status === 'pending' ? 'Pending' : 'Batal'
       }
     })
@@ -341,6 +366,8 @@ export default function CommissionReportPage() {
     // Add worksheet to workbook
     XLSX.utils.book_append_sheet(wb, ws, 'Detail Komisi')
 
+    if (!start || !end) return;
+    
     // Create summary sheet
     const summaryData = [
       { 'Keterangan': 'Periode', 'Nilai': `${format(start, 'dd MMM yyyy', { locale: id })} - ${format(end, 'dd MMM yyyy', { locale: id })}` },
@@ -382,13 +409,15 @@ export default function CommissionReportPage() {
     ]
     XLSX.utils.book_append_sheet(wb, wsSummary, 'Ringkasan')
 
+    if (!start || !end) return;
+
     // Generate and download Excel file
     const fileName = `komisi-detail-${format(start, 'yyyy-MM-dd')}-${format(end, 'yyyy-MM-dd')}.xlsx`
     XLSX.writeFile(wb, fileName)
   }
 
 
-  if (isLoading || usersLoading) {
+  if ((isGenerated && isLoading) || usersLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 p-4 flex items-center justify-center">
         <Card className="max-w-md mx-auto">
@@ -491,25 +520,79 @@ export default function CommissionReportPage() {
                 <label className="text-sm font-medium text-gray-700 mb-1 block">
                   Karyawan
                 </label>
-                <Select value={selectedUser} onValueChange={setSelectedUser}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Semua Karyawan</SelectItem>
-                    {uniqueUsers.map(userItem => (
-                      <SelectItem key={userItem.id} value={userItem.id}>
-                        {userItem.name} ({userItem.role?.toUpperCase()})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Popover open={userFilterOpen} onOpenChange={setUserFilterOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={userFilterOpen}
+                      className="w-full justify-between"
+                    >
+                      {selectedUser === "all"
+                        ? "Semua Karyawan"
+                        : uniqueUsers.find((user) => user.id === selectedUser)?.name || "Karyawan"}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[300px] p-0">
+                    <Command>
+                      <CommandInput placeholder="Cari karyawan..." />
+                      <CommandList>
+                        <CommandEmpty>Karyawan tidak ditemukan.</CommandEmpty>
+                        <CommandGroup>
+                          <CommandItem
+                            value="all"
+                            onSelect={() => {
+                              setSelectedUser("all");
+                              setUserFilterOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                selectedUser === "all" ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            Semua Karyawan
+                          </CommandItem>
+                          {uniqueUsers.map((userItem) => (
+                            <CommandItem
+                              key={userItem.id}
+                              value={userItem.name}
+                              onSelect={() => {
+                                setSelectedUser(userItem.id);
+                                setUserFilterOpen(false);
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  selectedUser === userItem.id ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {userItem.name} ({userItem.role?.toUpperCase()})
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
 
+            <div className="mt-6 flex flex-wrap items-center gap-4">
+              <Button 
+                onClick={handleGenerate} 
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                <Search className="h-4 w-4 mr-2" />
+                Generate Laporan
+              </Button>
+
             {/* Recalculate Button - Owner/Admin only */}
             {(user?.role === 'owner' || user?.role === 'admin') && (
-              <div className="mt-4 pt-4 border-t">
+              <div className="flex flex-col">
                 <Button
                   onClick={handleRecalculate}
                   disabled={isRecalculating}
@@ -528,11 +611,15 @@ export default function CommissionReportPage() {
                 </p>
               </div>
             )}
+            </div>
 
           </CardContent>
         </Card>
 
-        {/* Summary Cards */}
+        {/* Main Content Rendered Only If Generated */}
+        {isGenerated && (
+          <div className="space-y-6">
+            {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <Card>
             <CardContent className="p-6">
@@ -706,7 +793,9 @@ export default function CommissionReportPage() {
                           maximumFractionDigits: 0
                         }).format(entry.amount)}
                       </td>
-                      <td className="px-4 py-3 font-mono text-xs">{entry.ref}</td>
+                      <td className="px-4 py-3 font-mono text-xs">
+                        {entry.role === 'sales' ? '[Trx]' : '[Del]'} - {entry.customerName ? `[${entry.customerName}]` : '[Walk-in]'} - {entry.ref} - {format(entry.createdAt, "dd/MM/yyyy HH:mm")}
+                      </td>
                       <td className="px-4 py-3">
                         <Badge
                           variant={entry.status === 'paid' ? 'default' : entry.status === 'pending' ? 'secondary' : 'destructive'}
@@ -830,6 +919,8 @@ export default function CommissionReportPage() {
             )}
           </CardContent>
         </Card>
+        </div>
+        )}
 
       </div>
     </div>

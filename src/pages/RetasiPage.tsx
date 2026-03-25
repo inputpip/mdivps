@@ -17,6 +17,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import {
   Truck,
   Plus,
@@ -35,7 +38,9 @@ import {
   X,
   ShoppingCart,
   User,
-  Phone
+  Phone,
+  Check,
+  ChevronsUpDown
 } from "lucide-react";
 import { useRetasi, useRetasiItems, useRetasiTransactions } from "@/hooks/useRetasi";
 import { useDrivers } from "@/hooks/useDrivers";
@@ -61,6 +66,9 @@ export default function RetasiPage() {
   const [dateFrom, setDateFrom] = useState(() => getOfficeDateWithOffset(-4, 'Asia/Jayapura'));
   const [dateTo, setDateTo] = useState(() => getOfficeDateWithOffset(0, 'Asia/Jayapura'));
   const [driverFilter, setDriverFilter] = useState("all");
+  const [helperFilter, setHelperFilter] = useState("all");
+  const [driverFilterOpen, setDriverFilterOpen] = useState(false);
+  const [helperFilterOpen, setHelperFilterOpen] = useState(false);
   const [returnDialogOpen, setReturnDialogOpen] = useState(false);
   const [selectedRetasi, setSelectedRetasi] = useState<any>(null);
   const [selectedRetasiItems, setSelectedRetasiItems] = useState<any[]>([]);
@@ -102,6 +110,7 @@ export default function RetasiPage() {
   const filters = {
     is_returned: statusFilter === "active" ? false : statusFilter === "returned" ? true : undefined,
     driver_name: driverFilter && driverFilter !== "all" ? driverFilter : undefined,
+    helper_name: helperFilter && helperFilter !== "all" ? helperFilter : undefined,
     date_from: dateFrom || undefined,
     date_to: dateTo || undefined,
   };
@@ -339,7 +348,7 @@ export default function RetasiPage() {
             <CardTitle className="text-lg">Filter</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               <div className="space-y-2">
                 <Label>Tanggal Dari</Label>
                 <Input
@@ -358,19 +367,126 @@ export default function RetasiPage() {
               </div>
               <div className="space-y-2">
                 <Label>Supir</Label>
-                <Select value={driverFilter} onValueChange={setDriverFilter}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Semua Supir" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Semua Supir</SelectItem>
-                    {drivers.map((driver) => (
-                      <SelectItem key={driver.id} value={driver.name}>
-                        {driver.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Popover open={driverFilterOpen} onOpenChange={setDriverFilterOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={driverFilterOpen}
+                      className="w-full justify-between"
+                    >
+                      {driverFilter === "all"
+                        ? "Semua Supir"
+                        : drivers.find((driver) => driver.name === driverFilter)?.name || driverFilter}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[200px] p-0">
+                    <Command>
+                      <CommandInput placeholder="Cari supir..." />
+                      <CommandList>
+                        <CommandEmpty>Supir tidak ditemukan.</CommandEmpty>
+                        <CommandGroup>
+                          <CommandItem
+                            value="all"
+                            onSelect={() => {
+                              setDriverFilter("all");
+                              setDriverFilterOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                driverFilter === "all" ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            Semua Supir
+                          </CommandItem>
+                          {drivers.map((driver) => (
+                            <CommandItem
+                              key={driver.id}
+                              value={driver.name}
+                              onSelect={(currentValue) => {
+                                // Command components usually pass lowercase value back, we want original case
+                                setDriverFilter(driver.name);
+                                setDriverFilterOpen(false);
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  driverFilter === driver.name ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {driver.name}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div className="space-y-2">
+                <Label>Helper</Label>
+                <Popover open={helperFilterOpen} onOpenChange={setHelperFilterOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={helperFilterOpen}
+                      className="w-full justify-between"
+                    >
+                      {helperFilter === "all"
+                        ? "Semua Helper"
+                        : drivers.find((driver) => driver.name === helperFilter)?.name || helperFilter}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[200px] p-0">
+                    <Command>
+                      <CommandInput placeholder="Cari helper..." />
+                      <CommandList>
+                        <CommandEmpty>Helper tidak ditemukan.</CommandEmpty>
+                        <CommandGroup>
+                          <CommandItem
+                            value="all"
+                            onSelect={() => {
+                              setHelperFilter("all");
+                              setHelperFilterOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                helperFilter === "all" ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            Semua Helper
+                          </CommandItem>
+                          {drivers.map((driver) => (
+                            <CommandItem
+                              key={driver.id}
+                              value={driver.name}
+                              onSelect={() => {
+                                setHelperFilter(driver.name);
+                                setHelperFilterOpen(false);
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  helperFilter === driver.name ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {driver.name}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
               <div className="space-y-2">
                 <Label>Status</Label>
@@ -384,6 +500,41 @@ export default function RetasiPage() {
                     <SelectItem value="returned">Armada Kembali</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Summary Card */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg">Ringkasan Total</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-6 gap-4 text-center">
+              <div className="p-3 bg-blue-50 rounded-lg">
+                <p className="text-xs text-blue-600">Bawa</p>
+                <p className="text-xl font-bold text-blue-700">{totals.bawa}</p>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-lg">
+                <p className="text-xs text-slate-600">Kembali</p>
+                <p className="text-xl font-bold text-slate-700">{totals.kembali}</p>
+              </div>
+              <div className="p-3 bg-red-50 rounded-lg">
+                <p className="text-xs text-red-600">Error</p>
+                <p className="text-xl font-bold text-red-700">{totals.error}</p>
+              </div>
+              <div className="p-3 bg-green-50 rounded-lg">
+                <p className="text-xs text-green-600">Laku</p>
+                <p className="text-xl font-bold text-green-700">{totals.laku}</p>
+              </div>
+              <div className="p-3 bg-orange-50 rounded-lg">
+                <p className="text-xs text-orange-600">Tidak Laku</p>
+                <p className="text-xl font-bold text-orange-700">{totals.tidakLaku}</p>
+              </div>
+              <div className="p-3 bg-purple-50 rounded-lg">
+                <p className="text-xs text-purple-600">Selisih</p>
+                <p className={`text-xl font-bold ${totals.selisih >= 0 ? 'text-purple-700' : 'text-red-700'}`}>{totals.selisih}</p>
               </div>
             </div>
           </CardContent>
@@ -594,40 +745,6 @@ export default function RetasiPage() {
           </CardContent>
         </Card>
 
-        {/* Summary Card */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg">Ringkasan Total</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-6 gap-4 text-center">
-              <div className="p-3 bg-blue-50 rounded-lg">
-                <p className="text-xs text-blue-600">Bawa</p>
-                <p className="text-xl font-bold text-blue-700">{totals.bawa}</p>
-              </div>
-              <div className="p-3 bg-slate-50 rounded-lg">
-                <p className="text-xs text-slate-600">Kembali</p>
-                <p className="text-xl font-bold text-slate-700">{totals.kembali}</p>
-              </div>
-              <div className="p-3 bg-red-50 rounded-lg">
-                <p className="text-xs text-red-600">Error</p>
-                <p className="text-xl font-bold text-red-700">{totals.error}</p>
-              </div>
-              <div className="p-3 bg-green-50 rounded-lg">
-                <p className="text-xs text-green-600">Laku</p>
-                <p className="text-xl font-bold text-green-700">{totals.laku}</p>
-              </div>
-              <div className="p-3 bg-orange-50 rounded-lg">
-                <p className="text-xs text-orange-600">Tidak Laku</p>
-                <p className="text-xl font-bold text-orange-700">{totals.tidakLaku}</p>
-              </div>
-              <div className="p-3 bg-purple-50 rounded-lg">
-                <p className="text-xs text-purple-600">Selisih</p>
-                <p className={`text-xl font-bold ${totals.selisih >= 0 ? 'text-purple-700' : 'text-red-700'}`}>{totals.selisih}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
 
       </div>
 

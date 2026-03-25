@@ -430,7 +430,7 @@ export async function regenerateDeliveryCommission(deliveryId: string) {
  * - Updates commission amounts if rates changed (only for 'pending' status)
  * - Skips entries with 'paid' status
  */
-export async function recalculateCommissionsForPeriod(startDate: Date, endDate: Date) {
+export async function recalculateCommissionsForPeriod(startDate: Date, endDate: Date, branchId?: string) {
   let created = 0;
   let updated = 0;
   let skipped = 0;
@@ -462,7 +462,7 @@ export async function recalculateCommissionsForPeriod(startDate: Date, endDate: 
 
     // ========== PART 1: Process DELIVERIES (driver, helper) ==========
     if (rulesByRole['driver'] || rulesByRole['helper'] || rulesByRole['delivery_2_helpers'] || rulesByRole['delivery_3_helpers']) {
-      const { data: deliveries, error: deliveriesError } = await supabase
+      let deliveriesQuery = supabase
         .from('deliveries')
         .select(`
           id,
@@ -482,6 +482,12 @@ export async function recalculateCommissionsForPeriod(startDate: Date, endDate: 
         .gte('delivery_date', startDate.toISOString())
         .lte('delivery_date', endDate.toISOString())
         .or('driver_id.not.is.null,helper_id.not.is.null');
+      
+      if (branchId) {
+        deliveriesQuery = deliveriesQuery.eq('branch_id', branchId);
+      }
+
+      const { data: deliveries, error: deliveriesError } = await deliveriesQuery;
 
       if (deliveriesError) throw deliveriesError;
 
@@ -611,9 +617,9 @@ export async function recalculateCommissionsForPeriod(startDate: Date, endDate: 
       }
     }
 
-    // ========== PART 2: Process TRANSACTIONS (sales, operator, supervisor) ==========
-    if (rulesByRole['sales'] || rulesByRole['operator'] || rulesByRole['supervisor']) {
-      const { data: transactions, error: transactionsError } = await supabase
+    // ========== PART 2: Process TRANSACTIONS (sales, operator, supervisor, cashier, designer) ==========
+    if (rulesByRole['sales'] || rulesByRole['operator'] || rulesByRole['supervisor'] || rulesByRole['cashier'] || rulesByRole['designer']) {
+      let transactionsQuery = supabase
         .from('transactions')
         .select(`
           id,
@@ -621,35 +627,40 @@ export async function recalculateCommissionsForPeriod(startDate: Date, endDate: 
           sales_id,
           sales_name,
           operator_id,
+          cashier_id,
+          cashier_name,
+          designer_id,
           branch_id,
-          items,
-          sales:profiles!sales_id(full_name),
-          operator:profiles!operator_id(full_name)
+          items
         `)
         .gte('order_date', startDate.toISOString())
         .lte('order_date', endDate.toISOString())
         .eq('is_voided', false)
         .eq('is_cancelled', false);
 
+      if (branchId) {
+        transactionsQuery = transactionsQuery.eq('branch_id', branchId);
+      }
+
+      const { data: transactions, error: transactionsError } = await transactionsQuery;
+
       if (transactionsError) throw transactionsError;
 
-      // Get supervisors per branch (for supervisor commission)
+      // Get all profiles for mapping names and identifying branch supervisors
+      const { data: allProfiles } = await supabase
+        .from('profiles')
+        .select('id, full_name, role, branch_id');
+        
+      const profileMap = new Map<string, any>();
       let supervisorsByBranch: Map<string, any[]> = new Map();
-      if (rulesByRole['supervisor'] && transactions && transactions.length > 0) {
-        const branchIds = [...new Set(transactions.map(t => t.branch_id).filter(Boolean))];
-        if (branchIds.length > 0) {
-          const { data: supervisors } = await supabase
-            .from('profiles')
-            .select('id, full_name, branch_id')
-            .eq('role', 'supervisor')
-            .in('branch_id', branchIds);
-
-          for (const sup of (supervisors || [])) {
-            if (!supervisorsByBranch.has(sup.branch_id)) {
-              supervisorsByBranch.set(sup.branch_id, []);
-            }
-            supervisorsByBranch.get(sup.branch_id)!.push(sup);
+      
+      for (const p of (allProfiles || [])) {
+        profileMap.set(p.id, p);
+        if (p.role === 'supervisor') {
+          if (!supervisorsByBranch.has(p.branch_id)) {
+            supervisorsByBranch.set(p.branch_id, []);
           }
+          supervisorsByBranch.get(p.branch_id)!.push(p);
         }
       }
 
@@ -673,22 +684,31 @@ export async function recalculateCommissionsForPeriod(startDate: Date, endDate: 
 
         // Process each transaction
         for (const txn of transactions) {
-          const items = txn.items || [];
+          const rawItems = txn.items || [];
+          
+          let txnSalesId = txn.sales_id;
+          let txnSalesName = txn.sales_name;
 
-          for (const item of items) {
+          // Extrak salesId dari item pertama jika berupa metadata (backward compatibility)
+          if (Array.isArray(rawItems) && rawItems.length > 0 && rawItems[0]?._isSalesMeta) {
+            if (!txnSalesId) txnSalesId = rawItems[0].salesId;
+            if (!txnSalesName) txnSalesName = rawItems[0].salesName;
+          }
+
+          for (const item of rawItems) {
             // Skip bonus items
             if (item.isBonus || item.product?.name?.includes('(Bonus)') || item.product?.name?.includes('BONUS')) {
               continue;
             }
 
-            const productId = item.product?.id || item.productId;
-            const productName = item.product?.name || item.productName;
+            const productId = item.product?.id || item.productId || item.product_id;
+            const productName = item.product?.name || item.productName || item.product_name;
             const quantity = item.quantity || 0;
 
             if (!productId || quantity <= 0) continue;
 
             // Check sales commission
-            if (txn.sales_id && rulesByRole['sales']) {
+            if (txnSalesId && rulesByRole['sales']) {
               const salesRule = rulesByRole['sales'].find((r: any) => r.product_id === productId);
               const key = `${txn.id}-${productId}-sales`;
               const existing = txnExistingMap.get(key);
@@ -705,13 +725,89 @@ export async function recalculateCommissionsForPeriod(startDate: Date, endDate: 
                   }
                 } else {
                   newEntries.push({
-                    user_id: txn.sales_id,
-                    user_name: (txn.sales as any)?.full_name || txn.sales_name || 'Unknown Sales',
+                    user_id: txnSalesId,
+                    user_name: profileMap.get(txnSalesId)?.full_name || txnSalesName || 'Unknown Sales',
                     role: 'sales',
                     product_id: productId,
                     product_name: productName,
                     quantity: quantity,
                     rate_per_qty: salesRule.rate_per_qty,
+                    amount: newAmount,
+                    transaction_id: txn.id,
+                    delivery_id: null,
+                    ref: `TXN-${txn.id}`,
+                    status: 'pending',
+                    created_at: txn.order_date,
+                    branch_id: txn.branch_id || null
+                  });
+                  created++;
+                }
+              }
+            }
+
+            // Check cashier commission
+            if (txn.cashier_id && rulesByRole['cashier']) {
+              const rule = rulesByRole['cashier'].find((r: any) => r.product_id === productId);
+              const key = `${txn.id}-${productId}-cashier`;
+              const existing = txnExistingMap.get(key);
+
+              if (rule && rule.rate_per_qty > 0) {
+                const newAmount = quantity * rule.rate_per_qty;
+
+                if (existing) {
+                  if (existing.status === 'paid') {
+                    skipped++;
+                  } else if (existing.amount !== newAmount || existing.rate_per_qty !== rule.rate_per_qty) {
+                    updateEntries.push({ id: existing.id, amount: newAmount, rate_per_qty: rule.rate_per_qty });
+                    updated++;
+                  }
+                } else {
+                  newEntries.push({
+                    user_id: txn.cashier_id,
+                    user_name: profileMap.get(txn.cashier_id)?.full_name || txn.cashier_name || 'Unknown Cashier',
+                    role: 'cashier',
+                    product_id: productId,
+                    product_name: productName,
+                    quantity: quantity,
+                    rate_per_qty: rule.rate_per_qty,
+                    amount: newAmount,
+                    transaction_id: txn.id,
+                    delivery_id: null,
+                    ref: `TXN-${txn.id}`,
+                    status: 'pending',
+                    created_at: txn.order_date,
+                    branch_id: txn.branch_id || null
+                  });
+                  created++;
+                }
+              }
+            }
+
+            // Check designer commission
+            if (txn.designer_id && rulesByRole['designer']) {
+              const rule = rulesByRole['designer'].find((r: any) => r.product_id === productId);
+              const key = `${txn.id}-${productId}-designer`;
+              const existing = txnExistingMap.get(key);
+
+              if (rule && rule.rate_per_qty > 0) {
+                const newAmount = quantity * rule.rate_per_qty;
+
+                if (existing) {
+                  if (existing.status === 'paid') {
+                    skipped++;
+                  } else if (existing.amount !== newAmount || existing.rate_per_qty !== rule.rate_per_qty) {
+                    updateEntries.push({ id: existing.id, amount: newAmount, rate_per_qty: rule.rate_per_qty });
+                    updated++;
+                  }
+                } else {
+                  newEntries.push({
+                    user_id: txn.designer_id,
+                    user_name: profileMap.get(txn.designer_id)?.full_name || 'Unknown Designer',
+                    role: 'designer',
+                    product_id: productId,
+                    product_name: productName,
+                    quantity: quantity,
+                    rate_per_qty: rule.rate_per_qty,
                     amount: newAmount,
                     transaction_id: txn.id,
                     delivery_id: null,
@@ -744,7 +840,7 @@ export async function recalculateCommissionsForPeriod(startDate: Date, endDate: 
                 } else {
                   newEntries.push({
                     user_id: txn.operator_id,
-                    user_name: (txn.operator as any)?.full_name || 'Unknown Operator',
+                    user_name: profileMap.get(txn.operator_id)?.full_name || 'Unknown Operator',
                     role: 'operator',
                     product_id: productId,
                     product_name: productName,

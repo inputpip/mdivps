@@ -18,7 +18,8 @@ export const commissionKeys = {
 export function useOptimizedCommissionEntries(
   startDate?: Date,
   endDate?: Date,
-  role?: string
+  role?: string,
+  enabled: boolean = true
 ) {
   const { user } = useAuth()
   const { currentBranch } = useBranch()
@@ -146,8 +147,7 @@ export function useOptimizedCommissionEntries(
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 15 * 60 * 1000, // 15 minutes
     refetchOnMount: false, // Don't auto-refetch on mount
-    refetchOnWindowFocus: false, // Don't auto-refetch on focus
-    enabled: !!user && !!currentBranch, // Only run when user and branch are available
+    enabled: !!user && !!currentBranch && enabled, // Only run when user, branch, and explicit enabled flag are available
   })
 }
 
