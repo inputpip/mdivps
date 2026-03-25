@@ -22,18 +22,23 @@ interface DateRangeReportPDFProps {
   cashHistory: CashHistory[];
 }
 
-// Helper function to determine if record is income
+// Helper function to determine if record is transfer
+const isTransferType = (item: CashHistory) => {
+  return item.source_type === 'transfer_masuk' || 
+         item.source_type === 'transfer_keluar' || 
+         item.type === 'transfer_masuk' || 
+         item.type === 'transfer_keluar';
+};
+
+// Helper function to determine if record is income (excluding transfers)
 const isIncomeType = (item: CashHistory) => {
-  // Transfers are displayed based on their direction but don't affect total income/expense
-  if (item.source_type === 'transfer_masuk') {
-    return true;
-  }
-  if (item.source_type === 'transfer_keluar') {
-    return false;
-  }
+  if (isTransferType(item)) return false;
 
   if (item.type) {
     return ['orderan', 'kas_masuk_manual', 'panjar_pelunasan', 'pembayaran_piutang'].includes(item.type);
+  }
+  if (item.source_type) {
+    return ['pos_direct', 'receivables_payment'].includes(item.source_type);
   }
   if (item.transaction_type) {
     return item.transaction_type === 'income';
@@ -174,6 +179,7 @@ export function DateRangeReportPDF({ cashHistory }: DateRangeReportPDFProps) {
         currentBalance: 0,  // Saldo akhir periode
         dateIncome: 0,
         dateExpense: 0,
+        dateTransferNet: 0,
         dateNet: 0,
         todayChange: 0
       });
@@ -244,15 +250,26 @@ export function DateRangeReportPDF({ cashHistory }: DateRangeReportPDFProps) {
       const credit = Number(line.credit_amount) || 0;
 
       // For Asset accounts (Kas/Bank): Debit = income, Credit = expense
-      dateIncome += debit;
-      dateExpense += credit;
+      if (journal.reference_type === 'transfer') {
+        if (accountBalances.has(accountId)) {
+          const account = accountBalances.get(accountId);
+          const transferNet = debit - credit;
+          account.dateTransferNet += transferNet;
+          account.dateNet += transferNet;
+          account.todayChange = account.dateNet;
+        }
+      } else {
+        dateIncome += debit;
+        dateExpense += credit;
 
-      if (accountBalances.has(accountId)) {
-        const account = accountBalances.get(accountId);
-        account.dateIncome += debit;
-        account.dateExpense += credit;
-        account.dateNet = account.dateIncome - account.dateExpense;
-        account.todayChange = account.dateNet;
+        if (accountBalances.has(accountId)) {
+          const account = accountBalances.get(accountId);
+          account.dateIncome += debit;
+          account.dateExpense += credit;
+          const net = debit - credit;
+          account.dateNet += net;
+          account.todayChange = account.dateNet;
+        }
       }
     });
 
@@ -355,29 +372,39 @@ export function DateRangeReportPDF({ cashHistory }: DateRangeReportPDFProps) {
         doc.text('SALDO PER AKUN', 20, currentY);
         currentY += 10;
 
-        const accountData = data.accountBalances.map(account => [
-          account.accountName,
-          formatCurrency(account.previousBalance),
-          formatCurrency(account.dateIncome),
-          formatCurrency(account.dateExpense),
-          formatCurrency(account.dateNet),
-          formatCurrency(account.currentBalance)
-        ]);
+        const accountData = data.accountBalances.map(account => {
+          const transferStr = account.dateTransferNet > 0 
+            ? `+${formatCurrency(account.dateTransferNet)}` 
+            : account.dateTransferNet < 0 
+              ? `-${formatCurrency(Math.abs(account.dateTransferNet))}` 
+              : '-';
+
+          return [
+            account.accountName,
+            formatCurrency(account.previousBalance),
+            formatCurrency(account.dateIncome),
+            formatCurrency(account.dateExpense),
+            transferStr,
+            formatCurrency(account.dateNet),
+            formatCurrency(account.currentBalance)
+          ];
+        });
 
         autoTable(doc, {
           startY: currentY,
-          head: [['Akun', 'Saldo Awal', 'Kas Masuk', 'Kas Keluar', 'Net', 'Saldo Akhir']],
+          head: [['Akun', 'Saldo Awal', 'Masuk', 'Keluar', 'Transfer', 'Net', 'Saldo Akhir']],
           body: accountData,
           theme: 'grid',
           headStyles: { fillColor: [71, 85, 105], textColor: [255, 255, 255] },
-          styles: { fontSize: 9 },
+          styles: { fontSize: 8 },
           columnStyles: {
             0: { cellWidth: 35 },
-            1: { cellWidth: 30, halign: 'right' },
+            1: { cellWidth: 25, halign: 'right' },
             2: { cellWidth: 25, halign: 'right' },
             3: { cellWidth: 25, halign: 'right' },
             4: { cellWidth: 25, halign: 'right' },
-            5: { cellWidth: 30, halign: 'right' }
+            5: { cellWidth: 25, halign: 'right' },
+            6: { cellWidth: 25, halign: 'right' }
           }
         });
       }
@@ -397,9 +424,9 @@ export function DateRangeReportPDF({ cashHistory }: DateRangeReportPDFProps) {
         doc.setFont('helvetica', 'normal');
         doc.text('Tidak ada transaksi pada tanggal ini.', 20, currentY);
       } else {
-        // Income transactions
-        const incomeTransactions = data.dateTransactions.filter(isIncomeType);
-        const expenseTransactions = data.dateTransactions.filter(item => !isIncomeType(item));
+        const incomeTransactions = data.dateTransactions.filter(item => isIncomeType(item) && !isTransferType(item));
+        const expenseTransactions = data.dateTransactions.filter(item => !isIncomeType(item) && !isTransferType(item));
+        const transferTransactions = data.dateTransactions.filter(isTransferType);
 
         if (incomeTransactions.length > 0) {
           doc.setFontSize(14);
@@ -440,7 +467,6 @@ export function DateRangeReportPDF({ cashHistory }: DateRangeReportPDFProps) {
         }
 
         if (expenseTransactions.length > 0) {
-          // Check if we need a new page
           if (currentY > 250) {
             doc.addPage();
             currentY = 20;
@@ -469,6 +495,52 @@ export function DateRangeReportPDF({ cashHistory }: DateRangeReportPDFProps) {
             body: expenseData,
             theme: 'striped',
             headStyles: { fillColor: [239, 68, 68], textColor: [255, 255, 255] },
+            styles: { fontSize: 8, cellPadding: 2 },
+            columnStyles: {
+              0: { cellWidth: 15 },
+              1: { cellWidth: 35 },
+              2: { cellWidth: 30 },
+              3: { cellWidth: 25 },
+              4: { cellWidth: 60 },
+              5: { cellWidth: 25, halign: 'right' }
+            }
+          });
+          
+          currentY = (doc as any).lastAutoTable.finalY + 10;
+        }
+
+        if (transferTransactions.length > 0) {
+          if (currentY > 250) {
+            doc.addPage();
+            currentY = 20;
+          }
+
+          doc.setFontSize(14);
+          doc.setFont('helvetica', 'bold');
+          doc.text('MUTASI TRANSFER ANTAR KAS', 20, currentY);
+          currentY += 7;
+
+          const transferData = transferTransactions.map(item => {
+            const refNumber = item.reference_number || item.reference_name || item.reference_id || '-';
+            const isTransferIn = item.type === 'transfer_masuk' || item.source_type === 'transfer_masuk';
+            const sign = isTransferIn ? '+' : '-';
+            
+            return [
+              format(new Date(item.created_at), 'HH:mm', { locale: id }),
+              refNumber.length > 20 ? refNumber.substring(0, 20) + '...' : refNumber,
+              item.account_name || '-',
+              isTransferIn ? 'Transfer Masuk' : 'Transfer Keluar',
+              item.description || '-',
+              `${sign}${formatCurrency(item.amount)}`
+            ];
+          });
+
+          autoTable(doc, {
+            startY: currentY,
+            head: [['Waktu', 'No. Ref', 'Akun', 'Jenis', 'Deskripsi', 'Setoran']],
+            body: transferData,
+            theme: 'striped',
+            headStyles: { fillColor: [59, 130, 246], textColor: [255, 255, 255] }, // Blue color for transfers
             styles: { fontSize: 8, cellPadding: 2 },
             columnStyles: {
               0: { cellWidth: 15 },

@@ -118,6 +118,7 @@ export interface DeliveryFormData {
 // Input for creating a delivery (used by useDeliveries hook)
 export interface DeliveryInput {
   transactionId: string;
+  customerName?: string;
   deliveryDate: Date;
   notes?: string;
   driverId?: string | null;

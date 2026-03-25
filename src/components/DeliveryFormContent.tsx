@@ -320,6 +320,7 @@ export function DeliveryFormContent({ transaction, onSuccess, onDeliveryCreated 
 
       const result = await createDelivery.mutateAsync({
         transactionId: formData.transactionId,
+        customerName: transaction.customerName,
         deliveryDate: new Date(formData.deliveryDate), // Use user's selected delivery date and time
         notes: formData.notes,
         driverId: formData.driverId || undefined,  // Empty string -> undefined for UUID

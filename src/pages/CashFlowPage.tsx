@@ -43,13 +43,13 @@ export function CashFlowPage() {
       return itemDateStr === todayStr;
     });
 
-    // Hitung kas masuk & keluar hari ini
+    // Hitung kas masuk & keluar hari ini murni (tanpa transfer)
     const todayIncome = todayItems
-      .filter((item) => item.transaction_type === "income")
+      .filter((item) => item.transaction_type === "income" && !item.type?.startsWith("transfer"))
       .reduce((sum, item) => sum + item.amount, 0);
 
     const todayExpense = todayItems
-      .filter((item) => item.transaction_type === "expense")
+      .filter((item) => item.transaction_type === "expense" && !item.type?.startsWith("transfer"))
       .reduce((sum, item) => sum + item.amount, 0);
 
     const todayNet = todayIncome - todayExpense;
@@ -61,12 +61,21 @@ export function CashFlowPage() {
     const accountBalances = paymentAccounts.map((acc) => {
       const accTodayItems = todayItems.filter((t) => t.account_id === acc.id);
       const accTodayIncome = accTodayItems
-        .filter((t) => t.transaction_type === "income")
+        .filter((t) => t.transaction_type === "income" && !t.type?.startsWith("transfer"))
         .reduce((sum, t) => sum + t.amount, 0);
       const accTodayExpense = accTodayItems
-        .filter((t) => t.transaction_type === "expense")
+        .filter((t) => t.transaction_type === "expense" && !t.type?.startsWith("transfer"))
         .reduce((sum, t) => sum + t.amount, 0);
-      const accTodayNet = accTodayIncome - accTodayExpense;
+
+      const accTransferIn = accTodayItems
+        .filter((t) => t.type === "transfer_masuk")
+        .reduce((sum, t) => sum + t.amount, 0);
+      const accTransferOut = accTodayItems
+        .filter((t) => t.type === "transfer_keluar")
+        .reduce((sum, t) => sum + t.amount, 0);
+
+      const accTodayTransferNet = accTransferIn - accTransferOut;
+      const accTodayNet = accTodayIncome - accTodayExpense + accTodayTransferNet;
 
       return {
         accountId: acc.id,
@@ -76,6 +85,7 @@ export function CashFlowPage() {
         previousBalance: (acc.balance || 0) - accTodayNet,
         todayIncome: accTodayIncome,
         todayExpense: accTodayExpense,
+        todayTransferNet: accTodayTransferNet,
         todayNet: accTodayNet,
         todayChange: accTodayNet,
       };

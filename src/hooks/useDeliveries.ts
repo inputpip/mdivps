@@ -4,6 +4,7 @@ import { Delivery, DeliveryInput, DeliveryItem, DeliveryUpdateInput, Transaction
 import { useToast } from '@/hooks/use-toast';
 import { useBranch } from '@/contexts/BranchContext';
 import { PhotoUploadService } from '@/services/photoUploadService';
+import { format } from 'date-fns';
 
 // Type for delivery employees
 interface DeliveryEmployee {
@@ -146,11 +147,14 @@ export const useDeliveries = (transactionId?: string) => {
       if (input.photo) {
         try {
           // Use a descriptive name for the file
-          const referenceName = `delivery-${input.transactionId}-${Date.now()}`;
+          const customerName = input.customerName || 'UMUM';
+          const tanggal = format(new Date(), 'yyyyMMdd_HHmmss');
+          const referenceName = `DR-${input.transactionId.substring(0, 8)} - ${customerName} - ${tanggal}`;
           const uploadResult = await PhotoUploadService.uploadPhoto(
             input.photo,
             referenceName,
-            'deliveries'
+            'deliveries',
+            true
           );
 
           finalPhotoUrl = uploadResult.webViewLink;

@@ -126,10 +126,16 @@ export default function MobileDeliveryReportPage() {
             }
 
             // Upload photo
+            const nomor = selectedDelivery.deliveryNumber ? `DR-${selectedDelivery.deliveryNumber}` : `DR-${selectedDelivery.transactionId.substring(0, 8)}`
+            const customerName = selectedDelivery.customerName || 'UMUM'
+            const tanggal = format(new Date(), 'yyyyMMdd_HHmmss')
+            const exactFilename = `${nomor} - ${customerName} - ${tanggal}`
+
             const uploadResult = await PhotoUploadService.uploadPhoto(
                 photo,
-                `DR-${selectedDelivery.transactionId}-${Date.now()}`,
-                'delivery-reports'
+                exactFilename,
+                'delivery-reports',
+                true
             )
             const photoUrl = uploadResult.webViewLink
 

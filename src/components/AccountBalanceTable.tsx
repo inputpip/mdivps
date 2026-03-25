@@ -18,6 +18,7 @@ interface AccountBalance {
   previousBalance: number;
   todayIncome: number;
   todayExpense: number;
+  todayTransferNet: number;
   todayNet: number;
   todayChange: number;
 }
@@ -136,7 +137,7 @@ export function AccountBalanceTable({ data, isLoading }: AccountBalanceTableProp
                     </Badge>
                   </div>
                   
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
                     <div>
                       <div className="text-muted-foreground mb-1">Saldo Sebelumnya</div>
                       <div className="font-medium text-gray-600 dark:text-slate-400">
@@ -155,6 +156,15 @@ export function AccountBalanceTable({ data, isLoading }: AccountBalanceTableProp
                       <div className="text-muted-foreground mb-1">Keluar Hari Ini</div>
                       <div className={`font-medium ${account.todayExpense > 0 ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'}`}>
                         {account.todayExpense > 0 ? formatCurrency(account.todayExpense) : '-'}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="text-muted-foreground mb-1">Setoran (Transfer)</div>
+                      <div className={`font-medium flex items-center gap-1 ${
+                        account.todayTransferNet > 0 ? 'text-blue-600 dark:text-blue-400' : account.todayTransferNet < 0 ? 'text-orange-600 dark:text-orange-400' : 'text-muted-foreground'
+                      }`}>
+                        {account.todayTransferNet > 0 ? `+${formatCurrency(account.todayTransferNet)}` : account.todayTransferNet < 0 ? `-${formatCurrency(Math.abs(account.todayTransferNet))}` : '-'}
                       </div>
                     </div>
 

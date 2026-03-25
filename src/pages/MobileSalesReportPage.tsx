@@ -14,6 +14,7 @@ import { useAuth } from "@/hooks/useAuth"
 import { useBranch } from "@/contexts/BranchContext"
 import { useAccounts } from "@/hooks/useAccounts"
 import { Loader2, Camera, X, MapPin, Search, CheckCircle2, CreditCard, History, Navigation } from "lucide-react"
+import { format } from "date-fns"
 import { PhotoUploadService } from "@/services/photoUploadService"
 import { compressImage, isImageFile } from "@/utils/imageCompression"
 import { formatNumber } from "@/utils/formatNumber"
@@ -123,10 +124,15 @@ export default function MobileSalesReportPage() {
 
         try {
             if (photo) {
+                const customerName = selectedCustomer?.name || 'UMUM'
+                const tanggal = format(new Date(), 'yyyyMMdd_HHmmss')
+                const exactFilename = `KUNJUNGAN - ${customerName} - ${tanggal}`
+
                 const uploadResult = await PhotoUploadService.uploadPhoto(
                     photo,
-                    `VISIT-${Date.now()}`,
-                    'visits'
+                    exactFilename,
+                    'visits',
+                    true
                 )
                 photoUrl = uploadResult.webViewLink
             } else {

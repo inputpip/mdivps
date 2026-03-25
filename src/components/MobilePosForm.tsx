@@ -83,6 +83,8 @@ export const MobilePosForm = ({ preselectedCustomerId }: MobilePosFormProps) => 
   const [isCustomerAddOpen, setIsCustomerAddOpen] = useState(false)
   const [isPrintDialogOpen, setIsPrintDialogOpen] = useState(false)
   const [savedTransaction, setSavedTransaction] = useState<Transaction | null>(null)
+  const [loadingPrices, setLoadingPrices] = useState<{ [key: number]: boolean }>({});
+  const debounceTimers = useRef<Record<number, NodeJS.Timeout>>({});
   const [isSuccessSheetOpen, setIsSuccessSheetOpen] = useState(false)
   const [lastTransactionTotal, setLastTransactionTotal] = useState<number>(0) // Store total before reset
   const [openProductDropdowns, setOpenProductDropdowns] = useState<{ [key: number]: boolean }>({});
@@ -189,9 +191,20 @@ export const MobilePosForm = ({ preselectedCustomerId }: MobilePosFormProps) => 
     // Set state immediately for responsive UI
     setItems(newItems);
 
-    // If it's quantity change, trigger background bonus calculation (Async)
+    // If it's quantity change, trigger background bonus calculation (Async) with Debounce to prevent race conditions
     if (field === 'qty') {
-      updateItemWithBonuses(item, Number(value) || 0);
+      const itemId = item.id;
+      
+      if (debounceTimers.current[itemId]) {
+        clearTimeout(debounceTimers.current[itemId]);
+      }
+      
+      debounceTimers.current[itemId] = setTimeout(async () => {
+        setLoadingPrices(prev => ({ ...prev, [itemId]: true }));
+        await updateItemWithBonuses(item, Number(value) || 0);
+        setLoadingPrices(prev => ({ ...prev, [itemId]: false }));
+        delete debounceTimers.current[itemId];
+      }, 500);
     }
   };
 
@@ -255,6 +268,13 @@ export const MobilePosForm = ({ preselectedCustomerId }: MobilePosFormProps) => 
     setPaymentAccountId('');
     setSavedTransaction(null);
   };
+
+  // Cleanup debounce timers on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(debounceTimers.current).forEach(timer => clearTimeout(timer));
+    };
+  }, []);
 
   // Handle print thermal (RawBT)
   const handlePrintThermal = () => {
@@ -555,55 +575,28 @@ export const MobilePosForm = ({ preselectedCustomerId }: MobilePosFormProps) => 
       return;
     }
 
-    // Fetch pricing DULU agar bonus langsung tampil
-    const productPricing = item.product ? await getCachedPricing(item.product.id) : null;
+    const itemId = item.id;
 
+    if (debounceTimers.current[itemId]) {
+      clearTimeout(debounceTimers.current[itemId]);
+    }
+
+    // Update quantity locally first
     setItems(prevItems => {
-      // Calculate price and bonus
-      const calculation = productPricing ? PricingService.calculatePrice(
-        item.product!.basePrice || 0,
-        item.product!.currentStock || 0,
-        newQty,
-        [],
-        productPricing.bonusPricings || []
-      ) : null;
-
-      // Update main item qty and price (only update price if not manual)
       let newItems = prevItems.map((i, idx) =>
         idx === index
-          ? {
-            ...i,
-            qty: newQty,
-            harga: i.isManualPrice ? i.harga : (calculation?.finalPrice || i.harga)
-          }
+          ? { ...i, qty: newQty }
           : i
       );
-
-      // Remove old bonus items for this product
-      newItems = newItems.filter(i =>
-        !(i.isBonus && i.product?.id === item.product?.id)
-      );
-
-      // Add new bonus items LANGSUNG
-      if (calculation?.bonuses && calculation.bonuses.length > 0) {
-        for (const bonus of calculation.bonuses) {
-          if (bonus.type === 'quantity' && bonus.bonusQuantity > 0) {
-            newItems.push({
-              id: Date.now() + Math.random(),
-              product: item.product!,
-              keterangan: bonus.description || `Bonus`,
-              qty: bonus.bonusQuantity,
-              harga: 0,
-              unit: item.product!.unit || 'pcs',
-              isBonus: true,
-              bonusDescription: bonus.description,
-            });
-          }
-        }
-      }
-
       return newItems;
     });
+
+    debounceTimers.current[itemId] = setTimeout(async () => {
+      setLoadingPrices(prev => ({ ...prev, [itemId]: true }));
+      await updateItemWithBonuses({ ...item, qty: newQty }, newQty);
+      setLoadingPrices(prev => ({ ...prev, [itemId]: false }));
+      delete debounceTimers.current[itemId];
+    }, 500);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

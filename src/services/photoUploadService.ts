@@ -89,19 +89,24 @@ export class PhotoUploadService {
    * @param category - Kategori folder (default: Customers_Images)
    * @returns Promise dengan result upload
    */
-  static async uploadPhoto(file: File, customerName: string, category: string = 'customers'): Promise<PhotoUploadResult> {
+  static async uploadPhoto(file: File, customerName: string, category: string = 'customers', enableExactName: boolean = false): Promise<PhotoUploadResult> {
     try {
       const formData = new FormData();
 
-      // Sanitasi nama file dan pastikan ekstensi benar
-      const cleanName = customerName.replace(/[^\w\s-]/gi, '').replace(/\s+/g, '-').toLowerCase();
-      const timestamp = Date.now();
-
-      // Check if file is likely a JPEG (common from compression)
+      let filename = '';
       let extension = file.name.split('.').pop()?.toLowerCase() || 'jpg';
       if (file.type === 'image/jpeg') extension = 'jpg';
 
-      const filename = `${cleanName}-${timestamp}.${extension}`;
+      if (enableExactName) {
+        // Biarkan spasi dan huruf besar/kecil asli, hanya hapus karakter berbahaya (selain titik, dash, underscore, spasi)
+        const cleanName = customerName.replace(/[^\w\s.-]/gi, '');
+        filename = `${cleanName}.${extension}`;
+      } else {
+        // Format jadul (legacy): ubah spasi jadi dash, lowercase, tambah timestamp
+        const cleanName = customerName.replace(/[^\w\s-]/gi, '').replace(/\s+/g, '-').toLowerCase();
+        const timestamp = Date.now();
+        filename = `${cleanName}-${timestamp}.${extension}`;
+      }
 
       // Append fields BEFORE file (Best Practice for Multer/Busboy)
       formData.append('category', category);
