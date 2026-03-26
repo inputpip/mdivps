@@ -119,7 +119,7 @@ export function DateRangeReportPDF({ cashHistory }: DateRangeReportPDFProps) {
     // Get payment accounts (kas/bank) — filter by branch agar tidak duplikat lintas cabang
     const accountsQuery = supabase
       .from('accounts')
-      .select('id, name, code, is_payment_account')
+      .select('id, name, code, is_payment_account, balance')
       .eq('is_payment_account', true)
       .eq('is_header', false)
       .order('name');
@@ -149,76 +149,27 @@ export function DateRangeReportPDF({ cashHistory }: DateRangeReportPDFProps) {
     }
 
     // ============================================================================
-    // 1. HITUNG SALDO AWAL PERIODE (sebelum tanggal yang dipilih)
-    // Untuk akun Aset: Saldo = Total Debit - Total Credit
+    // 1 & 2. HITUNG SALDO menggunakan BACKWARD CALCULATION dari saldo saat ini
+    // (Persis seperti UI CashFlowPage agar hasil selalu presisi dan konsisten)
     // ============================================================================
-    const beforeQuery = supabase
-      .from('journal_entry_lines')
-      .select(`
-        account_id,
-        debit_amount,
-        credit_amount,
-        journal_entries!inner (
-          entry_date,
-          status,
-          is_voided,
-          branch_id
-        )
-      `)
-      .in('account_id', paymentAccountIds)
-      .lt('journal_entries.entry_date', startStr);
-
-    if (currentBranch?.id) {
-      beforeQuery.eq('journal_entries.branch_id', currentBranch.id);
-    }
-
-    const { data: beforeDateLines, error: beforeError } = await beforeQuery;
-
-    if (beforeError) {
-      console.error('Error fetching before-date journal lines:', beforeError);
-    }
-
-    // Calculate opening balance per account
     const accountBalances = new Map();
     (accounts || []).forEach(account => {
       accountBalances.set(account.id, {
         accountId: account.id,
         accountName: account.name,
         accountCode: account.code,
-        previousBalance: 0, // Saldo awal periode
-        currentBalance: 0,  // Saldo akhir periode
+        liveBalance: Number(account.balance) || 0, // Saldo riil saat ini
+        previousBalance: 0, // Akan dihitung dari liveBalance - postStartNet
+        currentBalance: 0,  // Akan dihitung dari previousBalance + dateNet
         dateIncome: 0,
         dateExpense: 0,
         dateTransferNet: 0,
         dateNet: 0,
-        todayChange: 0
+        postStartNet: 0 // Total mutasi TEPAT SEJAK startStr hingga saat ini
       });
     });
 
-    // Sum up all transactions BEFORE selected date for opening balance
-    let totalPreviousBalance = 0;
-    (beforeDateLines || []).forEach((line: any) => {
-      const journal = line.journal_entries;
-      if (!journal || journal.status !== 'posted' || journal.is_voided === true) return;
-
-      const accountId = line.account_id;
-      const debit = Number(line.debit_amount) || 0;
-      const credit = Number(line.credit_amount) || 0;
-
-      if (accountBalances.has(accountId)) {
-        const account = accountBalances.get(accountId);
-        account.previousBalance += (debit - credit);
-      }
-    });
-
-    // Calculate total previous balance
-    accountBalances.forEach(account => {
-      totalPreviousBalance += account.previousBalance;
-    });
-
-    // ============================================================================
-    // 2. HITUNG TRANSAKSI PADA TANGGAL YANG DIPILIH
-    // ============================================================================
+    // Tarik semua baris jurnal dari mulai \`startStr\` hingga SAAT INI
     const dateQuery = supabase
       .from('journal_entry_lines')
       .select(`
@@ -236,7 +187,7 @@ export function DateRangeReportPDF({ cashHistory }: DateRangeReportPDFProps) {
       `)
       .in('account_id', paymentAccountIds)
       .gte('journal_entries.entry_date', startStr)
-      .lte('journal_entries.entry_date', endStr);
+      .limit(50000); // 50000 lines is safe for extracting everything post startStr
 
     if (currentBranch?.id) {
       dateQuery.eq('journal_entries.branch_id', currentBranch.id);
@@ -248,10 +199,6 @@ export function DateRangeReportPDF({ cashHistory }: DateRangeReportPDFProps) {
       console.error('Error fetching date journal lines:', dateError);
     }
 
-    // Calculate income/expense for selected date
-    let dateIncome = 0;
-    let dateExpense = 0;
-
     (dateLines || []).forEach((line: any) => {
       const journal = line.journal_entries;
       if (!journal || journal.status !== 'posted' || journal.is_voided === true) return;
@@ -259,38 +206,49 @@ export function DateRangeReportPDF({ cashHistory }: DateRangeReportPDFProps) {
       const accountId = line.account_id;
       const debit = Number(line.debit_amount) || 0;
       const credit = Number(line.credit_amount) || 0;
+      const net = debit - credit;
 
-      // For Asset accounts (Kas/Bank): Debit = income, Credit = expense
-      if (journal.reference_type === 'transfer') {
-        if (accountBalances.has(accountId)) {
-          const account = accountBalances.get(accountId);
-          const transferNet = debit - credit;
-          account.dateTransferNet += transferNet;
-          account.dateNet += transferNet;
-          account.todayChange = account.dateNet;
-        }
-      } else {
-        dateIncome += debit;
-        dateExpense += credit;
+      if (accountBalances.has(accountId)) {
+        const account = accountBalances.get(accountId);
+        
+        // Akumulasi perubahan TOTAL KESELURUHAN sejak startStr s/d detik ini (live)
+        account.postStartNet += net;
 
-        if (accountBalances.has(accountId)) {
-          const account = accountBalances.get(accountId);
-          account.dateIncome += debit;
-          account.dateExpense += credit;
-          const net = debit - credit;
-          account.dateNet += net;
-          account.todayChange = account.dateNet;
+        // CEK apakah baris ini masuk dalam range report \`[startStr, endStr]\`
+        const journalDate = new Date(journal.entry_date);
+        const endDateObj = new Date(endStr);
+        if (journalDate <= endDateObj) {
+          if (journal.reference_type === 'transfer') {
+            account.dateTransferNet += net;
+            account.dateNet += net;
+          } else {
+            account.dateIncome += debit;
+            account.dateExpense += credit;
+            account.dateNet += net;
+          }
         }
       }
     });
 
-    // Calculate current balance (end of selected date)
+    let dateIncome = 0;
+    let dateExpense = 0;
+    let totalPreviousBalance = 0;
+    let totalCurrentBalance = 0;
+
+    // Hitung mundur Saldo Aktual berdasarkan range filter
     accountBalances.forEach(account => {
+      // Saldo sebelum startStr = Saldo saat ini - semua mutasi setelah startStr
+      account.previousBalance = account.liveBalance - account.postStartNet;
+      // Saldo akhir periode = Saldo sebelum startStr + mutasi di dalam range tersebut
       account.currentBalance = account.previousBalance + account.dateNet;
+
+      totalPreviousBalance += account.previousBalance;
+      totalCurrentBalance += account.currentBalance;
+      dateIncome += account.dateIncome;
+      dateExpense += account.dateExpense;
     });
 
     const dateNet = dateIncome - dateExpense;
-    const totalCurrentBalance = totalPreviousBalance + dateNet;
 
     // ============================================================================
     // 3. FILTER CASH HISTORY UNTUK DETAIL TRANSAKSI (HANYA CABANG AKTIF)
