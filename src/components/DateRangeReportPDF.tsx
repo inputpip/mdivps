@@ -376,7 +376,7 @@ export function DateRangeReportPDF({ cashHistory }: DateRangeReportPDFProps) {
           headStyles: { fillColor: [71, 85, 105], textColor: [255, 255, 255] },
           styles: { fontSize: 8 },
           columnStyles: {
-            0: { cellWidth: 35 },
+            0: { cellWidth: 30 },
             1: { cellWidth: 25, halign: 'right' },
             2: { cellWidth: 25, halign: 'right' },
             3: { cellWidth: 25, halign: 'right' },
@@ -433,9 +433,9 @@ export function DateRangeReportPDF({ cashHistory }: DateRangeReportPDFProps) {
             styles: { fontSize: 8, cellPadding: 2 },
             columnStyles: {
               0: { cellWidth: 15 },
-              1: { cellWidth: 35 },
+              1: { cellWidth: 30 },
               2: { cellWidth: 30 },
-              3: { cellWidth: 25 },
+              3: { cellWidth: 20 },
               4: { cellWidth: 60 },
               5: { cellWidth: 25, halign: 'right' }
             }
@@ -476,9 +476,9 @@ export function DateRangeReportPDF({ cashHistory }: DateRangeReportPDFProps) {
             styles: { fontSize: 8, cellPadding: 2 },
             columnStyles: {
               0: { cellWidth: 15 },
-              1: { cellWidth: 35 },
+              1: { cellWidth: 30 },
               2: { cellWidth: 30 },
-              3: { cellWidth: 25 },
+              3: { cellWidth: 20 },
               4: { cellWidth: 60 },
               5: { cellWidth: 25, halign: 'right' }
             }
@@ -522,9 +522,9 @@ export function DateRangeReportPDF({ cashHistory }: DateRangeReportPDFProps) {
             styles: { fontSize: 8, cellPadding: 2 },
             columnStyles: {
               0: { cellWidth: 15 },
-              1: { cellWidth: 35 },
+              1: { cellWidth: 30 },
               2: { cellWidth: 30 },
-              3: { cellWidth: 25 },
+              3: { cellWidth: 20 },
               4: { cellWidth: 60 },
               5: { cellWidth: 25, halign: 'right' }
             }

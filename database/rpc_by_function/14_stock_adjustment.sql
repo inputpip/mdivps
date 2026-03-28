@@ -149,11 +149,11 @@ BEGIN
     -- Generate entry number (Global across all branches)
     SELECT 'JE-' || TO_CHAR(CURRENT_DATE, 'YYYYMMDD') || '-' || LPAD(
       (COALESCE(
-        (SELECT MAX(CAST(SUBSTRING(entry_number FROM '-(\d+)$') AS INTEGER))
+        (SELECT COUNT(*)
          FROM journal_entries
          WHERE DATE(entry_date) = CURRENT_DATE),
         0
-      ) + 1)::TEXT, 4, '0')
+      ) + 1)::TEXT, 4, '0') || LPAD(FLOOR(RANDOM() * 1000)::TEXT, 3, '0')
     INTO v_entry_number;
 
     INSERT INTO journal_entries (id, branch_id, entry_number, entry_date, description, reference_type, reference_id, status, is_voided, created_at, updated_at, total_debit, total_credit)
@@ -302,11 +302,11 @@ BEGIN
     -- Generate entry number (Global across all branches)
     SELECT 'JE-' || TO_CHAR(CURRENT_DATE, 'YYYYMMDD') || '-' || LPAD(
       (COALESCE(
-        (SELECT MAX(CAST(SUBSTRING(entry_number FROM '-(\d+)$') AS INTEGER))
+        (SELECT COUNT(*)
          FROM journal_entries
          WHERE DATE(entry_date) = CURRENT_DATE),
         0
-      ) + 1)::TEXT, 4, '0')
+      ) + 1)::TEXT, 4, '0') || LPAD(FLOOR(RANDOM() * 1000)::TEXT, 3, '0')
     INTO v_entry_number;
 
     INSERT INTO journal_entries (

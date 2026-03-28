@@ -726,10 +726,10 @@ export function PrintReceiptDialog({ open, onOpenChange, transaction, template, 
           <tbody>
             ${transaction.items.filter(item => item.product?.name).map((item, idx) => `
               <tr>
-                <td style="padding: 1.5mm 1mm; font-size: 10.5pt; border-bottom: 0.5px dotted #999;">${item.product.name}${item.notes ? `<br/><small style="font-size: 9.5pt;">${item.notes}</small>` : ''}</td>
-                <td style="text-align: center; padding: 1.5mm 1mm; font-size: 10.5pt; border-bottom: 0.5px dotted #999;">${item.quantity} ${item.unit}</td>
-                <td style="text-align: right; padding: 1.5mm 1mm; font-size: 10.5pt; border-bottom: 0.5px dotted #999;">${new Intl.NumberFormat("id-ID", { minimumFractionDigits: 0 }).format(item.price)}</td>
-                <td style="text-align: right; padding: 1.5mm 1mm; font-size: 10.5pt; font-weight: bold; border-bottom: 0.5px dotted #999;">${new Intl.NumberFormat("id-ID", { minimumFractionDigits: 0 }).format(item.price * item.quantity)}</td>
+                <td style="padding: 3mm 1mm 1.5mm 1mm; font-size: 10.5pt; border-bottom: 0.5px dotted #999;">${item.product.name}${item.notes ? `<br/><small style="font-size: 9.5pt;">${item.notes}</small>` : ''}</td>
+                <td style="text-align: center; padding: 3mm 1mm 1.5mm 1mm; font-size: 10.5pt; border-bottom: 0.5px dotted #999;">${item.quantity} ${item.unit}</td>
+                <td style="text-align: right; padding: 3mm 1mm 1.5mm 1mm; font-size: 10.5pt; border-bottom: 0.5px dotted #999;">${new Intl.NumberFormat("id-ID", { minimumFractionDigits: 0 }).format(item.price)}</td>
+                <td style="text-align: right; padding: 3mm 1mm 1.5mm 1mm; font-size: 10.5pt; font-weight: bold; border-bottom: 0.5px dotted #999;">${new Intl.NumberFormat("id-ID", { minimumFractionDigits: 0 }).format(item.price * item.quantity)}</td>
               </tr>
             `).join('')}
           </tbody>
@@ -843,7 +843,7 @@ export function PrintReceiptDialog({ open, onOpenChange, transaction, template, 
             /* Page setup untuk continuous form 9.5 inch */
             @page {
               size: 241mm auto;  /* 9.5 inch width, auto height */
-              margin: 12mm 6mm 8mm 6mm;
+              margin: 12mm 2mm 8mm 2mm;
             }
 
             @media print {
@@ -864,7 +864,7 @@ export function PrintReceiptDialog({ open, onOpenChange, transaction, template, 
               font-size: 10pt;
               line-height: 1.4;
               margin: 0;
-              padding: 5mm 6mm 8mm 6mm;
+              padding: 5mm 2mm 8mm 2mm;
               width: 241mm;
               background: white;
               color: black;

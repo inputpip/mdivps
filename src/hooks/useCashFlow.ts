@@ -150,14 +150,12 @@ export function useCashFlow() {
 
       // Fetch payroll details
       if (refIdsByType['payroll']?.length) {
-        try {
-          const payrolls = await fetchInChunks('payroll_periods', 'id, name', refIdsByType['payroll']);
-          payrolls.forEach((p: any) => {
-            refNumberMap[p.id] = p.name || p.id;
-          });
-        } catch {
-          // Tabel payroll_periods tidak ada di database ini (e.g. mkw_db) — skip
-        }
+        const payrolls = await fetchInChunks('payroll_records', 'id, period_start, profiles(full_name)', refIdsByType['payroll']);
+        payrolls.forEach((p: any) => {
+          const empName = p.profiles?.full_name || 'Karyawan';
+          const periodStr = p.period_start ? ` (${p.period_start})` : '';
+          refNumberMap[p.id] = `Gaji ${empName}${periodStr}`;
+        });
       }
 
       // Fetch payable details
@@ -172,15 +170,34 @@ export function useCashFlow() {
       }
 
       // Fetch receivable payment details (to get customer names for payments)
-      if (refIdsByType['receivable']?.length) {
-        const payments = await fetchInChunks('payment_history', 'id, transaction_id, transactions(customer_name)', refIdsByType['receivable']);
-        payments.forEach((p: any) => {
-          const customerName = p.transactions?.customer_name || 'Pelanggan';
-          refDetailMap[p.id] = {
-            label: `Bayar Piutang: ${p.transaction_id}`,
-            description: `Penerimaan piutang dari ${customerName}`
-          };
-        });
+      const receivableIds = [...(refIdsByType['receivable'] || []), ...(refIdsByType['receivable_payment'] || [])];
+      
+      if (receivableIds.length > 0) {
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        const historyIds = receivableIds.filter(id => uuidRegex.test(id));
+        const trxIds = receivableIds.filter(id => !uuidRegex.test(id));
+
+        if (historyIds.length > 0) {
+          const payments = await fetchInChunks('payment_history', 'id, transaction_id, transactions(customer_name)', historyIds);
+          payments.forEach((p: any) => {
+            const customerName = p.transactions?.customer_name || 'Pelanggan';
+            refDetailMap[p.id] = {
+              label: `Bayar Piutang: ${p.transaction_id}`,
+              description: `Penerimaan piutang dari ${customerName}`
+            };
+          });
+        }
+
+        if (trxIds.length > 0) {
+          const trans = await fetchInChunks('transactions', 'id, customer_name', trxIds);
+          trans.forEach((t: any) => {
+            const customerName = t.customer_name || 'Pelanggan';
+            refDetailMap[t.id] = {
+              label: `Bayar Piutang: ${t.id}`,
+              description: `Penerimaan piutang dari ${customerName}`
+            };
+          });
+        }
       }
 
       // Transform to CashHistory format
@@ -202,6 +219,7 @@ export function useCashFlow() {
           'advance': 'panjar_pengambilan',
           'transfer': isIncome ? 'transfer_masuk' : 'transfer_keluar',
           'receivable': 'pembayaran_piutang',
+          'receivable_payment': 'pembayaran_piutang',
           'payable': 'pembayaran_hutang',
           'manual': isIncome ? 'kas_masuk_manual' : 'kas_keluar_manual',
         };
