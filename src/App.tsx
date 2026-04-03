@@ -46,7 +46,7 @@ const AttendancePage = lazy(() => import("@/pages/AttendancePage"));
 const AttendanceReportPage = lazy(() => import("@/pages/AttendanceReportPage"));
 const StockReportPage = lazy(() => import("@/pages/StockReportPage"));
 const TransactionItemsReportPage = lazy(() => import("@/pages/TransactionItemsReportPage"));
-const ProductAnalyticsDebugPage = lazy(() => import("@/pages/ProductAnalyticsDebugPage"));
+
 const MaterialMovementReportPage = lazy(() => import("@/pages/MaterialMovementReportPage"));
 const ServiceMaterialReportPage = lazy(() => import("@/pages/ServiceMaterialReportPage"));
 const CashFlowPage = lazy(() => import("@/pages/CashFlowPage"));
@@ -340,7 +340,7 @@ function WebApp() {
                       <Route path="/attendance/report" element={<AttendanceReportPage />} />
                       <Route path="/stock-report" element={<StockReportPage />} />
                       <Route path="/transaction-items-report" element={<TransactionItemsReportPage />} />
-                      <Route path="/debug/product-analytics" element={<ProductAnalyticsDebugPage />} />
+
                       <Route path="/material-movements" element={<MaterialMovementReportPage />} />
                       <Route path="/service-material-report" element={<ServiceMaterialReportPage />} />
                       <Route path="/cash-flow" element={<CashFlowPage />} />

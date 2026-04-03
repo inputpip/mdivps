@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  dummy_db:
+    image: postgres:14
+    container_name: dummy_postgres_db
+    restart: always
+    environment:
+      POSTGRES_USER: aquavit
+      POSTGRES_PASSWORD: Aquvit2024
+      POSTGRES_DB: mkw_db
+    ports:
+      - "5432:5432"
+    volumes:
+      # Mount folder HDD D:\db dummy ke wadah fisik databasenya
+      - "D:/db dummy:/var/lib/postgresql/data"
+
+  dummy_api:
+    image: postgrest/postgrest:latest
+    container_name: dummy_postgrest_api
+    restart: always
+    environment:
+      # Hubungkan PostgREST langsung ke dummy_db menggunakan password dari APPAQUVIT.MD
+      PGRST_DB_URI: postgres://aquavit:Aquvit2024@dummy_db:5432/mkw_db
+      PGRST_DB_SCHEMA: public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: "c7ltcd4PN7uyaZJ/UoBbf71xdnHA3ezq7HYaaIvxizA="
+      PGRST_JWT_SECRET_IS_BASE64: "true"
+      PGRST_JWT_ROLE_CLAIM_KEY: ".role"
+    ports:
+      # Port 8090 ini dimapping ke 3000 bawaan container, persis seperti .env.local kamu!
+      - "8090:3000"
+    depends_on:
+      - dummy_db

@@ -161,7 +161,7 @@ export const useStockMovements = () => {
     // Get all materials with branch filter
     let materialsQuery = supabase
       .from('materials')
-      .select('id, name, type, unit, stock');
+      .select('id, name, type, unit');
 
     // Apply branch filter
     if (currentBranch?.id) {
@@ -171,6 +171,18 @@ export const useStockMovements = () => {
     const { data: materials, error: materialsError } = await materialsQuery;
 
     if (materialsError) throw new Error(materialsError.message);
+
+    // Fetch actual stock from v_material_current_stock VIEW for accurate FIFO count
+    let stockQuery = supabase.from('v_material_current_stock').select('material_id, current_stock');
+    if (currentBranch?.id) {
+      stockQuery = stockQuery.or(`branch_id.eq.${currentBranch.id},branch_id.is.null`);
+    }
+
+    const { data: stockData } = await stockQuery;
+    const stockMap = new Map<string, number>();
+    if (stockData) {
+      stockData.forEach((s: any) => stockMap.set(s.material_id, Number(s.current_stock) || 0));
+    }
 
     // Group movements by material
     const materialMovements = movements.reduce((acc, movement) => {
@@ -197,7 +209,7 @@ export const useStockMovements = () => {
           .reduce((sum, m) => sum + m.quantity, 0);
 
         const netMovement = totalIn - totalOut;
-        const endingStock = Number(material.stock) || 0;
+        const endingStock = stockMap.get(material.id) || 0;
         const startingStock = endingStock - netMovement;
 
         reports.push({

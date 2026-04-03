@@ -38,180 +38,28 @@ export function useCashFlow() {
       // Create account lookup map
       const accountMap = new Map(paymentAccounts.map(acc => [acc.id, acc]));
 
-      // Get journal entry lines for payment accounts
-      const { data: journalLines, error: journalError } = await supabase
-        .from('journal_entry_lines')
-        .select(`
-          id,
-          account_id,
-          account_code,
-          account_name,
-          debit_amount,
-          credit_amount,
-          description,
-          journal_entries (
-            id,
-            entry_number,
-            entry_date,
-            description,
-            reference_type,
-            reference_id,
-            status,
-            is_voided,
-            branch_id,
-            created_at,
-            created_by
-          )
-        `)
-        .in('account_id', paymentAccountIds);
+      // Gunakan DATABASE VIEW `v_arus_kas_lengkap` untuk mengambil rekap total tanpa chunking!
+      // Menyelesaikan masalah URI Too Long (ERR_FAILED / 414)
+      const { data: viewData, error: viewError } = await supabase
+        .from('v_arus_kas_lengkap')
+        .select('*')
+        .in('account_id', paymentAccountIds)
+        .eq('branch_id', currentBranch?.id)
+        .order('created_at', { ascending: false });
 
-      if (journalError) {
-        console.error('❌ Failed to fetch journal lines for cash flow:', journalError);
+      if (viewError) {
+        console.error('❌ Failed to fetch cash flow view:', viewError);
         return [];
       }
 
-      // Filter only posted and not voided journals for current branch
-      const filteredLines = (journalLines || []).filter((line: any) => {
-        const journal = line.journal_entries;
-        if (!journal) return false;
-        return journal.status === 'posted' &&
-          journal.is_voided === false &&
-          journal.branch_id === currentBranch?.id;
-      });
+      // Transform result to match CashHistory interface
+      const cashHistoryData: CashHistory[] = (viewData || []).map((row: any) => {
+        const debitAmount = Number(row.debit_amount) || 0;
+        const creditAmount = Number(row.credit_amount) || 0;
 
-      // Sort by created_at descending
-      filteredLines.sort((a: any, b: any) => {
-        const dateA = new Date(a.journal_entries?.created_at || 0);
-        const dateB = new Date(b.journal_entries?.created_at || 0);
-        return dateB.getTime() - dateA.getTime();
-      });
-
-      // Collect reference IDs by type for batch fetching
-      const refIdsByType: Record<string, string[]> = {};
-      filteredLines.forEach((line: any) => {
-        const journal = line.journal_entries;
-        if (journal?.reference_id && journal?.reference_type) {
-          if (!refIdsByType[journal.reference_type]) {
-            refIdsByType[journal.reference_type] = [];
-          }
-          if (!refIdsByType[journal.reference_type].includes(journal.reference_id)) {
-            refIdsByType[journal.reference_type].push(journal.reference_id);
-          }
-        }
-      });
-
-      // Map to store reference numbers and detailed information
-      const refNumberMap: Record<string, string> = {};
-      const refDetailMap: Record<string, { label?: string, description?: string }> = {};
-
-      // Helper function to safely chunk large array of IDs to avoid URI Too Long (ERR_FAILED / 414)
-      const fetchInChunks = async (table: string, columns: string, ids: string[]) => {
-        if (!ids || ids.length === 0) return [];
-        const chunkSize = 200;
-        let allData: any[] = [];
-        for (let i = 0; i < ids.length; i += chunkSize) {
-          const chunk = ids.slice(i, i + chunkSize);
-          const { data, error } = await supabase.from(table as any).select(columns).in('id', chunk);
-          if (data && !error) allData = allData.concat(data);
-        }
-        return allData;
-      };
-
-      // Fetch transaction details
-      if (refIdsByType['transaction']?.length) {
-        const transactions = await fetchInChunks('transactions', 'id, customer_name', refIdsByType['transaction']);
-        transactions.forEach((t: any) => {
-          refNumberMap[t.id] = t.id;
-          refDetailMap[t.id] = { label: `Order ${t.id}`, description: `Penjualan ke ${t.customer_name}` };
-        });
-      }
-
-      // Fetch expense details
-      if (refIdsByType['expense']?.length) {
-        const expenses = await fetchInChunks('expenses', 'id, description', refIdsByType['expense']);
-        expenses.forEach((e: any) => {
-          refNumberMap[e.id] = e.id;
-          refDetailMap[e.id] = { description: e.description };
-        });
-      }
-
-      // Fetch employee advance details
-      if (refIdsByType['advance']?.length) {
-        const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-        const validAdvanceIds = refIdsByType['advance'].filter(id => UUID_REGEX.test(id));
-        if (validAdvanceIds.length > 0) {
-          const advances = await fetchInChunks('employee_advances', 'id, employee_name', validAdvanceIds);
-          advances.forEach((a: any) => {
-            refNumberMap[a.id] = a.id;
-            refDetailMap[a.id] = { description: `Panjar karyawan: ${a.employee_name || 'Tidak diketahui'}` };
-          });
-        }
-      }
-
-      // Fetch payroll details
-      if (refIdsByType['payroll']?.length) {
-        const payrolls = await fetchInChunks('payroll_records', 'id, period_start, profiles(full_name)', refIdsByType['payroll']);
-        payrolls.forEach((p: any) => {
-          const empName = p.profiles?.full_name || 'Karyawan';
-          const periodStr = p.period_start ? ` (${p.period_start})` : '';
-          refNumberMap[p.id] = `Gaji ${empName}${periodStr}`;
-        });
-      }
-
-      // Fetch payable details
-      if (refIdsByType['payable']?.length) {
-        const payables = await fetchInChunks('accounts_payable', 'id, supplier_name', refIdsByType['payable']);
-        payables.forEach((p: any) => {
-          refDetailMap[p.id] = {
-            label: `Bayar Hutang: ${p.id}`,
-            description: `Pembayaran hutang ke ${p.supplier_name}`
-          };
-        });
-      }
-
-      // Fetch receivable payment details (to get customer names for payments)
-      const receivableIds = [...(refIdsByType['receivable'] || []), ...(refIdsByType['receivable_payment'] || [])];
-      
-      if (receivableIds.length > 0) {
-        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-        const historyIds = receivableIds.filter(id => uuidRegex.test(id));
-        const trxIds = receivableIds.filter(id => !uuidRegex.test(id));
-
-        if (historyIds.length > 0) {
-          const payments = await fetchInChunks('payment_history', 'id, transaction_id, transactions(customer_name)', historyIds);
-          payments.forEach((p: any) => {
-            const customerName = p.transactions?.customer_name || 'Pelanggan';
-            refDetailMap[p.id] = {
-              label: `Bayar Piutang: ${p.transaction_id}`,
-              description: `Penerimaan piutang dari ${customerName}`
-            };
-          });
-        }
-
-        if (trxIds.length > 0) {
-          const trans = await fetchInChunks('transactions', 'id, customer_name', trxIds);
-          trans.forEach((t: any) => {
-            const customerName = t.customer_name || 'Pelanggan';
-            refDetailMap[t.id] = {
-              label: `Bayar Piutang: ${t.id}`,
-              description: `Penerimaan piutang dari ${customerName}`
-            };
-          });
-        }
-      }
-
-      // Transform to CashHistory format
-      // For payment accounts: Debit = kas masuk (income), Credit = kas keluar (expense)
-      const cashHistoryData: CashHistory[] = filteredLines.map((line: any) => {
-        const journal = line.journal_entries;
-        const debitAmount = Number(line.debit_amount) || 0;
-        const creditAmount = Number(line.credit_amount) || 0;
-
-        // Determine if this is income or expense
         const isIncome = debitAmount > 0;
         const amount = isIncome ? debitAmount : creditAmount;
 
-        // Map reference_type to old type format for compatibility
         const typeMap: Record<string, CashHistory['type']> = {
           'transaction': 'orderan',
           'expense': 'pengeluaran',
@@ -224,31 +72,26 @@ export function useCashFlow() {
           'manual': isIncome ? 'kas_masuk_manual' : 'kas_keluar_manual',
         };
 
-        const refId = journal.reference_id;
-        const detail = refId ? refDetailMap[refId] : null;
+        const type = typeMap[row.reference_type] || (isIncome ? 'kas_masuk_manual' : 'kas_keluar_manual');
 
-        // Determine specialized description
-        let finalDescription = line.description || journal.description;
-        if (detail?.description) {
-          finalDescription = detail.description;
+        // Rakit deskripsi akhir bersumber dari View
+        let finalDescription = row.reference_name || row.line_description || row.journal_description || 'Transaksi Umum';
+        if (row.reference_type === 'transaction') {
+            finalDescription = `Penjualan: ${finalDescription}`;
         }
 
-        // Get the actual transaction number from source table
-        const sourceRefNumber = journal.reference_id ? refNumberMap[journal.reference_id] : null;
-
         return {
-          id: line.id,
-          account_id: line.account_id,
-          account_name: line.account_name || accountMap.get(line.account_id)?.name || 'Unknown',
-          type: typeMap[journal.reference_type] || (isIncome ? 'kas_masuk_manual' : 'kas_keluar_manual'),
+          id: row.line_id,
+          account_id: row.account_id,
+          account_name: row.account_name || accountMap.get(row.account_id)?.name || 'Unknown',
+          type: type,
           transaction_type: isIncome ? 'income' : 'expense',
           amount: amount,
           description: finalDescription,
-          reference_id: journal.reference_id,
-          // Prioritas: label dari detail > nomor dari tabel sumber > entry_number
-          reference_number: detail?.label || sourceRefNumber || journal.entry_number,
-          created_at: journal.created_at,
-          created_by: journal.created_by,
+          reference_id: row.reference_id,
+          reference_number: row.entry_number || row.reference_id,
+          created_at: row.created_at,
+          created_by: null, 
         };
       });
 

@@ -35,8 +35,29 @@ async function calculateAccountBalancesFromJournal(
   branchId: string,
   asOfDate?: Date
 ): Promise<Account[]> {
-  // Get all journal_entry_lines for the branch
-  // Note: PostgREST doesn't support !inner syntax, so we filter on client side
+  // ============================================================================
+  // ⚡ FAST PATH (OPTIMIZATION): Gunakan Real-Time Balance dari Database Trigger
+  // Jika tidak ada asOfDate atau asOfDate = hari ini, kita tidak perlu mengkalkulasi
+  // ulang ratusan riwayat jurnal (yang memicu lelet/error). Cukup panggil
+  // .balance yang sudah otomatis dihitung setiap detik oleh Trigger PostgreSQL!
+  // ============================================================================
+  const today = new Date();
+  const isHistoricRequest = asOfDate && (
+    asOfDate.getFullYear() < today.getFullYear() ||
+    asOfDate.getMonth() < today.getMonth() ||
+    asOfDate.getDate() < today.getDate()
+  );
+
+  if (!isHistoricRequest) {
+    console.log('⚡ FAST PATH: Memakai Real-time DB Trigger Balance untuk Neraca/Laporan');
+    return accounts.map(acc => ({
+      ...acc,
+      balance: (acc.balance !== undefined && acc.balance !== null) ? acc.balance : (acc.initialBalance || 0)
+    }));
+  }
+
+  console.log('⏳ SLOW PATH: Menghitung riwayat historis via jurnal untuk tanggal:', asOfDate.toISOString().split('T')[0]);
+
   // Get journal_entry_lines for the branch with server-side filtering
   let query = supabase
     .from('journal_entry_lines')
@@ -418,7 +439,7 @@ export async function generateBalanceSheet(asOfDate?: Date, branchId?: string): 
   // Get inventory value from materials (filtered by branch)
   let materialsQuery = supabase
     .from('materials')
-    .select('id, name, stock, price_per_unit, branch_id');
+    .select('id, name, price_per_unit, branch_id');
 
   if (branchId) {
     materialsQuery = materialsQuery.eq('branch_id', branchId);
@@ -486,6 +507,15 @@ export async function generateBalanceSheet(asOfDate?: Date, branchId?: string): 
   const stockMap = new Map<string, number>();
   (stockData || []).forEach((s: any) => stockMap.set(s.product_id, Number(s.current_stock) || 0));
 
+  // Get actual material stock from VIEW (source of truth)
+  let materialStockQuery = supabase.from('v_material_current_stock').select('material_id, current_stock');
+  if (branchId) {
+    materialStockQuery = materialStockQuery.or(`branch_id.eq.${branchId},branch_id.is.null`);
+  }
+  const { data: materialStockData } = await materialStockQuery;
+  const materialStockMap = new Map<string, number>();
+  (materialStockData || []).forEach((s: any) => materialStockMap.set(s.material_id, Number(s.current_stock) || 0));
+
   // Merge products with stock from VIEW
   const productsData = productsError ? [] : (products || []).map((p: any) => ({
     ...p,
@@ -523,9 +553,11 @@ export async function generateBalanceSheet(asOfDate?: Date, branchId?: string): 
   // Nilai aktual dari products/materials table disimpan untuk referensi saja:
   // ============================================================================
 
-  // Calculate actual inventory from materials (for reference only)
-  const actualMaterialsInventory = materials?.reduce((sum, material) =>
-    sum + ((material.stock || 0) * (material.price_per_unit || 0)), 0) || 0;
+  // Calculate actual inventory from materials (for reference only - Using VIEW as source of truth)
+  const actualMaterialsInventory = materials?.reduce((sum, material) => {
+    const currentStock = materialStockMap.get(material.id) || 0;
+    return sum + (currentStock * (material.price_per_unit || 0));
+  }, 0) || 0;
 
   // Calculate actual inventory from products (for reference only)
   const actualProductsInventory = productsData?.reduce((sum, product) => {

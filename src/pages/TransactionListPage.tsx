@@ -2,10 +2,12 @@ import { TransactionTable } from "@/components/TransactionTable";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useGranularPermission } from "@/hooks/useGranularPermission";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, ArrowLeft } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Wallet, BookOpen, Receipt, PackageSearch } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 export default function TransactionListPage() {
   const { hasGranularPermission, isLoading } = useGranularPermission();
+  const navigate = useNavigate();
 
   // Check transactions_view permission
   if (!isLoading && !hasGranularPermission('transactions_view')) {
@@ -30,11 +32,31 @@ export default function TransactionListPage() {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Data Transaksi</CardTitle>
-        <CardDescription>
-          Lihat dan kelola semua transaksi yang pernah dibuat.
-        </CardDescription>
+      <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-4">
+        <div>
+          <CardTitle>Data Transaksi</CardTitle>
+          <CardDescription>
+            Lihat dan kelola semua transaksi yang pernah dibuat.
+          </CardDescription>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" size="sm" onClick={() => navigate('/cash-flow')}>
+            <Wallet className="h-4 w-4 mr-2 text-blue-500" />
+            Buku Kas
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => navigate('/receivables')}>
+            <BookOpen className="h-4 w-4 mr-2 text-orange-500" />
+            Piutang
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => navigate('/expenses')}>
+            <Receipt className="h-4 w-4 mr-2 text-red-500" />
+            Pengeluaran
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => navigate('/products')}>
+            <PackageSearch className="h-4 w-4 mr-2 text-green-500" />
+            Produk
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         <TransactionTable />
