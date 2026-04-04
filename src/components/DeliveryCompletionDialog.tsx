@@ -157,17 +157,7 @@ export function DeliveryCompletionDialog({
 
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-3">
-            <div className="flex-1">
-              <DeliveryNotePDF
-                delivery={delivery}
-                transactionInfo={transaction}
-              >
-                <Button className="w-full bg-blue-600 hover:bg-blue-700">
-                  <FileDown className="h-4 w-4 mr-2" />
-                  Cetak Surat Jalan
-                </Button>
-              </DeliveryNotePDF>
-            </div>
+
 
             {delivery.photoUrl && (
               <Button

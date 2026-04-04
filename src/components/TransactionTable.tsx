@@ -513,13 +513,13 @@ export function TransactionTable() {
 
         <!-- Bank Accounts - Full Width -->
         ${(() => {
-          const banks = [
-            companyInfo?.bankAccount1 ? `${companyInfo.bankAccount1} A.N ${companyInfo?.bankAccountName1 || companyInfo?.name || '-'}` : '',
-            companyInfo?.bankAccount2 ? `${companyInfo.bankAccount2} A.N ${companyInfo?.bankAccountName2 || companyInfo?.name || '-'}` : '',
-            companyInfo?.bankAccount3 ? `${companyInfo.bankAccount3} A.N ${companyInfo?.bankAccountName3 || companyInfo?.name || '-'}` : ''
-          ].filter(Boolean);
-          return banks.length > 0 ? `<tr><td colspan="5" style="font-size: 10pt; padding-top: 1mm;">Rek: ${banks.join(' | ')}</td></tr>` : '';
-        })()}
+        const banks = [
+          companyInfo?.bankAccount1 ? `${companyInfo.bankAccount1} A.N ${companyInfo?.bankAccountName1 || companyInfo?.name || '-'}` : '',
+          companyInfo?.bankAccount2 ? `${companyInfo.bankAccount2} A.N ${companyInfo?.bankAccountName2 || companyInfo?.name || '-'}` : '',
+          companyInfo?.bankAccount3 ? `${companyInfo.bankAccount3} A.N ${companyInfo?.bankAccountName3 || companyInfo?.name || '-'}` : ''
+        ].filter(Boolean);
+        return banks.length > 0 ? `<tr><td colspan="5" style="font-size: 10pt; padding-top: 1mm;">Rek: ${banks.join(' | ')}</td></tr>` : '';
+      })()}
 
         <!-- Warning Footer -->
         <tr>
@@ -842,6 +842,19 @@ export function TransactionTable() {
               <span className="hidden sm:inline">{isFullyDelivered ? "Selesai" : "Antar"}</span>
             </Button>
 
+            {/* Dot Matrix Print Button */}
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDotMatrixPrint(transaction);
+              }}
+              title="Cetak Faktur (Dot Matrix)"
+              className="hover-glow text-gray-600 hover:text-gray-900"
+            >
+              <Printer className="h-4 w-4" />
+            </Button>
 
             {isOwner(user) && (
               <Button
@@ -1669,6 +1682,15 @@ export function TransactionTable() {
                                     >
                                       <Eye className="h-3 w-3 mr-1" />
                                       Detail
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => handleDotMatrixPrint(transaction)}
+                                      className="text-xs"
+                                    >
+                                      <Printer className="h-3 w-3 mr-1" />
+                                      Cetak
                                     </Button>
                                   </div>
                                 </div>
