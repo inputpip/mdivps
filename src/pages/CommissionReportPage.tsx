@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo, useEffect, Fragment } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -60,6 +60,13 @@ export default function CommissionReportPage() {
     return new Date().toISOString().slice(0, 10)
   })
 
+  const applyMonthlyFilter = (month: number, year: number) => {
+    const endDay = new Date(year, month + 1, 0).getDate();
+    const m = (month + 1).toString().padStart(2, '0');
+    setStartDate(`${year}-${m}-01`);
+    setEndDate(`${year}-${m}-${endDay.toString().padStart(2, '0')}`);
+  }
+
   const [selectedUser, setSelectedUser] = useState<string>("all")
   const [userFilterOpen, setUserFilterOpen] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
@@ -89,7 +96,17 @@ export default function CommissionReportPage() {
       filtered = filtered.filter(entry => entry.userId === queryConfig.user)
     }
 
-    return filtered.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    return filtered.sort((a, b) => {
+      // Kelompokkan per karyawan secara alfabet jika tidak memfilter secara spesifik (mirip sistem Gaji)
+      if (!queryConfig?.user || queryConfig.user === "all") {
+        const nameA = a.userName || '';
+        const nameB = b.userName || '';
+        if (nameA !== nameB) {
+          return nameA.localeCompare(nameB);
+        }
+      }
+      return b.createdAt.getTime() - a.createdAt.getTime()
+    })
   }, [entries, queryConfig?.user])
 
   // Reset to first page when filters change
@@ -142,8 +159,39 @@ export default function CommissionReportPage() {
       return acc
     }, {} as Record<string, { userName: string; role: string; amount: number; quantity: number; count: number }>)
 
-    return { total, quantity, byRole, byUser }
-  }, [filteredEntries])
+    // Group by user and role for detail breakdown
+    const byUserAndRole = filteredEntries.reduce((acc, entry) => {
+      const key = `${entry.userId}_${entry.role}`;
+      if (!acc[key]) {
+        const employee = users?.find(u => u.id === entry.userId);
+        acc[key] = {
+          userId: entry.userId,
+          userName: employee?.name || entry.userName || 'Tanpa Nama',
+          role: entry.role,
+          amount: 0,
+          quantity: 0,
+          count: 0
+        }
+      }
+      acc[key].amount += entry.amount;
+      acc[key].quantity += entry.quantity;
+      acc[key].count += 1;
+      return acc;
+    }, {} as Record<string, { userId: string; userName: string; role: string; amount: number; quantity: number; count: number }>);
+
+    const groupedByRole = Object.values(byUserAndRole).reduce((acc, item) => {
+      if (!acc[item.role]) acc[item.role] = [];
+      acc[item.role].push(item);
+      return acc;
+    }, {} as Record<string, { userId: string; userName: string; role: string; amount: number; quantity: number; count: number }[]>);
+
+    // Sort users inside each role by amount
+    Object.keys(groupedByRole).forEach(role => {
+      groupedByRole[role].sort((a,b) => b.amount - a.amount);
+    });
+
+    return { total, quantity, byRole, byUser, groupedByRole }
+  }, [filteredEntries, users])
 
   // Get users for filter - use all employees from profiles table
   const uniqueUsers = useMemo(() => {
@@ -407,7 +455,34 @@ export default function CommissionReportPage() {
       { wch: 30 }, // Keterangan
       { wch: 40 }  // Nilai
     ]
-    XLSX.utils.book_append_sheet(wb, wsSummary, 'Ringkasan')
+    XLSX.utils.book_append_sheet(wb, wsSummary, 'Ringkasan Laporan')
+
+    // Prepare Employee Salary formatted sheet
+    const employeeData: any[] = [];
+    Object.entries(totals.groupedByRole).forEach(([role, usersInRole]) => {
+      usersInRole.forEach(data => {
+        const avgRate = data.quantity > 0 ? Math.round(data.amount / data.quantity) : 0;
+        employeeData.push({
+          'Nama Karyawan': data.userName,
+          'Peran Utama': role,
+          'Tarif Komisi (Rp)': avgRate,
+          'Jumlah Barang (Qty)': data.quantity,
+          'Frekuensi Transaksi': data.count,
+          'Total Komisi (Rp)': data.amount
+        });
+      });
+    });
+
+    const wsEmployee = XLSX.utils.json_to_sheet(employeeData);
+    wsEmployee['!cols'] = [
+      { wch: 25 }, // Nama 
+      { wch: 15 }, // Peran
+      { wch: 18 }, // Tarif
+      { wch: 20 }, // Qty
+      { wch: 18 }, // Frekuensi
+      { wch: 20 }  // Total Komisi
+    ];
+    XLSX.utils.book_append_sheet(wb, wsEmployee, 'Rekap Gaji Karyawan');
 
     if (!start || !end) return;
 
@@ -495,6 +570,18 @@ export default function CommissionReportPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-sm text-muted-foreground mr-2">Filter Cepat:</span>
+              <Button variant="outline" size="sm" onClick={() => {
+                const now = new Date();
+                applyMonthlyFilter(now.getMonth(), now.getFullYear());
+              }}>Bulan Ini</Button>
+              <Button variant="outline" size="sm" onClick={() => {
+                const now = new Date();
+                now.setMonth(now.getMonth() - 1);
+                applyMonthlyFilter(now.getMonth(), now.getFullYear());
+              }}>Bulan Lalu</Button>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="text-sm font-medium text-gray-700 mb-1 block">
@@ -705,6 +792,71 @@ export default function CommissionReportPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Summary by User (Ringkasan per Karyawan) */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Daftar Karyawan & Total Komisi</CardTitle>
+            <CardDescription>
+              Kumpulan total hitungan komisi beserta rincian per karyawan (Siap untuk direkap ke Gaji)
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-md border overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground w-1/4">Nama Karyawan</th>
+                    <th className="text-center px-4 py-3 font-semibold text-muted-foreground w-32">Tarif Komisi</th>
+                    <th className="text-center px-4 py-3 font-semibold text-muted-foreground w-24">Jumlah Qty</th>
+                    <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Total Transaksi</th>
+                    <th className="text-right px-4 py-3 font-semibold text-muted-foreground w-1/4">Total Komisi (Rp)</th>
+                  </tr>
+                </thead>
+                {Object.entries(totals.groupedByRole).map(([role, usersInRole]) => (
+                  <tbody key={role} className="divide-y relative">
+                    <tr className="bg-slate-100/80">
+                      <td colSpan={5} className="px-4 py-2 font-bold text-slate-800 uppercase tracking-wider text-xs">
+                        Peran: {role}
+                      </td>
+                    </tr>
+                    {usersInRole.map((data) => {
+                      const avgRate = data.quantity > 0 ? Math.round(data.amount / data.quantity) : 0;
+                      return (
+                        <tr key={`${role}-${data.userId}`} className="hover:bg-muted/50 transition-colors">
+                          <td className="px-4 py-3 font-medium text-blue-700 pl-6">{data.userName}</td>
+                          <td className="px-4 py-3 text-center text-slate-600">
+                            {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(avgRate)}
+                          </td>
+                          <td className="px-4 py-3 text-center font-bold text-blue-600">
+                            {data.quantity}
+                          </td>
+                          <td className="px-4 py-3 text-center text-muted-foreground">{data.count}x Jalan</td>
+                          <td className="px-4 py-3 text-right font-bold text-green-700 bg-green-50/20">
+                            {new Intl.NumberFormat("id-ID", {
+                              style: "currency",
+                              currency: "IDR",
+                              maximumFractionDigits: 0
+                            }).format(data.amount)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                ))}
+                {Object.keys(totals.groupedByRole).length === 0 && (
+                  <tbody>
+                    <tr>
+                      <td colSpan={5} className="text-center py-6 text-muted-foreground">
+                        Tidak ada data komisi karyawan pada periode ini.
+                      </td>
+                    </tr>
+                  </tbody>
+                )}
+              </table>
             </div>
           </CardContent>
         </Card>
