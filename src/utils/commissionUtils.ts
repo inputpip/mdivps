@@ -250,7 +250,8 @@ export async function regenerateDeliveryCommission(deliveryId: string) {
         driver:driver_id(full_name),
         helper:helper_id(full_name),
         helper2:helper_id_2(full_name),
-        helper3:helper_id_3(full_name)
+        helper3:helper_id_3(full_name),
+        transaction:transactions(items)
       `)
       .eq('id', deliveryId)
       .single();
@@ -297,8 +298,16 @@ export async function regenerateDeliveryCommission(deliveryId: string) {
 
     // Create commission entries for delivered items (exclude bonus items)
     for (const item of (delivery.items || [])) {
+      const txItems = (delivery.transaction as any)?.items || [];
+      const matchingTxItem = Array.isArray(txItems) ? txItems.find((ti: any) => 
+        (ti.product?.id === item.product_id) || (ti.productId === item.product_id)
+      ) : null;
+
       // Skip bonus items
-      const isBonusItem = item.is_bonus || item.product_name?.includes('(Bonus)') || item.product_name?.includes('BONUS');
+      const isBonusItem = item.is_bonus || 
+        item.product_name?.includes('(Bonus)') || 
+        item.product_name?.includes('BONUS') || 
+        Boolean(matchingTxItem?.isBonus);
       if (isBonusItem) {
         continue;
       }
@@ -477,7 +486,8 @@ export async function recalculateCommissionsForPeriod(startDate: Date, endDate: 
           driver:driver_id(full_name),
           helper:helper_id(full_name),
           helper2:helper_id_2(full_name),
-          helper3:helper_id_3(full_name)
+          helper3:helper_id_3(full_name),
+          transaction:transactions(items)
         `)
         .gte('delivery_date', startDate.toISOString())
         .lte('delivery_date', endDate.toISOString())
@@ -500,6 +510,7 @@ export async function recalculateCommissionsForPeriod(startDate: Date, endDate: 
           .in('delivery_id', deliveryIds);
 
         const deliveryExistingMap = new Map<string, any>();
+        const usedDeliveryKeys = new Set<string>();
         for (const c of (existingDeliveryCommissions || [])) {
           const key = `${c.delivery_id}-${c.product_id}-${c.role}-${c.user_id}`;
           deliveryExistingMap.set(key, c);
@@ -508,8 +519,13 @@ export async function recalculateCommissionsForPeriod(startDate: Date, endDate: 
         // Process each delivery
         for (const delivery of deliveries) {
           for (const item of (delivery.items || [])) {
+            const txItems = (delivery.transaction as any)?.items || [];
+            const matchingTxItem = Array.isArray(txItems) ? txItems.find((ti: any) => 
+              (ti.product?.id === item.product_id) || (ti.productId === item.product_id)
+            ) : null;
+
             // Skip bonus items
-            if (item.is_bonus || item.product_name?.includes('(Bonus)') || item.product_name?.includes('BONUS')) {
+            if (item.is_bonus || item.product_name?.includes('(Bonus)') || item.product_name?.includes('BONUS') || Boolean(matchingTxItem?.isBonus)) {
               continue;
             }
 
@@ -581,6 +597,7 @@ export async function recalculateCommissionsForPeriod(startDate: Date, endDate: 
             for (const apply of appliedRules) {
               const appliedRole = (apply as any).actualRole || apply.person.roleLabel;
               const key = `${delivery.id}-${item.product_id}-${appliedRole}-${apply.person.id}`;
+              usedDeliveryKeys.add(key);
               const existing = deliveryExistingMap.get(key);
 
               const newAmount = item.quantity_delivered * apply.ruleRate;
@@ -613,6 +630,23 @@ export async function recalculateCommissionsForPeriod(startDate: Date, endDate: 
               }
             }
           }
+        }
+
+        // Delete obsolete delivery commission entries
+        const deleteDeliveryIds: string[] = [];
+        for (const [key, existing] of deliveryExistingMap.entries()) {
+          if (!usedDeliveryKeys.has(key) && existing.status !== 'paid') {
+            deleteDeliveryIds.push(existing.id);
+          }
+        }
+        
+        if (deleteDeliveryIds.length > 0) {
+          for (let i = 0; i < deleteDeliveryIds.length; i += 100) {
+            const batch = deleteDeliveryIds.slice(i, i + 100);
+            await supabase.from('commission_entries').delete().in('id', batch);
+            skipped += batch.length;
+          }
+          console.log(`🗑️ Deleted ${deleteDeliveryIds.length} obsolete delivery commission entries`);
         }
       }
     }
@@ -674,6 +708,7 @@ export async function recalculateCommissionsForPeriod(startDate: Date, endDate: 
           .is('delivery_id', null); // Only transaction-based commissions (not delivery)
 
         const txnExistingMap = new Map<string, any>();
+        const usedTxnKeys = new Set<string>();
         for (const c of (existingTxnCommissions || [])) {
           // For supervisor, include user_id in key since multiple supervisors can get commission
           const key = c.role === 'supervisor'
@@ -714,6 +749,7 @@ export async function recalculateCommissionsForPeriod(startDate: Date, endDate: 
               const existing = txnExistingMap.get(key);
 
               if (salesRule && salesRule.rate_per_qty > 0) {
+                usedTxnKeys.add(key);
                 const newAmount = quantity * salesRule.rate_per_qty;
 
                 if (existing) {
@@ -752,6 +788,7 @@ export async function recalculateCommissionsForPeriod(startDate: Date, endDate: 
               const existing = txnExistingMap.get(key);
 
               if (rule && rule.rate_per_qty > 0) {
+                usedTxnKeys.add(key);
                 const newAmount = quantity * rule.rate_per_qty;
 
                 if (existing) {
@@ -790,6 +827,7 @@ export async function recalculateCommissionsForPeriod(startDate: Date, endDate: 
               const existing = txnExistingMap.get(key);
 
               if (rule && rule.rate_per_qty > 0) {
+                usedTxnKeys.add(key);
                 const newAmount = quantity * rule.rate_per_qty;
 
                 if (existing) {
@@ -828,6 +866,7 @@ export async function recalculateCommissionsForPeriod(startDate: Date, endDate: 
               const existing = txnExistingMap.get(key);
 
               if (operatorRule && operatorRule.rate_per_qty > 0) {
+                usedTxnKeys.add(key);
                 const newAmount = quantity * operatorRule.rate_per_qty;
 
                 if (existing) {
@@ -872,6 +911,7 @@ export async function recalculateCommissionsForPeriod(startDate: Date, endDate: 
                   const existing = txnExistingMap.get(key);
 
                   if (existing) {
+                    usedTxnKeys.add(key);
                     if (existing.status === 'paid') {
                       skipped++;
                     } else if (existing.amount !== newAmount || existing.rate_per_qty !== supervisorRule.rate_per_qty) {
@@ -879,6 +919,7 @@ export async function recalculateCommissionsForPeriod(startDate: Date, endDate: 
                       updated++;
                     }
                   } else {
+                    usedTxnKeys.add(key);
                     newEntries.push({
                       user_id: supervisor.id,
                       user_name: supervisor.full_name || 'Unknown Supervisor',
@@ -901,6 +942,23 @@ export async function recalculateCommissionsForPeriod(startDate: Date, endDate: 
               }
             }
           }
+        }
+
+        // Delete obsolete transaction commission entries
+        const deleteTxnIds: string[] = [];
+        for (const [key, existing] of txnExistingMap.entries()) {
+          if (!usedTxnKeys.has(key) && existing.status !== 'paid') {
+            deleteTxnIds.push(existing.id);
+          }
+        }
+        
+        if (deleteTxnIds.length > 0) {
+          for (let i = 0; i < deleteTxnIds.length; i += 100) {
+            const batch = deleteTxnIds.slice(i, i + 100);
+            await supabase.from('commission_entries').delete().in('id', batch);
+            skipped += batch.length;
+          }
+          console.log(`🗑️ Deleted ${deleteTxnIds.length} obsolete transaction commission entries`);
         }
       }
     }

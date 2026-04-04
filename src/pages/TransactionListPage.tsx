@@ -2,7 +2,7 @@ import { TransactionTable } from "@/components/TransactionTable";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useGranularPermission } from "@/hooks/useGranularPermission";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, ArrowLeft, Wallet, BookOpen, Receipt, PackageSearch } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Wallet, BookOpen, Receipt, PackageSearch, BarChart3, Truck } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 export default function TransactionListPage() {
@@ -40,6 +40,18 @@ export default function TransactionListPage() {
           </CardDescription>
         </div>
         <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" size="sm" onClick={() => navigate('/deliveries')}>
+            <Truck className="h-4 w-4 mr-2 text-sky-500" />
+            Pengantaran
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => navigate('/commission-report')}>
+            <BarChart3 className="h-4 w-4 mr-2 text-indigo-500" />
+            Komisi
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => navigate('/transaction-items-report')}>
+            <PackageSearch className="h-4 w-4 mr-2 text-emerald-500" />
+            Produk Laku
+          </Button>
           <Button variant="outline" size="sm" onClick={() => navigate('/cash-flow')}>
             <Wallet className="h-4 w-4 mr-2 text-blue-500" />
             Buku Kas

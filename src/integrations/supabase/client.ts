@@ -82,7 +82,10 @@ const LOCAL_ANON_JWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiI
 
 // Use production JWT for all connections (connect to mkw.aquvit.id)
 function getAnonJWT(): string {
-  // Always use production JWT since we want to connect to production database
+  const baseUrl = getBaseUrl();
+  if (baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1')) {
+    return LOCAL_ANON_JWT;
+  }
   return PROD_ANON_JWT;
 }
 
@@ -181,9 +184,8 @@ function getBaseUrl(): string {
   // IMPORTANT: Change this to match server you want to test against
   // 'https://nbx.aquvit.id' for Nabire
   // 'https://mkw.aquvit.id' for Manokwari
-  // 'http://localhost:3001' for local database (via Docker PostgREST)
-  // 'http://localhost:3003' for VPS aquvit_dev (via SSH tunnel)
-  return 'https://mkw.aquvit.id';
+  // 'http://localhost:8090' for Local Docker testing
+  return import.meta.env.VITE_POSTGREST_URL || 'http://localhost:8090';
 }
 
 function getTenantConfig(): TenantConfig {
