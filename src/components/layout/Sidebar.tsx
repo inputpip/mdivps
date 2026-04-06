@@ -45,6 +45,7 @@ import {
   Receipt,
   Lock,
   Unlock,
+  FolderArchive,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
@@ -157,6 +158,7 @@ const getMenuItems = (hasPermission: (permission: Permission) => boolean, hasGra
       { href: "/roles", label: "Manajemen Roles", icon: Shield, permission: PERMISSIONS.ROLES },
       { href: "/branches", label: "Manajemen Cabang", icon: Building2, permission: PERMISSIONS.SETTINGS },
       { href: "/web-management", label: "Web Management", icon: Server, permission: PERMISSIONS.SETTINGS, roles: ['owner'] },
+      { href: "/company-archive", label: "Arsip Berkas", icon: FolderArchive, permission: PERMISSIONS.SETTINGS, roles: ['owner'] },
 
     ].filter(item => {
       if (!hasPermission(item.permission)) return false;

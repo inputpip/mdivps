@@ -82,6 +82,7 @@ const DeliveryReportPage = lazy(() => import("@/pages/DeliveryReportPage"));
 
 
 const QuotationsPage = lazy(() => import("@/pages/QuotationsPage"));
+const CompanyArchivePage = lazy(() => import("@/pages/CompanyArchivePage"));
 const SERVERS = [
   {
     id: 'nabire',
@@ -358,6 +359,7 @@ function WebApp() {
                       <Route path="/journal" element={<JournalPage />} />
                       <Route path="/material-usage-summary" element={<MaterialUsageSummaryPage />} />
                       <Route path="/web-management" element={<WebManagementPage />} />
+                      <Route path="/company-archive" element={<CompanyArchivePage />} />
                       <Route path="/customer-map" element={<CustomerMapPage />} />
                       <Route path="/quotations" element={<QuotationsPage />} />
                       <Route path="/quotations/new" element={<QuotationsPage />} />
