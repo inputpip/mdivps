@@ -457,30 +457,91 @@ export default function CommissionReportPage() {
     ]
     XLSX.utils.book_append_sheet(wb, wsSummary, 'Ringkasan Laporan')
 
-    // Prepare Employee Salary formatted sheet
-    const employeeData: any[] = [];
+    // Prepare Employee Salary formatted sheet — dengan RUMUS Excel di kolom Total
+    // Dibangun cell-by-cell agar kolom F (Total Komisi) berisi formula =C*D, bukan angka statis
+    const wsEmployee: XLSX.WorkSheet = {};
+    const employeeHeaders = ['Nama Karyawan', 'Peran Utama', 'Tarif Komisi (Rp)', 'Jumlah Barang (Qty)', 'Frekuensi Transaksi', 'Total Komisi (Rp)'];
+    
+    // Row 1: Header
+    employeeHeaders.forEach((header, colIdx) => {
+      const cellAddr = XLSX.utils.encode_cell({ r: 0, c: colIdx });
+      wsEmployee[cellAddr] = { t: 's', v: header };
+    });
+
+    let empRowIdx = 1; // Start dari row index 1 (row 2 di Excel = 1-indexed)
+
+    // Flatten semua data dari groupedByRole, lalu sort berdasarkan nama (A-Z)
+    // Bila nama sama (orang dgn 2 peran), sort lagi berdasarkan role
+    const allEmployeeRows: { userName: string; role: string; avgRate: number; quantity: number; count: number }[] = [];
     Object.entries(totals.groupedByRole).forEach(([role, usersInRole]) => {
       usersInRole.forEach(data => {
         const avgRate = data.quantity > 0 ? Math.round(data.amount / data.quantity) : 0;
-        employeeData.push({
-          'Nama Karyawan': data.userName,
-          'Peran Utama': role,
-          'Tarif Komisi (Rp)': avgRate,
-          'Jumlah Barang (Qty)': data.quantity,
-          'Frekuensi Transaksi': data.count,
-          'Total Komisi (Rp)': data.amount
-        });
+        allEmployeeRows.push({ userName: data.userName, role, avgRate, quantity: data.quantity, count: data.count });
       });
     });
 
-    const wsEmployee = XLSX.utils.json_to_sheet(employeeData);
+    // Sort: nama A-Z sebagai primary key, role sebagai secondary key
+    allEmployeeRows.sort((a, b) => {
+      const nameCompare = a.userName.localeCompare(b.userName, 'id');
+      if (nameCompare !== 0) return nameCompare;
+      return a.role.localeCompare(b.role, 'id');
+    });
+
+    allEmployeeRows.forEach(row => {
+      const excelRow = empRowIdx + 1; // Nomor baris di Excel (1-indexed), header ada di baris 1
+
+      // Kolom A: Nama Karyawan
+      wsEmployee[XLSX.utils.encode_cell({ r: empRowIdx, c: 0 })] = { t: 's', v: row.userName };
+      // Kolom B: Peran Utama
+      wsEmployee[XLSX.utils.encode_cell({ r: empRowIdx, c: 1 })] = { t: 's', v: row.role };
+      // Kolom C: Tarif Komisi (angka, bisa diubah oleh user)
+      wsEmployee[XLSX.utils.encode_cell({ r: empRowIdx, c: 2 })] = { t: 'n', v: row.avgRate };
+      // Kolom D: Jumlah Barang / Qty (angka)
+      wsEmployee[XLSX.utils.encode_cell({ r: empRowIdx, c: 3 })] = { t: 'n', v: row.quantity };
+      // Kolom E: Frekuensi Transaksi (angka)
+      wsEmployee[XLSX.utils.encode_cell({ r: empRowIdx, c: 4 })] = { t: 'n', v: row.count };
+      // Kolom F: Total Komisi — RUMUS =C*D (Tarif × Qty), bukan angka statis!
+      wsEmployee[XLSX.utils.encode_cell({ r: empRowIdx, c: 5 })] = {
+        t: 'n',
+        f: `C${excelRow}*D${excelRow}`,   // ← Rumus Excel yang sesungguhnya
+        v: row.avgRate * row.quantity,     // Cached value (untuk preview tanpa recalculate)
+      };
+
+      empRowIdx++;
+    });
+
+    // Tambah baris TOTAL di bawah jika ada data
+    if (empRowIdx > 1) {
+      wsEmployee[XLSX.utils.encode_cell({ r: empRowIdx, c: 0 })] = { t: 's', v: 'TOTAL' };
+      wsEmployee[XLSX.utils.encode_cell({ r: empRowIdx, c: 1 })] = { t: 's', v: '' };
+      wsEmployee[XLSX.utils.encode_cell({ r: empRowIdx, c: 2 })] = { t: 's', v: '' };
+      wsEmployee[XLSX.utils.encode_cell({ r: empRowIdx, c: 3 })] = {
+        t: 'n',
+        f: `SUM(D2:D${empRowIdx})`,
+        v: totals.quantity,
+      };
+      wsEmployee[XLSX.utils.encode_cell({ r: empRowIdx, c: 4 })] = {
+        t: 'n',
+        f: `SUM(E2:E${empRowIdx})`,
+        v: Object.values(totals.byUser).reduce((s, u) => s + u.count, 0),
+      };
+      wsEmployee[XLSX.utils.encode_cell({ r: empRowIdx, c: 5 })] = {
+        t: 'n',
+        f: `SUM(F2:F${empRowIdx})`,
+        v: totals.total,
+      };
+      empRowIdx++;
+    }
+
+    // Set sheet range
+    wsEmployee['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: empRowIdx - 1, c: 5 } });
     wsEmployee['!cols'] = [
-      { wch: 25 }, // Nama 
-      { wch: 15 }, // Peran
-      { wch: 18 }, // Tarif
-      { wch: 20 }, // Qty
-      { wch: 18 }, // Frekuensi
-      { wch: 20 }  // Total Komisi
+      { wch: 25 }, // Nama Karyawan
+      { wch: 15 }, // Peran Utama
+      { wch: 18 }, // Tarif Komisi
+      { wch: 20 }, // Jumlah Barang (Qty)
+      { wch: 18 }, // Frekuensi Transaksi
+      { wch: 20 }, // Total Komisi (formula)
     ];
     XLSX.utils.book_append_sheet(wb, wsEmployee, 'Rekap Gaji Karyawan');
 
