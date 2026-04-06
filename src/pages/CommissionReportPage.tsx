@@ -457,91 +457,94 @@ export default function CommissionReportPage() {
     ]
     XLSX.utils.book_append_sheet(wb, wsSummary, 'Ringkasan Laporan')
 
-    // Prepare Employee Salary formatted sheet — dengan RUMUS Excel di kolom Total
-    // Dibangun cell-by-cell agar kolom F (Total Komisi) berisi formula =C*D, bukan angka statis
+    // Prepare sheet "Rekap Gaji Karyawan" — per produk per karyawan
+    // Setiap baris = 1 karyawan + 1 peran + 1 produk dengan tarif ASLI (bukan rata2)
+    // Sehingga formula =D*E (Tarif × Qty) menjadi 100% akurat
     const wsEmployee: XLSX.WorkSheet = {};
-    const employeeHeaders = ['Nama Karyawan', 'Peran Utama', 'Tarif Komisi (Rp)', 'Jumlah Barang (Qty)', 'Frekuensi Transaksi', 'Total Komisi (Rp)'];
-    
+    const employeeHeaders = ['Nama Karyawan', 'Peran', 'Nama Produk', 'Tarif (Rp)', 'Jumlah Qty', 'Total Komisi (Rp)'];
+
     // Row 1: Header
     employeeHeaders.forEach((header, colIdx) => {
-      const cellAddr = XLSX.utils.encode_cell({ r: 0, c: colIdx });
-      wsEmployee[cellAddr] = { t: 's', v: header };
+      wsEmployee[XLSX.utils.encode_cell({ r: 0, c: colIdx })] = { t: 's', v: header };
     });
 
-    let empRowIdx = 1; // Start dari row index 1 (row 2 di Excel = 1-indexed)
+    let empRowIdx = 1;
 
-    // Flatten semua data dari groupedByRole, lalu sort berdasarkan nama (A-Z)
-    // Bila nama sama (orang dgn 2 peran), sort lagi berdasarkan role
-    const allEmployeeRows: { userName: string; role: string; avgRate: number; quantity: number; count: number }[] = [];
-    Object.entries(totals.groupedByRole).forEach(([role, usersInRole]) => {
-      usersInRole.forEach(data => {
-        const avgRate = data.quantity > 0 ? Math.round(data.amount / data.quantity) : 0;
-        allEmployeeRows.push({ userName: data.userName, role, avgRate, quantity: data.quantity, count: data.count });
-      });
+    // Aggregate filteredEntries per (userId + role + productId)
+    // agar setiap baris = 1 produk dengan 1 tarif pasti
+    type ProductRow = { userName: string; role: string; productName: string; ratePerQty: number; quantity: number; amount: number };
+    const productMap = new Map<string, ProductRow>();
+
+    filteredEntries.forEach(entry => {
+      if (entry.status === 'cancelled') return;
+      const key = `${entry.userId}__${entry.role}__${entry.productId}`;
+      const existing = productMap.get(key);
+      if (existing) {
+        existing.quantity += entry.quantity;
+        existing.amount  += entry.amount;
+      } else {
+        productMap.set(key, {
+          userName:    entry.userName,
+          role:        entry.role,
+          productName: entry.productName,
+          ratePerQty:  entry.ratePerQty,  // tarif asli per produk ini
+          quantity:    entry.quantity,
+          amount:      entry.amount,
+        });
+      }
     });
 
-    // Sort: nama A-Z sebagai primary key, role sebagai secondary key
-    allEmployeeRows.sort((a, b) => {
-      const nameCompare = a.userName.localeCompare(b.userName, 'id');
-      if (nameCompare !== 0) return nameCompare;
-      return a.role.localeCompare(b.role, 'id');
+    // Sort: nama A-Z → peran → nama produk
+    const productRows = Array.from(productMap.values()).sort((a, b) => {
+      const n = a.userName.localeCompare(b.userName, 'id');
+      if (n !== 0) return n;
+      const r = a.role.localeCompare(b.role, 'id');
+      if (r !== 0) return r;
+      return a.productName.localeCompare(b.productName, 'id');
     });
 
-    allEmployeeRows.forEach(row => {
-      const excelRow = empRowIdx + 1; // Nomor baris di Excel (1-indexed), header ada di baris 1
+    let grandTotalQty = 0;
+    let grandTotalAmount = 0;
 
-      // Kolom A: Nama Karyawan
+    productRows.forEach(row => {
+      const excelRow = empRowIdx + 1;
       wsEmployee[XLSX.utils.encode_cell({ r: empRowIdx, c: 0 })] = { t: 's', v: row.userName };
-      // Kolom B: Peran Utama
       wsEmployee[XLSX.utils.encode_cell({ r: empRowIdx, c: 1 })] = { t: 's', v: row.role };
-      // Kolom C: Tarif Komisi (angka, bisa diubah oleh user)
-      wsEmployee[XLSX.utils.encode_cell({ r: empRowIdx, c: 2 })] = { t: 'n', v: row.avgRate };
-      // Kolom D: Jumlah Barang / Qty (angka)
-      wsEmployee[XLSX.utils.encode_cell({ r: empRowIdx, c: 3 })] = { t: 'n', v: row.quantity };
-      // Kolom E: Frekuensi Transaksi (angka)
-      wsEmployee[XLSX.utils.encode_cell({ r: empRowIdx, c: 4 })] = { t: 'n', v: row.count };
-      // Kolom F: Total Komisi — RUMUS =C*D (Tarif × Qty), bukan angka statis!
+      wsEmployee[XLSX.utils.encode_cell({ r: empRowIdx, c: 2 })] = { t: 's', v: row.productName };
+      // Kolom D: Tarif ASLI per produk ini (bukan rata-rata!)
+      wsEmployee[XLSX.utils.encode_cell({ r: empRowIdx, c: 3 })] = { t: 'n', v: row.ratePerQty };
+      // Kolom E: Total Qty produk ini
+      wsEmployee[XLSX.utils.encode_cell({ r: empRowIdx, c: 4 })] = { t: 'n', v: row.quantity };
+      // Kolom F: Rumus =D*E — akurat karena tarif & qty untuk 1 produk spesifik
       wsEmployee[XLSX.utils.encode_cell({ r: empRowIdx, c: 5 })] = {
         t: 'n',
-        f: `C${excelRow}*D${excelRow}`,   // ← Rumus Excel yang sesungguhnya
-        v: row.avgRate * row.quantity,     // Cached value (untuk preview tanpa recalculate)
+        f: `D${excelRow}*E${excelRow}`,
+        v: row.ratePerQty * row.quantity,
       };
-
+      grandTotalQty    += row.quantity;
+      grandTotalAmount += row.amount;
       empRowIdx++;
     });
 
-    // Tambah baris TOTAL di bawah jika ada data
+    // Baris TOTAL dengan formula SUM
     if (empRowIdx > 1) {
       wsEmployee[XLSX.utils.encode_cell({ r: empRowIdx, c: 0 })] = { t: 's', v: 'TOTAL' };
       wsEmployee[XLSX.utils.encode_cell({ r: empRowIdx, c: 1 })] = { t: 's', v: '' };
       wsEmployee[XLSX.utils.encode_cell({ r: empRowIdx, c: 2 })] = { t: 's', v: '' };
-      wsEmployee[XLSX.utils.encode_cell({ r: empRowIdx, c: 3 })] = {
-        t: 'n',
-        f: `SUM(D2:D${empRowIdx})`,
-        v: totals.quantity,
-      };
-      wsEmployee[XLSX.utils.encode_cell({ r: empRowIdx, c: 4 })] = {
-        t: 'n',
-        f: `SUM(E2:E${empRowIdx})`,
-        v: Object.values(totals.byUser).reduce((s, u) => s + u.count, 0),
-      };
-      wsEmployee[XLSX.utils.encode_cell({ r: empRowIdx, c: 5 })] = {
-        t: 'n',
-        f: `SUM(F2:F${empRowIdx})`,
-        v: totals.total,
-      };
+      wsEmployee[XLSX.utils.encode_cell({ r: empRowIdx, c: 3 })] = { t: 's', v: '' };
+      wsEmployee[XLSX.utils.encode_cell({ r: empRowIdx, c: 4 })] = { t: 'n', f: `SUM(E2:E${empRowIdx})`, v: grandTotalQty };
+      wsEmployee[XLSX.utils.encode_cell({ r: empRowIdx, c: 5 })] = { t: 'n', f: `SUM(F2:F${empRowIdx})`, v: grandTotalAmount };
       empRowIdx++;
     }
 
-    // Set sheet range
     wsEmployee['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: empRowIdx - 1, c: 5 } });
     wsEmployee['!cols'] = [
       { wch: 25 }, // Nama Karyawan
-      { wch: 15 }, // Peran Utama
-      { wch: 18 }, // Tarif Komisi
-      { wch: 20 }, // Jumlah Barang (Qty)
-      { wch: 18 }, // Frekuensi Transaksi
-      { wch: 20 }, // Total Komisi (formula)
+      { wch: 15 }, // Peran
+      { wch: 30 }, // Nama Produk
+      { wch: 15 }, // Tarif (Rp)
+      { wch: 15 }, // Jumlah Qty
+      { wch: 20 }, // Total Komisi
     ];
     XLSX.utils.book_append_sheet(wb, wsEmployee, 'Rekap Gaji Karyawan');
 
@@ -857,68 +860,101 @@ export default function CommissionReportPage() {
           </CardContent>
         </Card>
 
-        {/* Summary by User (Ringkasan per Karyawan) */}
+        {/* Summary by User — Per Produk Per Karyawan */}
         <Card>
           <CardHeader>
             <CardTitle>Daftar Karyawan & Total Komisi</CardTitle>
             <CardDescription>
-              Kumpulan total hitungan komisi beserta rincian per karyawan (Siap untuk direkap ke Gaji)
+              Rincian komisi per produk per karyawan — Tarif × Qty = Total (transparan & akurat)
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="rounded-md border overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/50">
-                  <tr>
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground w-1/4">Nama Karyawan</th>
-                    <th className="text-center px-4 py-3 font-semibold text-muted-foreground w-32">Tarif Komisi</th>
-                    <th className="text-center px-4 py-3 font-semibold text-muted-foreground w-24">Jumlah Qty</th>
-                    <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Total Transaksi</th>
-                    <th className="text-right px-4 py-3 font-semibold text-muted-foreground w-1/4">Total Komisi (Rp)</th>
-                  </tr>
-                </thead>
-                {Object.entries(totals.groupedByRole).map(([role, usersInRole]) => (
-                  <tbody key={role} className="divide-y relative">
-                    <tr className="bg-slate-100/80">
-                      <td colSpan={5} className="px-4 py-2 font-bold text-slate-800 uppercase tracking-wider text-xs">
-                        Peran: {role}
-                      </td>
-                    </tr>
-                    {usersInRole.map((data) => {
-                      const avgRate = data.quantity > 0 ? Math.round(data.amount / data.quantity) : 0;
-                      return (
-                        <tr key={`${role}-${data.userId}`} className="hover:bg-muted/50 transition-colors">
-                          <td className="px-4 py-3 font-medium text-blue-700 pl-6">{data.userName}</td>
-                          <td className="px-4 py-3 text-center text-slate-600">
-                            {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(avgRate)}
-                          </td>
-                          <td className="px-4 py-3 text-center font-bold text-blue-600">
-                            {data.quantity}
-                          </td>
-                          <td className="px-4 py-3 text-center text-muted-foreground">{data.count}x Jalan</td>
-                          <td className="px-4 py-3 text-right font-bold text-green-700 bg-green-50/20">
-                            {new Intl.NumberFormat("id-ID", {
-                              style: "currency",
-                              currency: "IDR",
-                              maximumFractionDigits: 0
-                            }).format(data.amount)}
+            {(() => {
+              // Aggregate filteredEntries per (userId + role + productId)
+              type FEProductRow = { userName: string; role: string; productName: string; ratePerQty: number; quantity: number; amount: number; userId: string; productId: string };
+              const feProductMap = new Map<string, FEProductRow>();
+              filteredEntries.forEach(entry => {
+                if (entry.status === 'cancelled') return;
+                const key = `${entry.userId}__${entry.role}__${entry.productId}`;
+                const ex = feProductMap.get(key);
+                if (ex) {
+                  ex.quantity += entry.quantity;
+                  ex.amount   += entry.amount;
+                } else {
+                  feProductMap.set(key, {
+                    userName: entry.userName, role: entry.role,
+                    productName: entry.productName, ratePerQty: entry.ratePerQty,
+                    quantity: entry.quantity, amount: entry.amount,
+                    userId: entry.userId, productId: entry.productId,
+                  });
+                }
+              });
+              const feRows = Array.from(feProductMap.values()).sort((a, b) => {
+                const n = a.userName.localeCompare(b.userName, 'id');
+                if (n !== 0) return n;
+                const r = a.role.localeCompare(b.role, 'id');
+                if (r !== 0) return r;
+                return a.productName.localeCompare(b.productName, 'id');
+              });
+
+              // Group untuk header nama karyawan
+              let lastKey = '';
+              return (
+                <div className="rounded-md border overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/50">
+                      <tr>
+                        <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Nama Karyawan</th>
+                        <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Peran</th>
+                        <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Nama Produk</th>
+                        <th className="text-center px-4 py-3 font-semibold text-muted-foreground w-28">Tarif (Rp)</th>
+                        <th className="text-center px-4 py-3 font-semibold text-muted-foreground w-24">Qty</th>
+                        <th className="text-right px-4 py-3 font-semibold text-muted-foreground w-40">Total Komisi (Rp)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {feRows.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="text-center py-6 text-muted-foreground">
+                            Tidak ada data komisi karyawan pada periode ini.
                           </td>
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                ))}
-                {Object.keys(totals.groupedByRole).length === 0 && (
-                  <tbody>
-                    <tr>
-                      <td colSpan={5} className="text-center py-6 text-muted-foreground">
-                        Tidak ada data komisi karyawan pada periode ini.
-                      </td>
-                    </tr>
-                  </tbody>
-                )}
-              </table>
-            </div>
+                      ) : feRows.map((row, idx) => {
+                        const rowKey = `${row.userId}__${row.role}`;
+                        const isNewGroup = rowKey !== lastKey;
+                        lastKey = rowKey;
+                        const exactTotal = row.ratePerQty * row.quantity;
+                        return (
+                          <Fragment key={`${row.userId}-${row.role}-${row.productId}`}>
+                            {isNewGroup && (
+                              <tr className="bg-slate-50 border-t-2 border-slate-200">
+                                <td colSpan={6} className="px-4 py-1.5 text-xs font-bold text-slate-600 uppercase tracking-wide">
+                                  {row.userName} <span className="font-normal text-slate-400 ml-1">({row.role})</span>
+                                </td>
+                              </tr>
+                            )}
+                            <tr className="hover:bg-muted/40 transition-colors">
+                              <td className="px-4 py-2 text-blue-700 font-medium pl-6">{row.userName}</td>
+                              <td className="px-4 py-2">
+                                <Badge variant="outline" className="uppercase text-xs">{row.role}</Badge>
+                              </td>
+                              <td className="px-4 py-2 text-slate-700">{row.productName}</td>
+                              <td className="px-4 py-2 text-center text-slate-600">
+                                {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(row.ratePerQty)}
+                              </td>
+                              <td className="px-4 py-2 text-center font-bold text-blue-600">{row.quantity.toLocaleString('id-ID')}</td>
+                              <td className="px-4 py-2 text-right font-bold text-green-700">
+                                {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(exactTotal)}
+                              </td>
+                            </tr>
+                          </Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
           </CardContent>
         </Card>
 
