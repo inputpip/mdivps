@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import { CommissionRule, CommissionEntry } from '@/types/commission'
 import { useAuth } from './useAuth'
-import { deleteCommissionExpense, deleteTransactionCommissionExpenses } from '@/utils/financialIntegration'
+
 import { useBranch } from '@/contexts/BranchContext'
 
 export function useCommissionRules() {
@@ -319,30 +319,7 @@ export function useCommissionEntries(startDate?: Date, endDate?: Date, role?: st
   const deleteCommissionEntry = async (entryId: string) => {
     try {
       console.log('🗑️ Deleting commission entry:', entryId);
-      
-      // Get commission entry details to check if we need to delete expense
-      // Use .order('id').limit(1) and handle array response because our client forces Accept: application/json
-      const { data: commissionEntryRaw } = await supabase
-        .from('commission_entries')
-        .select('role, delivery_id')
-        .eq('id', entryId)
-        .order('id').limit(1)
-      const commissionEntry = Array.isArray(commissionEntryRaw) ? commissionEntryRaw[0] : commissionEntryRaw
 
-      // Only delete expense entry for sales commission (not delivery commission)
-      if (commissionEntry && commissionEntry.role === 'sales' && !commissionEntry.delivery_id) {
-        try {
-          await deleteCommissionExpense(entryId);
-          console.log('✅ Deleted sales commission expense entry')
-        } catch (expenseError) {
-          console.error('❌ Failed to delete commission expense (continuing with commission deletion):', expenseError);
-          // Don't throw - continue with commission deletion even if expense deletion fails
-        }
-      } else {
-        console.log('ℹ️ Skipped expense deletion for delivery commission')
-      }
-      
-      // Then delete the commission entry
       const { error } = await supabase
         .from('commission_entries')
         .delete()
@@ -353,9 +330,7 @@ export function useCommissionEntries(startDate?: Date, endDate?: Date, role?: st
         throw error;
       }
 
-      console.log('✅ Commission entry and expense deleted successfully');
-      
-      // Refresh the entries
+      console.log('✅ Commission entry deleted successfully');
       await fetchEntries();
     } catch (err: any) {
       console.error('❌ Delete commission error:', err);
@@ -366,17 +341,8 @@ export function useCommissionEntries(startDate?: Date, endDate?: Date, role?: st
 
   const deleteCommissionsByTransaction = async (transactionId: string) => {
     try {
-      console.log('🗑️ Deleting commission entries and expenses for transaction:', transactionId);
-      
-      // First delete all corresponding expense entries for this transaction
-      try {
-        await deleteTransactionCommissionExpenses(transactionId);
-      } catch (expenseError) {
-        console.error('❌ Failed to delete commission expenses for transaction (continuing):', expenseError);
-        // Don't throw - continue with commission deletion even if expense deletion fails
-      }
-      
-      // Then delete the commission entries
+      console.log('🗑️ Deleting commission entries for transaction:', transactionId);
+
       const { error } = await supabase
         .from('commission_entries')
         .delete()
@@ -387,7 +353,7 @@ export function useCommissionEntries(startDate?: Date, endDate?: Date, role?: st
         throw error;
       }
 
-      console.log('✅ All commission entries and expenses for transaction deleted successfully');
+      console.log('✅ All commission entries for transaction deleted successfully');
     } catch (err: any) {
       console.error('❌ Delete transaction commissions error:', err);
       setError(err.message)

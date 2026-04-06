@@ -1877,11 +1877,11 @@ BEGIN
   -- CREATE JOURNAL ENTRY
   INSERT INTO journal_entries (
     id, branch_id, entry_number, entry_date, description,
-    reference_type, reference_id, status, is_voided, created_at, updated_at
+    reference_type, reference_id, status, total_debit, total_credit, is_voided, created_at, updated_at
   ) VALUES (
     gen_random_uuid(), p_branch_id, v_entry_number, p_transfer_date,
     COALESCE(p_description, 'Transfer dari ' || v_from_account.name || ' ke ' || v_to_account.name),
-    'transfer', p_transfer_id, 'posted', FALSE, NOW(), NOW()
+    'transfer', p_transfer_id, 'posted', p_amount, p_amount, FALSE, NOW(), NOW()
   ) RETURNING id INTO v_journal_id;
 
   -- Dr. Akun Tujuan (kas bertambah)

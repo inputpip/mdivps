@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client'
 import { CommissionEntry } from '@/types/commission'
 import { useAuth } from './useAuth'
 import { useBranch } from '@/contexts/BranchContext'
-import { deleteCommissionExpense, deleteTransactionCommissionExpenses } from '@/utils/financialIntegration'
+
 
 // Query keys for consistent caching
 export const commissionKeys = {
@@ -158,29 +158,7 @@ export function useDeleteCommissionEntry() {
   return useMutation({
     mutationFn: async (entryId: string) => {
       console.log('🗑️ Deleting commission entry:', entryId)
-      
-      // Get commission entry details to check if we need to delete expense
-      // Use .order('id').limit(1) and handle array response because our client forces Accept: application/json
-      const { data: commissionEntryRaw } = await supabase
-        .from('commission_entries')
-        .select('role, delivery_id')
-        .eq('id', entryId)
-        .order('id').limit(1)
-      const commissionEntry = Array.isArray(commissionEntryRaw) ? commissionEntryRaw[0] : commissionEntryRaw
 
-      // Only delete expense entry for sales commission (not delivery commission)
-      if (commissionEntry && commissionEntry.role === 'sales' && !commissionEntry.delivery_id) {
-        try {
-          await deleteCommissionExpense(entryId)
-          console.log('✅ Deleted sales commission expense entry')
-        } catch (expenseError) {
-          console.error('❌ Failed to delete commission expense (continuing):', expenseError)
-        }
-      } else {
-        console.log('ℹ️ Skipped expense deletion for delivery commission')
-      }
-      
-      // Delete commission entry
       const { error } = await supabase
         .from('commission_entries')
         .delete()
@@ -191,7 +169,7 @@ export function useDeleteCommissionEntry() {
         throw error
       }
 
-      console.log('✅ Commission entry and expense deleted successfully')
+      console.log('✅ Commission entry deleted successfully')
     },
     onSuccess: () => {
       // Invalidate all commission-related queries
@@ -210,16 +188,8 @@ export function useDeleteTransactionCommissions() {
 
   return useMutation({
     mutationFn: async (transactionId: string) => {
-      console.log('🗑️ Deleting commission entries and expenses for transaction:', transactionId)
-      
-      // Delete commission expenses first
-      try {
-        await deleteTransactionCommissionExpenses(transactionId)
-      } catch (expenseError) {
-        console.error('❌ Failed to delete commission expenses (continuing):', expenseError)
-      }
-      
-      // Delete commission entries
+      console.log('🗑️ Deleting commission entries for transaction:', transactionId)
+
       const { error } = await supabase
         .from('commission_entries')
         .delete()
@@ -230,7 +200,7 @@ export function useDeleteTransactionCommissions() {
         throw error
       }
 
-      console.log('✅ All commission entries and expenses for transaction deleted')
+      console.log('✅ All commission entries for transaction deleted')
     },
     onSuccess: () => {
       // Invalidate commission and expense queries

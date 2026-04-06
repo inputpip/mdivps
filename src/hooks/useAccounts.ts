@@ -8,8 +8,8 @@ const fromDbToApp = (dbAccount: any): Account => ({
   id: dbAccount.id,
   name: dbAccount.name,
   type: dbAccount.type,
-  balance: Number(dbAccount.balance) || 0,
-  initialBalance: Number(dbAccount.initial_balance) || 0,
+  balance: Number(dbAccount.total_balance) || 0,
+  initialBalance: Number(dbAccount.total_initial_balance) || 0,
   isPaymentAccount: dbAccount.is_payment_account,
   createdAt: new Date(dbAccount.created_at),
 
@@ -24,7 +24,7 @@ const fromDbToApp = (dbAccount: any): Account => ({
 
   // Employee assignment for cash accounts
   employeeId: dbAccount.employee_id || undefined,
-  employeeName: dbAccount.profiles?.name || dbAccount.profiles?.full_name || undefined,
+  employeeName: dbAccount.employee_name || dbAccount.employee_full_name || undefined,
 });
 
 export const useAccounts = () => {
@@ -36,8 +36,8 @@ export const useAccounts = () => {
     queryFn: async () => {
       // Get accounts for current branch only
       let accountsQuery = supabase
-        .from('accounts')
-        .select('*, profiles:employee_id(name, full_name)');
+        .from('v_coa_saldosaatini')
+        .select('*');
 
       if (currentBranch?.id) {
         accountsQuery = accountsQuery.eq('branch_id', currentBranch.id);
@@ -279,7 +279,7 @@ export const useAccounts = () => {
   const getAccountsHierarchy = useMutation({
     mutationFn: async () => {
       const { data, error } = await supabase
-        .from('accounts')
+        .from('v_coa_saldosaatini')
         .select('*')
         .eq('is_active', true)
         .order('sort_order', { ascending: true });
@@ -292,12 +292,12 @@ export const useAccounts = () => {
     mutationFn: async (accountId: string, includeChildren = false) => {
       if (!includeChildren) {
         const { data: dataRaw, error } = await supabase
-          .from('accounts')
-          .select('balance')
+          .from('v_coa_saldosaatini')
+          .select('total_balance')
           .eq('id', accountId)
           .single();
         if (error) throw error;
-        return Number(dataRaw?.balance) || 0;
+        return Number(dataRaw?.total_balance) || 0;
       }
 
       const { data, error } = await supabase

@@ -228,6 +228,7 @@ export function CashFlowTable({ data, isLoading }: CashFlowTableProps) {
   const [isDetailDialogOpen, setIsDetailDialogOpen] = React.useState(false);
   const [detailRecord, setDetailRecord] = React.useState<CashHistoryWithBalance | null>(null);
   const [selectedAccountId, setSelectedAccountId] = React.useState<string>('all');
+  const [selectedType, setSelectedType] = React.useState<string>('all');
 
   // Get account balances and codes from useAccounts (calculated from journal entries)
   const accountBalances = React.useMemo(() => {
@@ -262,6 +263,19 @@ export function CashFlowTable({ data, isLoading }: CashFlowTableProps) {
     return Array.from(accountMap.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [data, accountCodes]);
 
+  // Get unique types from cash flow data for filter dropdown
+  const uniqueTypesInData = React.useMemo(() => {
+    if (!Array.isArray(data)) return [];
+    const typeSet = new Set<string>();
+    data.forEach(item => {
+      const typeLabel = getTypeLabel(item);
+      if (typeLabel && typeLabel !== 'Tidak Diketahui') {
+        typeSet.add(typeLabel);
+      }
+    });
+    return Array.from(typeSet).sort();
+  }, [data]);
+
   // Initialize filtered data with calculated balances
   React.useEffect(() => {
     if (!Array.isArray(data) || Object.keys(accountBalances).length === 0) {
@@ -279,35 +293,12 @@ export function CashFlowTable({ data, isLoading }: CashFlowTableProps) {
       const item = data[i];
       const accountId = item.account_id;
 
-      // Current balance for this account
-      const currentBalance = accountRunningBalances[accountId] || 0;
-
-      // Calculate the effect of this transaction
-      let transactionEffect = 0;
-      if (isIncomeType(item)) {
-        transactionEffect = item.amount;
-      } else if (isExpenseType(item)) {
-        transactionEffect = -item.amount;
-      } else if (item.source_type === 'transfer_masuk') {
-        transactionEffect = item.amount;
-      } else if (item.source_type === 'transfer_keluar') {
-        transactionEffect = -item.amount;
-      }
-
-      // After balance is the current balance
-      const afterBalance = currentBalance;
-      // Previous balance is current balance minus the transaction effect
-      const previousBalance = currentBalance - transactionEffect;
-
       dataWithBalances.push({
         ...item,
-        previousBalance,
-        afterBalance,
+        previousBalance: item.previous_balance || 0,
+        afterBalance: item.after_balance || 0,
         accountCode: accountCodes[accountId] || ''
       });
-
-      // Update running balance for next iteration (going backwards in time)
-      accountRunningBalances[accountId] = previousBalance;
     }
 
     setFilteredData(dataWithBalances);
@@ -320,6 +311,11 @@ export function CashFlowTable({ data, isLoading }: CashFlowTableProps) {
     // Apply account filter
     if (selectedAccountId !== 'all') {
       result = result.filter(item => item.account_id === selectedAccountId);
+    }
+
+    // Apply type filter
+    if (selectedType !== 'all') {
+      result = result.filter(item => getTypeLabel(item) === selectedType);
     }
 
     // Apply date filter
@@ -354,7 +350,7 @@ export function CashFlowTable({ data, isLoading }: CashFlowTableProps) {
       console.error('Error filtering cash flow data:', error);
       return result;
     }
-  }, [filteredData, dateRange, selectedAccountId]);
+  }, [filteredData, dateRange, selectedAccountId, selectedType]);
 
   const clearAccountFilter = () => {
     setSelectedAccountId('all');
@@ -363,6 +359,7 @@ export function CashFlowTable({ data, isLoading }: CashFlowTableProps) {
   const clearAllFilters = () => {
     setDateRange({ from: undefined, to: undefined });
     setSelectedAccountId('all');
+    setSelectedType('all');
   };
 
   // Calculate totals for summary cards
@@ -951,8 +948,25 @@ export function CashFlowTable({ data, isLoading }: CashFlowTableProps) {
             </Select>
           </div>
 
+          {/* Type Filter */}
+          <div className="flex items-center gap-2">
+            <Select value={selectedType} onValueChange={setSelectedType}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Filter Jenis" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Semua Jenis</SelectItem>
+                {uniqueTypesInData.map(type => (
+                  <SelectItem key={type} value={type}>
+                    {type}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           {/* Clear Filters */}
-          {(dateRange.from || dateRange.to || selectedAccountId !== 'all') && (
+          {(dateRange.from || dateRange.to || selectedAccountId !== 'all' || selectedType !== 'all') && (
             <Button
               variant="ghost"
               size="sm"
@@ -972,6 +986,15 @@ export function CashFlowTable({ data, isLoading }: CashFlowTableProps) {
                 <X
                   className="h-3 w-3 cursor-pointer hover:text-destructive"
                   onClick={clearAccountFilter}
+                />
+              </Badge>
+            )}
+            {selectedType !== 'all' && (
+              <Badge variant="secondary" className="flex items-center gap-1">
+                Jenis: {selectedType}
+                <X
+                  className="h-3 w-3 cursor-pointer hover:text-destructive"
+                  onClick={() => setSelectedType('all')}
                 />
               </Badge>
             )}

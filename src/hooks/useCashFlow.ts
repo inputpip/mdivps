@@ -92,6 +92,8 @@ export function useCashFlow() {
           reference_number: row.entry_number || row.reference_id,
           created_at: row.created_at,
           created_by: null, 
+          previous_balance: Number(row.previous_balance) || 0,
+          after_balance: Number(row.after_balance) || 0,
         };
       });
 

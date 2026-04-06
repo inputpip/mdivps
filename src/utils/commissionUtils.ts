@@ -2,7 +2,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { CommissionEntry } from '@/types/commission';
 import { Transaction } from '@/types/transaction';
 import { Delivery } from '@/types/delivery';
-import { createCommissionExpense } from './financialIntegration';
+
 
 export async function generateSalesCommission(transaction: Transaction) {
   try {
@@ -71,33 +71,9 @@ export async function generateSalesCommission(transaction: Transaction) {
         throw insertError;
       }
 
-      // Create corresponding expense entries automatically
-      if (insertedEntries && insertedEntries.length > 0) {
-        for (const entry of insertedEntries) {
-          try {
-            const commissionEntry: CommissionEntry = {
-              id: entry.id,
-              userId: entry.user_id,
-              userName: entry.user_name,
-              role: entry.role,
-              productId: entry.product_id,
-              productName: entry.product_name,
-              quantity: entry.quantity,
-              ratePerQty: entry.rate_per_qty,
-              amount: entry.amount,
-              transactionId: entry.transaction_id,
-              deliveryId: entry.delivery_id,
-              ref: entry.ref,
-              status: entry.status,
-              createdAt: new Date(entry.created_at)
-            };
-
-            await createCommissionExpense(commissionEntry);
-          } catch (expenseError) {
-            // Don't throw - commission is created successfully, expense is secondary
-          }
-        }
-      }
+      // Commission entries dicatat untuk keperluan laporan saja.
+      // Beban komisi TIDAK dicatat sebagai expense terpisah —
+      // akan masuk secara otomatis saat payroll diproses.
     }
 
   } catch (error) {

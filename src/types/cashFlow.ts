@@ -20,6 +20,8 @@ export interface CashHistory {
   // Added for COA integration
   expense_account_id?: string;
   expense_account_name?: string;
+  previous_balance?: number;
+  after_balance?: number;
 }
 
 export type CashFlowType = 'income' | 'expense';

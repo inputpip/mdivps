@@ -30,8 +30,6 @@ import { format } from "date-fns"
 import { id } from "date-fns/locale/id"
 
 // ─── Konstanta ────────────────────────────────────────────────────────────────
-const MAX_FILE_SIZE_KB = 1000
-const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_KB * 1024
 const ALLOWED_TYPES = [
   "application/pdf",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -106,14 +104,9 @@ function UploadForm({ onClose, editDoc }: UploadFormProps) {
     const file = e.target.files?.[0]
     if (!file) return
 
-    // Validate type
+    // Validate type — hanya PDF dan Excel
     if (!ALLOWED_TYPES.includes(file.type)) {
       setFileError("Hanya file PDF atau Excel (.xlsx/.xls) yang diizinkan.")
-      return
-    }
-    // Validate size
-    if (file.size > MAX_FILE_SIZE_BYTES) {
-      setFileError(`Ukuran file melebihi batas maksimum ${MAX_FILE_SIZE_KB} KB. (File Anda: ${formatBytes(file.size)})`)
       return
     }
 
@@ -216,8 +209,6 @@ function UploadForm({ onClose, editDoc }: UploadFormProps) {
               <div className="text-sm text-muted-foreground">
                 <Upload className="h-6 w-6 mx-auto mb-1 text-slate-400" />
                 Klik untuk pilih file <span className="font-medium text-indigo-600">PDF atau Excel</span>
-                <br />
-                <span className="text-xs">Maks {MAX_FILE_SIZE_KB} KB</span>
               </div>
             )}
           </div>
@@ -499,7 +490,6 @@ export default function CompanyArchivePage() {
               <p className="font-semibold mb-1">Ketentuan Upload Berkas</p>
               <ul className="list-disc pl-4 space-y-0.5 text-xs">
                 <li>Format yang diizinkan: <strong>PDF</strong> dan <strong>Excel (.xlsx / .xls)</strong></li>
-                <li>Ukuran maksimum per file: <strong>{MAX_FILE_SIZE_KB} KB</strong></li>
                 <li>Berkas disimpan secara terenkripsi di database</li>
                 <li>Hanya <strong>Owner</strong> yang dapat mengakses, upload, dan menghapus berkas</li>
               </ul>
