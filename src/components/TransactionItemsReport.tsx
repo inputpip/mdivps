@@ -166,494 +166,73 @@ export const TransactionItemsReport = () => {
       let toDate: Date
 
       if (filterType === 'monthly') {
-        // Untuk filter bulanan, gunakan hari pertama dan terakhir bulan
         const firstDay = format(startOfMonth(new Date(selectedYear, selectedMonth - 1)), 'yyyy-MM-dd')
         const lastDay = format(endOfMonth(new Date(selectedYear, selectedMonth - 1)), 'yyyy-MM-dd')
         fromDate = toOfficeStartOfDay(firstDay, timezone)
         toDate = toOfficeEndOfDay(lastDay, timezone)
       } else {
-        // Gunakan timezone kantor untuk konversi tanggal
-        // Ini memastikan filter bekerja dengan benar terlepas dari timezone browser
         fromDate = toOfficeStartOfDay(startDate, timezone)
         toDate = toOfficeEndOfDay(endDate, timezone)
       }
 
-      console.log('[TransactionItemsReport] Date filter with office timezone:', {
-        timezone,
-        startDate,
-        endDate,
-        fromDateISO: fromDate.toISOString(),
-        toDateISO: toDate.toISOString(),
+      console.log('[TransactionItemsReport] Fetching from v_realisasi_penjualan:', {
+        timezone, startDate, endDate, fromDateISO: fromDate.toISOString(), toDateISO: toDate.toISOString()
       })
 
-      const items: SoldProduct[] = []
+      // Query to our powerful new View
+      let query = supabase
+        .from('v_realisasi_penjualan')
+        .select('*')
+        .gte('realization_date', fromDate.toISOString())
+        .lte('realization_date', toDate.toISOString())
 
-      // 1. Fetch delivered items from delivery_items table
-      if (sourceFilter === 'all' || sourceFilter === 'delivery') {
-        let deliveryQuery = supabase
-          .from('deliveries')
-          .select(`
-            id,
-            transaction_id,
-            delivery_date,
-            created_at,
-            driver_id,
-            driver:profiles!deliveries_driver_id_fkey(full_name),
-            delivery_items(
-              id,
-              product_id,
-              product_name,
-              quantity_delivered,
-              unit
-            ),
-            transaction:transactions!deliveries_transaction_id_fkey(
-              id,
-              customer_name,
-              order_date,
-              cashier_id,
-              retasi_id,
-              sales_name,
-              payment_account_id,
-              payment_status,
-              cashier:profiles!transactions_cashier_id_fkey(full_name),
-              items
-            )
-          `)
-          .gte('delivery_date', fromDate.toISOString())
-          .lte('delivery_date', toDate.toISOString())
-
-        if (currentBranch?.id) {
-          deliveryQuery = deliveryQuery.eq('branch_id', currentBranch.id)
-        }
-
-        const { data: deliveryData, error: deliveryError } = await deliveryQuery
-
-        if (deliveryError) {
-          console.error('Error fetching deliveries:', deliveryError)
-        } else if (deliveryData) {
-          // Fetch ALL retasi records for the branch (no date filter for more reliable matching)
-          let allRetasiList: any[] = []
-          if (currentBranch?.id) {
-            const { data: allRetasi } = await supabase
-              .from('retasi')
-              .select('id, retasi_number, retasi_ke, driver_name, departure_date, created_at')
-              .eq('branch_id', currentBranch.id)
-              .order('departure_date', { ascending: false })
-
-            if (allRetasi) {
-              allRetasiList = allRetasi
-              console.log('[Report] Fetched retasi:', allRetasi.length, 'sample:', allRetasi.slice(0, 2))
-            }
-          }
-
-          deliveryData.forEach((delivery: any) => {
-            const deliveryDate = new Date(delivery.delivery_date)
-            // Get local date string (not UTC) to match DB departure_date format
-            const year = deliveryDate.getFullYear()
-            const month = String(deliveryDate.getMonth() + 1).padStart(2, '0')
-            const day = String(deliveryDate.getDate()).padStart(2, '0')
-            const deliveryDateStr = `${year}-${month}-${day}`
-
-            const transaction = delivery.transaction
-            const transactionItems = transaction?.items || []
-            const driverName = delivery.driver?.full_name || ''
-
-            // Find retasi: Priority 1: Direct link via transaction.retasi_id
-            let retasiInfo = null
-
-            // 1. Try to find by explicit ID first
-            if (transaction?.retasi_id && allRetasiList.length > 0) {
-              retasiInfo = allRetasiList.find(r => r.id === transaction.retasi_id)
-            }
-
-            // 2. Fallback: match by driver name and date if no explicit ID
-            if (!retasiInfo && driverName && allRetasiList.length > 0) {
-              const driverNameLower = driverName.toLowerCase().trim()
-
-              // Find matching retasi
-              // Find ALL matching retasis
-              const candidates = allRetasiList.filter(r => {
-                const retasiDriver = (r.driver_name || '').toLowerCase().trim()
-                const retasiDate = r.departure_date // YYYY-MM-DD string from DB
-
-                // Flexible name matching (contains or exact)
-                const nameMatch = retasiDriver.includes(driverNameLower) ||
-                  driverNameLower.includes(retasiDriver) ||
-                  retasiDriver === driverNameLower
-
-                // Date matching
-                const dateMatch = retasiDate === deliveryDateStr
-
-                return nameMatch && dateMatch
-              })
-
-              if (candidates.length === 1) {
-                // Exact single match
-                retasiInfo = candidates[0]
-              } else if (candidates.length > 1) {
-                // Multiple matches (e.g., Retasi 1, Retasi 2 on same day)
-                // Heuristic: Use created_at timestamps. The delivery should belong to the retasi active at that time.
-                // Or, simply, associate with the retasi created most recently BEFORE the delivery.
-
-                const deliveryTime = new Date(delivery.created_at || delivery.delivery_date).getTime()
-
-                // Sort candidates by creation time ASC
-                candidates.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-
-                // Find the candidate that was created most recently before deliveryTime
-                // Default to the last one if all are before (or if timestamps are weird)
-                let bestMatch = candidates[candidates.length - 1]
-
-                for (let i = candidates.length - 1; i >= 0; i--) {
-                  const rTime = new Date(candidates[i].created_at).getTime()
-                  if (rTime <= deliveryTime) {
-                    bestMatch = candidates[i]
-                    break
-                  }
-                }
-                retasiInfo = bestMatch
-              }
-            }
-
-            if (!retasiInfo) {
-              console.log('[Report] No retasi match for:', driverName, deliveryDateStr)
-            }
-
-
-            // Display just "ke-X" if found
-            const retasiNumberDisplay = retasiInfo
-              ? `ke-${retasiInfo.retasi_ke}`
-              : '-'
-
-            const driverNameDisplay = driverName
-
-            delivery.delivery_items?.forEach((item: any) => {
-              const matchingTxItem = transactionItems.find((ti: any) =>
-                ti.product?.id === item.product_id || ti.productId === item.product_id
-              )
-
-              const isBonus = item.product_name?.toLowerCase().includes('bonus') ||
-                Boolean(matchingTxItem?.isBonus)
-
-              const priceRaw = matchingTxItem?.price || matchingTxItem?.product?.basePrice || 0
-              const price = isBonus ? 0 : priceRaw
-
-              // Double check payment account mapping
-              const paymentAcctId = transaction?.payment_account_id
-              const paymentAcct = paymentAccounts.find(a => a.id === paymentAcctId)
-
-              items.push({
-                transactionId: delivery.transaction_id,
-                transactionDate: new Date(transaction?.order_date || delivery.delivery_date),
-                soldDate: deliveryDate,
-                customerName: transaction?.customer_name || 'Unknown',
-                productName: item.product_name,
-                quantity: item.quantity_delivered,
-                unit: item.unit || 'pcs',
-                price: price,
-                total: item.quantity_delivered * price,
-                source: 'delivery',
-                driverName: driverNameDisplay,
-                retasiNumber: retasiNumberDisplay,
-                retasiKe: retasiInfo?.retasi_ke,
-                cashierName: transaction?.cashier?.full_name || 'Unknown',
-                isBonus: isBonus,
-                paymentAccountId: paymentAcctId,
-                paymentAccountName: paymentAcct?.name,
-                paymentStatus: transaction?.payment_status || 'Belum Lunas',
-                salesName: extractSalesName(transaction)
-              })
-            })
-          })
-        }
+      if (currentBranch?.id) {
+        query = query.eq('branch_id', currentBranch.id)
       }
 
-      // 2. Fetch office sale transactions (laku kantor)
-      if (sourceFilter === 'all' || sourceFilter === 'office_sale') {
-        let officeSaleQuery = supabase
-          .from('transactions')
-          .select(`
-            id,
-            customer_name,
-            order_date,
-            items,
-            cashier_id,
-            sales_name,
-            payment_account_id,
-            payment_status,
-            cashier:profiles!transactions_cashier_id_fkey(full_name)
-          `)
-          .eq('is_office_sale', true)
-          .gte('order_date', fromDate.toISOString())
-          .lte('order_date', toDate.toISOString())
-          .eq('is_voided', false)
-          .eq('is_cancelled', false)
+      const { data: records, error } = await query
 
-        if (currentBranch?.id) {
-          officeSaleQuery = officeSaleQuery.eq('branch_id', currentBranch.id)
-        }
-
-        const { data: officeSaleData, error: officeSaleError } = await officeSaleQuery
-
-        if (officeSaleError) {
-          console.error('Error fetching office sales:', officeSaleError)
-        } else if (officeSaleData) {
-          officeSaleData.forEach((transaction: any) => {
-            const orderDate = new Date(transaction.order_date)
-            const transactionItems = transaction.items || []
-
-            transactionItems.forEach((item: any) => {
-              // Skip metadata items (sales meta, migration meta)
-              if (item._isSalesMeta || item._isMigrationMeta) return
-
-              // Skip items without product info
-              if (!item.product?.name && !item.name && !item.productName && !item.product_name) return
-
-              const productName = item.product?.name || item.name || item.productName || item.product_name
-              const isBonus = Boolean(item.isBonus) || productName.toLowerCase().includes('bonus')
-
-              const priceRaw = item.price || item.product?.basePrice || 0
-              const price = isBonus ? 0 : priceRaw
-              const quantity = item.quantity || 0
-
-              // Get payment account name
-              const paymentAcct = paymentAccounts.find(a => a.id === transaction.payment_account_id)
-
-              items.push({
-                transactionId: transaction.id,
-                transactionDate: orderDate,
-                soldDate: orderDate, // For office sale, sold date = order date
-                customerName: transaction.customer_name || 'Walk-in Customer',
-                productName: productName,
-                quantity: quantity,
-                unit: item.unit || item.product?.unit || 'pcs',
-                price: price,
-                total: quantity * price,
-                source: 'office_sale',
-                driverName: undefined,
-                cashierName: transaction.cashier?.full_name || 'Unknown',
-                isBonus: isBonus,
-                paymentAccountId: transaction.payment_account_id,
-                paymentAccountName: paymentAcct?.name,
-                paymentStatus: transaction.payment_status || 'Belum Lunas',
-                salesName: extractSalesName(transaction)
-              })
-            })
-          })
-        }
+      if (error) {
+        console.error('Error fetching v_realisasi_penjualan:', error)
+        throw error
       }
 
-      // 3. Fetch retasi transactions (from Driver POS - transactions with retasi_id)
-      // Driver POS = MUST have retasi (driver can't sell without active retasi)
-      // Regular POS = NO retasi
-      if (sourceFilter === 'all' || sourceFilter === 'retasi') {
-        // Get transactions that have retasi_id (from Driver POS)
-        let retasiQuery = supabase
-          .from('transactions')
-          .select(`
-            id,
-            customer_name,
-            order_date,
-            items,
-            retasi_id,
-            retasi_number,
-            cashier_name,
-            sales_name,
-            payment_account_id,
-            payment_status
-          `)
-          .not('retasi_id', 'is', null)
-          .gte('order_date', fromDate.toISOString())
-          .lte('order_date', toDate.toISOString())
-          .eq('is_voided', false)
-          .eq('is_cancelled', false)
+      const items: SoldProduct[] = (records || []).map(r => {
+        const soldDate = new Date(r.realization_date || new Date())
+        const paymentAcct = paymentAccounts.find(a => a.id === r.payment_account_id)
 
-        if (currentBranch?.id) {
-          retasiQuery = retasiQuery.eq('branch_id', currentBranch.id)
-        }
-
-        const { data: retasiTransactions, error: retasiError } = await retasiQuery
-
-        console.log('Retasi Transactions (Driver POS):', { retasiTransactions, retasiError })
-
-        if (retasiError) {
-          console.error('Error fetching retasi transactions:', retasiError)
-        } else if (retasiTransactions && retasiTransactions.length > 0) {
-          // Get retasi details for display
-          const retasiIds = [...new Set(retasiTransactions.map(t => t.retasi_id).filter(Boolean))]
-
-          let retasiDetailsMap: Record<string, any> = {}
-          if (retasiIds.length > 0) {
-            const { data: retasiDetails } = await supabase
-              .from('retasi')
-              .select('id, retasi_number, retasi_ke, driver_name')
-              .in('id', retasiIds)
-
-            if (retasiDetails) {
-              retasiDetails.forEach(r => {
-                retasiDetailsMap[r.id] = r
-              })
+        // Parse Retasi Ke if possible
+        let retasiKeValue: number | undefined = undefined;
+        let retasiDisplay = r.retasi_number || '-';
+        if (r.retasi_number && r.retasi_number.includes('ke-')) {
+            const match = r.retasi_number.match(/ke-(\d+)/i);
+            if (match) {
+                retasiKeValue = parseInt(match[1]);
             }
-          }
-
-          // Skip transactions already counted in delivery
-          const deliveryTransactionIds = new Set(items.filter(i => i.source === 'delivery').map(i => i.transactionId))
-
-          retasiTransactions.forEach((transaction: any) => {
-            // Skip if already counted in delivery
-            if (deliveryTransactionIds.has(transaction.id)) return
-
-            const orderDate = new Date(transaction.order_date)
-            const transactionItems = transaction.items || []
-            const retasiInfo = retasiDetailsMap[transaction.retasi_id]
-
-            transactionItems.forEach((item: any) => {
-              // Skip metadata items (sales meta, migration meta)
-              if (item._isSalesMeta || item._isMigrationMeta) return
-
-              // Skip items without product info
-              if (!item.product?.name && !item.name && !item.productName && !item.product_name) return
-
-              const productName = item.product?.name || item.name || item.productName || item.product_name
-              const isBonus = Boolean(item.isBonus) || productName.toLowerCase().includes('bonus')
-
-              const priceRaw = item.price || item.product?.basePrice || 0
-              const price = isBonus ? 0 : priceRaw
-              const quantity = item.quantity || 0
-
-              // Format retasi number with "ke-X" suffix
-              const retasiNumberDisplay = retasiInfo
-                ? `${retasiInfo.retasi_number} (ke-${retasiInfo.retasi_ke})`
-                : (transaction.retasi_number || '-')
-
-              // Get payment account name
-              const paymentAcct = paymentAccounts.find(a => a.id === transaction.payment_account_id)
-
-              items.push({
-                transactionId: transaction.id,
-                transactionDate: orderDate,
-                soldDate: orderDate,
-                customerName: transaction.customer_name || 'Customer Retasi',
-                productName: productName,
-                quantity: quantity,
-                unit: item.unit || item.product?.unit || 'pcs',
-                price: price,
-                total: quantity * price,
-                source: 'retasi',
-                retasiNumber: retasiNumberDisplay,
-                retasiKe: retasiInfo?.retasi_ke,
-                driverName: retasiInfo?.driver_name || transaction.cashier_name,
-                cashierName: transaction.cashier_name || 'Unknown',
-                isBonus: isBonus,
-                paymentAccountId: transaction.payment_account_id,
-                paymentAccountName: paymentAcct?.name,
-                paymentStatus: transaction.payment_status || 'Belum Lunas',
-                salesName: extractSalesName(transaction)
-              })
-            })
-          })
-        }
-      }
-
-      // 4. Fetch direct sale transactions (non-office sale without delivery/retasi - includes migration data and pos kasir)
-      // These are transactions that don't have delivery records and don't have retasi_id
-      if (sourceFilter === 'all' || sourceFilter === 'migration' || sourceFilter === 'pos_kasir') {
-        // Get all transaction IDs that already have deliveries (no date filter - we want ALL deliveries)
-        // This ensures transactions with delivery records outside the date range are properly excluded
-        let deliveredTxQuery = supabase
-          .from('deliveries')
-          .select('transaction_id')
-
-        if (currentBranch?.id) {
-          deliveredTxQuery = deliveredTxQuery.eq('branch_id', currentBranch.id)
         }
 
-        const { data: deliveredTxData } = await deliveredTxQuery
-        const deliveredTxIds = new Set((deliveredTxData || []).map(d => d.transaction_id))
-
-        // Get transactions that are NOT office_sale, NOT retasi, and NOT delivered
-        let directSaleQuery = supabase
-          .from('transactions')
-          .select(`
-            id,
-            customer_name,
-            order_date,
-            items,
-            cashier_id,
-            sales_name,
-            payment_account_id,
-            payment_status,
-            cashier:profiles!transactions_cashier_id_fkey(full_name)
-          `)
-          .or('is_office_sale.eq.false,is_office_sale.is.null')
-          .is('retasi_id', null)
-          .gte('order_date', fromDate.toISOString())
-          .lte('order_date', toDate.toISOString())
-          .eq('is_voided', false)
-          .eq('is_cancelled', false)
-
-        if (currentBranch?.id) {
-          directSaleQuery = directSaleQuery.eq('branch_id', currentBranch.id)
+        return {
+          transactionId: r.transaction_id,
+          transactionDate: soldDate, 
+          soldDate: soldDate,
+          customerName: r.customer_name || 'Walk-in Customer',
+          productName: r.product_name || 'Unknown',
+          quantity: r.quantity || 0,
+          unit: r.unit || 'pcs',
+          price: Number(r.price) || 0,
+          total: (r.quantity || 0) * (Number(r.price) || 0),
+          source: r.source_type as any,
+          driverName: r.driver_name || undefined,
+          retasiNumber: retasiDisplay,
+          retasiKe: retasiKeValue,
+          cashierName: r.cashier_name || 'Unknown',
+          isBonus: r.is_bonus || false,
+          paymentAccountId: r.payment_account_id,
+          paymentAccountName: paymentAcct?.name,
+          paymentStatus: r.payment_status || 'Belum Lunas',
+          salesName: r.sales_name || undefined
         }
-
-        const { data: directSaleData, error: directSaleError } = await directSaleQuery
-
-        if (directSaleError) {
-          console.error('Error fetching direct sales:', directSaleError)
-        } else if (directSaleData) {
-          // Filter out transactions that already have deliveries
-          const directSalesWithoutDelivery = directSaleData.filter(t => !deliveredTxIds.has(t.id))
-
-          console.log('Direct Sales (without delivery):', directSalesWithoutDelivery.length)
-
-          directSalesWithoutDelivery.forEach((transaction: any) => {
-            const orderDate = new Date(transaction.order_date)
-            const transactionItems = transaction.items || []
-
-            // Check if transaction has migration metadata
-            const hasMigrationMeta = transactionItems.some((item: any) => item._isMigrationMeta)
-            const sourceType = hasMigrationMeta ? 'migration' : 'pos_kasir'
-
-            transactionItems.forEach((item: any) => {
-              // Skip metadata items (sales meta, migration meta)
-              if (item._isSalesMeta || item._isMigrationMeta) return
-
-              // Skip items without product info
-              if (!item.product?.name && !item.name && !item.productName && !item.product_name) return
-
-              const productName = item.product?.name || item.name || item.productName || item.product_name
-              const isBonus = Boolean(item.isBonus) || productName.toLowerCase().includes('bonus')
-
-              const priceRaw = item.price || item.product?.basePrice || 0
-              const price = isBonus ? 0 : priceRaw
-              const quantity = item.quantity || 0
-
-              // Get payment account name
-              const paymentAcct = paymentAccounts.find(a => a.id === transaction.payment_account_id)
-
-              items.push({
-                transactionId: transaction.id,
-                transactionDate: orderDate,
-                soldDate: orderDate,
-                customerName: transaction.customer_name || 'Customer',
-                productName: productName,
-                quantity: quantity,
-                unit: item.unit || item.product?.unit || 'pcs',
-                price: price,
-                total: quantity * price,
-                source: sourceType,
-                driverName: undefined,
-                cashierName: transaction.cashier?.full_name || 'Unknown',
-                isBonus: isBonus,
-                paymentAccountId: transaction.payment_account_id,
-                paymentAccountName: paymentAcct?.name,
-                paymentStatus: transaction.payment_status || 'Belum Lunas',
-                salesName: extractSalesName(transaction)
-              })
-            })
-          })
-        }
-      }
+      })
 
       // Sort by sold date (newest first)
       items.sort((a, b) => b.soldDate.getTime() - a.soldDate.getTime())

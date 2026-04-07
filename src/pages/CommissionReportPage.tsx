@@ -204,7 +204,7 @@ export default function CommissionReportPage() {
           name: user.name, // useUsers already maps full_name to name
           role: user.role
         }))
-        .sort((a, b) => a.name.localeCompare(b.name))
+        .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
     }
 
     // Fallback: get from entries if users not available
@@ -218,7 +218,7 @@ export default function CommissionReportPage() {
           role: entry?.role
         }
       })
-      .sort((a, b) => a.name.localeCompare(b.name))
+      .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
   }, [users, entries])
 
   const handleDeleteCommission = async (entryId: string) => {
@@ -483,11 +483,13 @@ export default function CommissionReportPage() {
         existing.quantity += entry.quantity;
         existing.amount  += entry.amount;
       } else {
+        const employee = users?.find(u => u.id === entry.userId);
+        const resolvedName = employee?.name || entry.userName || 'Tanpa Nama';
         productMap.set(key, {
-          userName:    entry.userName,
+          userName:    resolvedName,
           role:        entry.role,
           productName: entry.productName,
-          ratePerQty:  entry.ratePerQty,  // tarif asli per produk ini
+          ratePerQty:  entry.ratePerQty,
           quantity:    entry.quantity,
           amount:      entry.amount,
         });
@@ -496,11 +498,11 @@ export default function CommissionReportPage() {
 
     // Sort: nama A-Z → peran → nama produk
     const productRows = Array.from(productMap.values()).sort((a, b) => {
-      const n = a.userName.localeCompare(b.userName, 'id');
+      const n = (a.userName || '').localeCompare(b.userName || '', 'id');
       if (n !== 0) return n;
-      const r = a.role.localeCompare(b.role, 'id');
+      const r = (a.role || '').localeCompare(b.role || '', 'id');
       if (r !== 0) return r;
-      return a.productName.localeCompare(b.productName, 'id');
+      return (a.productName || '').localeCompare(b.productName || '', 'id');
     });
 
     let grandTotalQty = 0;
@@ -881,8 +883,10 @@ export default function CommissionReportPage() {
                   ex.quantity += entry.quantity;
                   ex.amount   += entry.amount;
                 } else {
+                  const employee = users?.find(u => u.id === entry.userId);
+                  const resolvedName = employee?.name || entry.userName || 'Tanpa Nama';
                   feProductMap.set(key, {
-                    userName: entry.userName, role: entry.role,
+                    userName: resolvedName, role: entry.role,
                     productName: entry.productName, ratePerQty: entry.ratePerQty,
                     quantity: entry.quantity, amount: entry.amount,
                     userId: entry.userId, productId: entry.productId,
@@ -890,11 +894,11 @@ export default function CommissionReportPage() {
                 }
               });
               const feRows = Array.from(feProductMap.values()).sort((a, b) => {
-                const n = a.userName.localeCompare(b.userName, 'id');
+                const n = (a.userName || '').localeCompare(b.userName || '', 'id');
                 if (n !== 0) return n;
-                const r = a.role.localeCompare(b.role, 'id');
+                const r = (a.role || '').localeCompare(b.role || '', 'id');
                 if (r !== 0) return r;
-                return a.productName.localeCompare(b.productName, 'id');
+                return (a.productName || '').localeCompare(b.productName || '', 'id');
               });
 
               // Group untuk header nama karyawan
@@ -912,44 +916,48 @@ export default function CommissionReportPage() {
                         <th className="text-right px-4 py-3 font-semibold text-muted-foreground w-40">Total Komisi (Rp)</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y">
+                    <tbody className="divide-y relative">
                       {feRows.length === 0 ? (
                         <tr>
                           <td colSpan={6} className="text-center py-6 text-muted-foreground">
                             Tidak ada data komisi karyawan pada periode ini.
                           </td>
                         </tr>
-                      ) : feRows.map((row, idx) => {
+                      ) : feRows.reduce((acc, row, idx) => {
                         const rowKey = `${row.userId}__${row.role}`;
                         const isNewGroup = rowKey !== lastKey;
                         lastKey = rowKey;
                         const exactTotal = row.ratePerQty * row.quantity;
-                        return (
-                          <Fragment key={`${row.userId}-${row.role}-${row.productId}`}>
-                            {isNewGroup && (
-                              <tr className="bg-slate-50 border-t-2 border-slate-200">
-                                <td colSpan={6} className="px-4 py-1.5 text-xs font-bold text-slate-600 uppercase tracking-wide">
-                                  {row.userName} <span className="font-normal text-slate-400 ml-1">({row.role})</span>
-                                </td>
-                              </tr>
-                            )}
-                            <tr className="hover:bg-muted/40 transition-colors">
-                              <td className="px-4 py-2 text-blue-700 font-medium pl-6">{row.userName}</td>
-                              <td className="px-4 py-2">
-                                <Badge variant="outline" className="uppercase text-xs">{row.role}</Badge>
-                              </td>
-                              <td className="px-4 py-2 text-slate-700">{row.productName}</td>
-                              <td className="px-4 py-2 text-center text-slate-600">
-                                {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(row.ratePerQty)}
-                              </td>
-                              <td className="px-4 py-2 text-center font-bold text-blue-600">{row.quantity.toLocaleString('id-ID')}</td>
-                              <td className="px-4 py-2 text-right font-bold text-green-700">
-                                {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(exactTotal)}
+                        
+                        if (isNewGroup) {
+                          acc.push(
+                            <tr key={`group-${row.userId}-${row.role}-${idx}`} className="bg-slate-50 border-t-2 border-slate-200">
+                              <td colSpan={6} className="px-4 py-1.5 text-xs font-bold text-slate-600 uppercase tracking-wide">
+                                {row.userName} <span className="font-normal text-slate-400 ml-1">({row.role})</span>
                               </td>
                             </tr>
-                          </Fragment>
+                          );
+                        }
+                        
+                        acc.push(
+                          <tr key={`item-${row.userId}-${row.role}-${row.productId}-${idx}`} className="hover:bg-muted/40 transition-colors">
+                            <td className="px-4 py-2 text-blue-700 font-medium pl-6">{row.userName}</td>
+                            <td className="px-4 py-2">
+                              <Badge variant="outline" className="uppercase text-xs">{row.role}</Badge>
+                            </td>
+                            <td className="px-4 py-2 text-slate-700">{row.productName}</td>
+                            <td className="px-4 py-2 text-center text-slate-600">
+                              {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(row.ratePerQty)}
+                            </td>
+                            <td className="px-4 py-2 text-center font-bold text-blue-600">{row.quantity.toLocaleString('id-ID')}</td>
+                            <td className="px-4 py-2 text-right font-bold text-green-700">
+                              {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(exactTotal)}
+                            </td>
+                          </tr>
                         );
-                      })}
+                        
+                        return acc;
+                      }, [] as React.ReactNode[])}
                     </tbody>
                   </table>
                 </div>

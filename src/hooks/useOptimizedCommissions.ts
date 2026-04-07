@@ -45,42 +45,38 @@ export function useOptimizedCommissionEntries(
         isAdminOrOwner: user?.role === 'admin' || user?.role === 'owner'
       })
 
-      // Check if commission_entries table exists
-      const { data: testData, error: testError } = await supabase
-        .from('commission_entries')
-        .select('id')
-        .order('id').limit(1)
-
-      if (testError && testError.code === 'PGRST116') {
-        console.log('❌ Commission entries table does not exist yet')
-        throw new Error('Tabel komisi belum dibuat. Silakan jalankan migrasi database terlebih dahulu.')
-      }
-
-      // Build query
+      // Build query to View v_kalkulasi_komisi
       let query = supabase
-        .from('commission_entries')
-        .select('*')
-        .order('created_at', { ascending: false })
+        .from('v_kalkulasi_komisi')
+        .select(`
+          realization_date,
+          transaction_id,
+          delivery_id,
+          product_id,
+          product_name,
+          quantity,
+          user_id,
+          user_name,
+          role,
+          rate_per_qty
+        `)
 
-      // Apply branch filter - ALWAYS filter by selected branch
       if (currentBranch?.id) {
         query = query.eq('branch_id', currentBranch.id)
       }
 
-      // Apply filters
       if (startDate) {
-        query = query.gte('created_at', startDate.toISOString())
+        query = query.gte('realization_date', startDate.toISOString())
       }
       if (endDate) {
-        query = query.lte('created_at', endDate.toISOString())
+        query = query.lte('realization_date', endDate.toISOString())
       }
       if (role && role !== 'all') {
         query = query.eq('role', role)
       }
 
-      // Apply user filter for non-admin users
-      if (user?.role !== 'admin' && user?.role !== 'owner') {
-        query = query.eq('user_id', user?.id)
+      if (user?.id && user?.role !== 'admin' && user?.role !== 'owner') {
+        query = query.eq('user_id', user.id)
       }
 
       const { data, error } = await query
@@ -90,30 +86,15 @@ export function useOptimizedCommissionEntries(
         throw error
       }
 
-      console.log(`📊 Commission entries query result:`, {
-        totalEntries: data?.length || 0,
-        roleBreakdown: data?.reduce((acc, entry) => {
-          acc[entry.role] = (acc[entry.role] || 0) + 1;
-          return acc;
-        }, {} as Record<string, number>) || {},
-        sampleEntries: data?.slice(0, 3).map(e => ({
-          id: e.id,
-          role: e.role,
-          userName: e.user_name,
-          productName: e.product_name,
-          amount: e.amount
-        })) || []
-      });
-
-      // Get customer names from transactions for commission entries
-      const transactionIds = [...new Set(data?.filter(e => e.transaction_id).map(e => e.transaction_id) || [])]
+      // Get customer names from transactions
+      const transactionIds = [...new Set((data || []).map(e => e.transaction_id).filter(Boolean))]
       let customerMap: Record<string, string> = {}
 
       if (transactionIds.length > 0) {
         const { data: transactions } = await supabase
           .from('transactions')
           .select('id, customer_name')
-          .in('id', transactionIds)
+          .in('id', transactionIds as string[])
 
         if (transactions) {
           transactions.forEach((t: any) => {
@@ -122,9 +103,12 @@ export function useOptimizedCommissionEntries(
         }
       }
 
+      // Filter out zero-amount commissions immediately to keep UI clean
+      const nonZeroData = (data || []).filter(e => e.rate_per_qty > 0 && e.quantity > 0)
+
       // Transform data
-      const formattedEntries: CommissionEntry[] = data?.map(entry => ({
-        id: entry.id,
+      const formattedEntries: CommissionEntry[] = nonZeroData.map((entry, idx) => ({
+        id: `${entry.transaction_id}_${entry.user_id}_${entry.product_id}_${idx}`, // Synthetic ID
         userId: entry.user_id,
         userName: entry.user_name,
         role: entry.role,
@@ -132,16 +116,19 @@ export function useOptimizedCommissionEntries(
         productName: entry.product_name,
         quantity: entry.quantity,
         ratePerQty: entry.rate_per_qty,
-        amount: entry.amount,
+        amount: entry.quantity * entry.rate_per_qty,
         transactionId: entry.transaction_id,
         deliveryId: entry.delivery_id,
-        ref: entry.ref,
-        customerName: entry.transaction_id ? customerMap[entry.transaction_id] : undefined,
-        createdAt: new Date(entry.created_at),
-        status: entry.status
+        ref: 'Dinamis (Auto)',
+        customerName: entry.transaction_id ? customerMap[entry.transaction_id as string] : undefined,
+        createdAt: new Date(entry.realization_date || new Date()),
+        status: 'pending' // Because we no longer track paid
       })) || []
 
-      console.log(`✅ Fetched ${formattedEntries.length} commission entries`)
+      // Sort DESC dynamically since view might not sort by date reliably
+      formattedEntries.sort((a,b) => b.createdAt.getTime() - a.createdAt.getTime())
+
+      console.log(`✅ Fetched ${formattedEntries.length} dynamic commission entries`)
       return formattedEntries
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -226,14 +213,14 @@ export function useCommissionSummary(
     queryFn: async () => {
       // Get commission entries for summary calculation
       let query = supabase
-        .from('commission_entries')
-        .select('user_id, user_name, role, amount, quantity')
+        .from('v_kalkulasi_komisi')
+        .select('user_id, user_name, role, rate_per_qty, quantity')
 
       if (startDate) {
-        query = query.gte('created_at', startDate.toISOString())
+        query = query.gte('realization_date', startDate.toISOString())
       }
       if (endDate) {
-        query = query.lte('created_at', endDate.toISOString())
+        query = query.lte('realization_date', endDate.toISOString())
       }
       if (user?.id && user?.role !== 'admin' && user?.role !== 'owner') {
         query = query.eq('user_id', user.id)
@@ -246,6 +233,10 @@ export function useCommissionSummary(
       // Calculate summary
       const summary = data?.reduce((acc, entry) => {
         const key = `${entry.user_id}-${entry.role}`
+        const amount = (entry.quantity || 0) * (entry.rate_per_qty || 0)
+
+        // Ignore zero commissions
+        if (amount <= 0) return acc;
         
         if (!acc[key]) {
           acc[key] = {
@@ -258,7 +249,7 @@ export function useCommissionSummary(
           }
         }
 
-        acc[key].totalAmount += entry.amount
+        acc[key].totalAmount += amount
         acc[key].totalQuantity += entry.quantity
         acc[key].entryCount += 1
 
@@ -297,19 +288,18 @@ export function usePrefetchCommissions() {
       queryKey,
       queryFn: async () => {
         let query = supabase
-          .from('commission_entries')
+          .from('v_kalkulasi_komisi')
           .select('*')
-          .order('created_at', { ascending: false })
           .limit(50) // Limit for prefetch
 
-        if (startDate) query = query.gte('created_at', startDate.toISOString())
-        if (endDate) query = query.lte('created_at', endDate.toISOString())
+        if (startDate) query = query.gte('realization_date', startDate.toISOString())
+        if (endDate) query = query.lte('realization_date', endDate.toISOString())
 
         const { data, error } = await query
         if (error) throw error
 
-        return data?.map(entry => ({
-          id: entry.id,
+        return data?.map((entry, idx) => ({
+          id: `${entry.transaction_id}_${entry.user_id}_${entry.product_id}_${idx}`,
           userId: entry.user_id,
           userName: entry.user_name,
           role: entry.role,
@@ -317,12 +307,12 @@ export function usePrefetchCommissions() {
           productName: entry.product_name,
           quantity: entry.quantity,
           ratePerQty: entry.rate_per_qty,
-          amount: entry.amount,
+          amount: entry.quantity * entry.rate_per_qty,
           transactionId: entry.transaction_id,
           deliveryId: entry.delivery_id,
-          ref: entry.ref,
-          createdAt: new Date(entry.created_at),
-          status: entry.status
+          ref: 'Dinamis (Auto)',
+          createdAt: new Date(entry.realization_date || new Date()),
+          status: 'pending'
         })) || []
       },
       staleTime: 5 * 60 * 1000,

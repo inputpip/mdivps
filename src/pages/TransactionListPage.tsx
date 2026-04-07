@@ -40,7 +40,7 @@ export default function TransactionListPage() {
           </CardDescription>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <Button variant="outline" size="sm" onClick={() => navigate('/deliveries')}>
+          <Button variant="outline" size="sm" onClick={() => navigate('/delivery')}>
             <Truck className="h-4 w-4 mr-2 text-sky-500" />
             Pengantaran
           </Button>
