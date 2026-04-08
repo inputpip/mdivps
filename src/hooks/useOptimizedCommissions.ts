@@ -106,8 +106,32 @@ export function useOptimizedCommissionEntries(
       // Filter out zero-amount commissions immediately to keep UI clean
       const nonZeroData = (data || []).filter(e => e.rate_per_qty > 0 && e.quantity > 0)
 
+      // Deduplicate overlapping entries (e.g., if a transaction appears both as retasi and delivery)
+      const deduplicatedData = [];
+      const seenKeys = new Set();
+
+      for (const entry of nonZeroData) {
+        // Build a unique key for the transaction, role, user, and product combination
+        const uniqueKey = `${entry.transaction_id}_${entry.user_id}_${entry.role}_${entry.product_id}`;
+        
+        if (!seenKeys.has(uniqueKey)) {
+          seenKeys.add(uniqueKey);
+          deduplicatedData.push(entry);
+        } else {
+          // If a duplicate happens, prioritize the one WITH a delivery_id (which usually contains more precise assignment)
+          if (entry.delivery_id) {
+            const existingIndex = deduplicatedData.findIndex(
+              e => `${e.transaction_id}_${e.user_id}_${e.role}_${e.product_id}` === uniqueKey
+            );
+            if (existingIndex !== -1 && !deduplicatedData[existingIndex].delivery_id) {
+               deduplicatedData[existingIndex] = entry; 
+            }
+          }
+        }
+      }
+
       // Transform data
-      const formattedEntries: CommissionEntry[] = nonZeroData.map((entry, idx) => ({
+      const formattedEntries: CommissionEntry[] = deduplicatedData.map((entry, idx) => ({
         id: `${entry.transaction_id}_${entry.user_id}_${entry.product_id}_${idx}`, // Synthetic ID
         userId: entry.user_id,
         userName: entry.user_name,
@@ -214,7 +238,7 @@ export function useCommissionSummary(
       // Get commission entries for summary calculation
       let query = supabase
         .from('v_kalkulasi_komisi')
-        .select('user_id, user_name, role, rate_per_qty, quantity')
+        .select('user_id, user_name, role, rate_per_qty, quantity, transaction_id, product_id, delivery_id')
 
       if (startDate) {
         query = query.gte('realization_date', startDate.toISOString())
@@ -230,8 +254,32 @@ export function useCommissionSummary(
 
       if (error) throw error
 
+      // Deduplicate overlapping entries for summary
+      const deduplicatedData = [];
+      const seenKeys = new Set();
+      const nonZeroData = (data || []).filter(e => e.rate_per_qty > 0 && e.quantity > 0)
+
+      for (const entry of nonZeroData) {
+        const uniqueKey = `${entry.transaction_id}_${entry.user_id}_${entry.role}_${entry.product_id}`;
+        
+        if (!seenKeys.has(uniqueKey)) {
+          seenKeys.add(uniqueKey);
+          deduplicatedData.push(entry);
+        } else {
+          // If duplicate, prefer the one with delivery_id
+          if (entry.delivery_id) {
+            const existingIndex = deduplicatedData.findIndex(
+              e => `${e.transaction_id}_${e.user_id}_${e.role}_${e.product_id}` === uniqueKey
+            );
+            if (existingIndex !== -1 && !deduplicatedData[existingIndex].delivery_id) {
+               deduplicatedData[existingIndex] = entry; 
+            }
+          }
+        }
+      }
+      
       // Calculate summary
-      const summary = data?.reduce((acc, entry) => {
+      const summary = deduplicatedData.reduce((acc, entry) => {
         const key = `${entry.user_id}-${entry.role}`
         const amount = (entry.quantity || 0) * (entry.rate_per_qty || 0)
 
@@ -298,7 +346,24 @@ export function usePrefetchCommissions() {
         const { data, error } = await query
         if (error) throw error
 
-        return data?.map((entry, idx) => ({
+        const deduplicatedData = [];
+        const seenKeys = new Set();
+        const nonZeroData = (data || []).filter(e => e.rate_per_qty > 0 && e.quantity > 0)
+
+        for (const entry of nonZeroData) {
+          const uniqueKey = `${entry.transaction_id}_${entry.user_id}_${entry.role}_${entry.product_id}`;
+          if (!seenKeys.has(uniqueKey)) {
+            seenKeys.add(uniqueKey);
+            deduplicatedData.push(entry);
+          } else if (entry.delivery_id) {
+            const existingIndex = deduplicatedData.findIndex(e => `${e.transaction_id}_${e.user_id}_${e.role}_${e.product_id}` === uniqueKey);
+            if (existingIndex !== -1 && !deduplicatedData[existingIndex].delivery_id) {
+               deduplicatedData[existingIndex] = entry; 
+            }
+          }
+        }
+
+        return deduplicatedData.map((entry, idx) => ({
           id: `${entry.transaction_id}_${entry.user_id}_${entry.product_id}_${idx}`,
           userId: entry.user_id,
           userName: entry.user_name,

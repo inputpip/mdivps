@@ -31,9 +31,11 @@ interface SoldProduct {
   price: number
   total: number
   source: 'delivery' | 'office_sale' | 'retasi' | 'migration' | 'pos_kasir' // Sumber: pengantaran, laku kantor, retasi, data migrasi, atau pos kasir
+  driverId?: string
   driverName?: string
   retasiNumber?: string
   retasiKe?: number // Retasi ke-berapa (1, 2, 3, dst)
+  cashierId?: string
   cashierName: string
   isBonus: boolean
   paymentAccountId?: string // ID akun pembayaran
@@ -222,9 +224,11 @@ export const TransactionItemsReport = () => {
           price: Number(r.price) || 0,
           total: (r.quantity || 0) * (Number(r.price) || 0),
           source: r.source_type as any,
+          driverId: r.driver_id,
           driverName: r.driver_name || undefined,
           retasiNumber: retasiDisplay,
           retasiKe: retasiKeValue,
+          cashierId: r.cashier_id,
           cashierName: r.cashier_name || 'Unknown',
           isBonus: r.is_bonus || false,
           paymentAccountId: r.payment_account_id,
@@ -233,6 +237,50 @@ export const TransactionItemsReport = () => {
           salesName: r.sales_name || undefined
         }
       })
+
+      console.log('[DEBUG] items mapped. Example top item:', items.length > 0 ? {
+        id: items[0].transactionId,
+        source: items[0].source,
+        driverId: items[0].driverId,
+        driverName: items[0].driverName,
+      } : 'No items');
+
+      // Fetch missing names from profiles
+      const missingProfileIds = [
+        ...items.filter(i => (i.source === 'delivery' || i.source === 'retasi') && (!i.driverName || i.driverName === '-' || i.driverName.trim() === '') && i.driverId).map(i => i.driverId),
+        ...items.filter(i => (i.source === 'office_sale' || i.source === 'pos_kasir') && (!i.cashierName || i.cashierName === 'Unknown' || i.cashierName === '-' || i.cashierName.trim() === '') && i.cashierId).map(i => i.cashierId)
+      ];
+      
+      const uniqueMissingIds = [...new Set(missingProfileIds)].filter(Boolean) as string[];
+
+      console.log('[DEBUG] uniqueMissingIds found:', uniqueMissingIds);
+
+      if (uniqueMissingIds.length > 0) {
+        try {
+          console.log('[DEBUG] Fetching missing profiles for IDs:', uniqueMissingIds);
+          const { data: profilesData } = await supabase
+            .from('profiles')
+            .select('id, full_name')
+            .in('id', uniqueMissingIds);
+            
+          console.log('[DEBUG] Fetched profiles:', profilesData);
+            
+          if (profilesData && profilesData.length > 0) {
+            const profileMap = profilesData.reduce((acc, p) => ({ ...acc, [p.id]: p.full_name }), {} as Record<string, string>);
+            
+            items.forEach(item => {
+              if ((item.source === 'delivery' || item.source === 'retasi') && (!item.driverName || item.driverName === '-' || item.driverName.trim() === '') && item.driverId && profileMap[item.driverId]) {
+                item.driverName = profileMap[item.driverId];
+              }
+              if ((item.source === 'office_sale' || item.source === 'pos_kasir') && (!item.cashierName || item.cashierName === 'Unknown' || item.cashierName === '-' || item.cashierName.trim() === '') && item.cashierId && profileMap[item.cashierId]) {
+                item.cashierName = profileMap[item.cashierId];
+              }
+            });
+          }
+        } catch (err) {
+          console.error('[TransactionItemsReport] Error fetching profiles for missing names:', err);
+        }
+      }
 
       // Sort by sold date (newest first)
       items.sort((a, b) => b.soldDate.getTime() - a.soldDate.getTime())

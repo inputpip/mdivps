@@ -47,7 +47,6 @@ export default function CommissionReportPage() {
   const { users, isLoading: usersLoading } = useUsers({ filterByBranch: true })
   const deleteCommissionMutation = useDeleteCommissionEntry()
   const [deleteLoading, setDeleteLoading] = useState<string | null>(null)
-  const [isRecalculating, setIsRecalculating] = useState(false)
 
   // Date filters
   const [startDate, setStartDate] = useState(() => {
@@ -239,36 +238,7 @@ export default function CommissionReportPage() {
     });
   };
 
-  // Recalculate commissions for the selected period
-  const handleRecalculate = async () => {
-    const recalcStart = new Date(startDate + "T00:00:00");
-    const recalcEnd = new Date(endDate + "T23:59:59.999");
-    
-    if (!confirm(`Recalculate komisi untuk periode ${format(recalcStart, 'dd MMM yyyy', { locale: id })} - ${format(recalcEnd, 'dd MMM yyyy', { locale: id })}?\n\nIni akan:\n• Generate komisi untuk delivery yang belum ada komisinya\n• Update komisi jika rate berubah\n• Komisi yang sudah PAID tidak akan diubah`)) {
-      return;
-    }
 
-    setIsRecalculating(true);
-    try {
-      const result = await recalculateCommissionsForPeriod(recalcStart, recalcEnd, currentBranch?.id);
-
-      toast({
-        title: "Recalculate Selesai",
-        description: `${result.created} komisi baru dibuat, ${result.updated} diupdate, ${result.skipped} dilewati (sudah paid)`,
-      });
-
-      // Refresh data
-      window.location.reload();
-    } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Gagal Recalculate",
-        description: error.message || "Terjadi kesalahan saat recalculate komisi",
-      });
-    } finally {
-      setIsRecalculating(false);
-    }
-  };
 
   const exportToPDF = () => {
     const doc = new jsPDF('landscape', 'pt', 'a4')
@@ -742,28 +712,6 @@ export default function CommissionReportPage() {
                 <Search className="h-4 w-4 mr-2" />
                 Generate Laporan
               </Button>
-
-            {/* Recalculate Button - Owner/Admin only */}
-            {(user?.role === 'owner' || user?.role === 'admin') && (
-              <div className="flex flex-col">
-                <Button
-                  onClick={handleRecalculate}
-                  disabled={isRecalculating}
-                  variant="outline"
-                  className="bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100"
-                >
-                  {isRecalculating ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                  )}
-                  Recalculate Komisi Periode Ini
-                </Button>
-                <p className="text-xs text-muted-foreground mt-2">
-                  Generate/update komisi untuk delivery dalam periode yang dipilih berdasarkan commission rules terbaru
-                </p>
-              </div>
-            )}
             </div>
 
           </CardContent>
@@ -923,25 +871,12 @@ export default function CommissionReportPage() {
                             Tidak ada data komisi karyawan pada periode ini.
                           </td>
                         </tr>
-                      ) : feRows.reduce((acc, row, idx) => {
-                        const rowKey = `${row.userId}__${row.role}`;
-                        const isNewGroup = rowKey !== lastKey;
-                        lastKey = rowKey;
+                      ) : feRows.map((row, idx) => {
                         const exactTotal = row.ratePerQty * row.quantity;
                         
-                        if (isNewGroup) {
-                          acc.push(
-                            <tr key={`group-${row.userId}-${row.role}-${idx}`} className="bg-slate-50 border-t-2 border-slate-200">
-                              <td colSpan={6} className="px-4 py-1.5 text-xs font-bold text-slate-600 uppercase tracking-wide">
-                                {row.userName} <span className="font-normal text-slate-400 ml-1">({row.role})</span>
-                              </td>
-                            </tr>
-                          );
-                        }
-                        
-                        acc.push(
+                        return (
                           <tr key={`item-${row.userId}-${row.role}-${row.productId}-${idx}`} className="hover:bg-muted/40 transition-colors">
-                            <td className="px-4 py-2 text-blue-700 font-medium pl-6">{row.userName}</td>
+                            <td className="px-4 py-2 text-blue-700 font-medium">{row.userName}</td>
                             <td className="px-4 py-2">
                               <Badge variant="outline" className="uppercase text-xs">{row.role}</Badge>
                             </td>
@@ -955,9 +890,7 @@ export default function CommissionReportPage() {
                             </td>
                           </tr>
                         );
-                        
-                        return acc;
-                      }, [] as React.ReactNode[])}
+                      })}
                     </tbody>
                   </table>
                 </div>

@@ -36,6 +36,8 @@ export interface Delivery {
   branchId?: string;
   transactionTotal?: number; // Total nilai order
   cashierName?: string;
+  transactionIsCancelled?: boolean;
+  transactionIsVoided?: boolean;
   items: DeliveryItem[];
   createdAt: Date;
   updatedAt: Date;

@@ -75,6 +75,8 @@ const fromDbToDelivery = (dbData: any): Delivery => {
     notes: dbData.notes,
     transactionTotal: dbData.transactions?.total || 0, // Map total from joined transaction
     cashierName: dbData.transactions?.cashier_name, // Map cashier name
+    transactionIsCancelled: dbData.transactions?.is_cancelled || false,
+    transactionIsVoided: dbData.transactions?.is_voided || false,
     createdAt: new Date(dbData.created_at),
     updatedAt: dbData.updated_at ? new Date(dbData.updated_at) : new Date(dbData.created_at),
     items: dbData.delivery_items?.map((item: any) => {
@@ -419,6 +421,8 @@ export const useDeliveryHistory = () => {
             total,
             items,
             cashier_name,
+            is_cancelled,
+            is_voided,
             customer:customer_id(address)
           ),
           driver:driver_id(full_name),
@@ -427,10 +431,23 @@ export const useDeliveryHistory = () => {
           helper3:helper_id_3(full_name)
         `)
         .eq('branch_id', currentBranch?.id)
+        .neq('status', 'cancelled') // Exclude cancelled deliveries at DB level
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return (data || []).map(fromDbToDelivery);
+      
+      // Also filter out deliveries tied to cancelled/voided transactions
+      const validDeliveries = (data || []).filter(d => {
+        const txn = d.transactions;
+        if (!txn) return true; // keep if no transaction found
+        // if transaction is an Array (unlikely since relations are one-to-one or many-to-one, but just in case)
+        if (Array.isArray(txn)) {
+           return !txn.some(t => t.is_cancelled || t.is_voided);
+        }
+        return !txn.is_cancelled && !txn.is_voided;
+      });
+
+      return validDeliveries.map(fromDbToDelivery);
     },
     enabled: !!currentBranch,
   });

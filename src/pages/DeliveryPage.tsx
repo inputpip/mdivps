@@ -17,7 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Truck, Package, Search, RefreshCw, Clock, CheckCircle, AlertCircle, Plus, History, Eye, Camera, Download, Filter, Calendar, Trash2, Loader2, Pencil, ChevronDown, ChevronUp, X, FileText, MapPin } from "lucide-react"
+import { Truck, Package, Search, RefreshCw, Clock, CheckCircle, AlertCircle, Plus, History, Eye, Camera, Download, Filter, Calendar, Trash2, Loader2, Pencil, ChevronDown, ChevronUp, X, FileText, MapPin, Check } from "lucide-react"
 import { format } from "date-fns"
 import { id as idLocale } from "date-fns/locale/id"
 import { useTransactionsReadyForDelivery, useDeliveryHistory, useDeliveries } from "@/hooks/useDeliveries"
@@ -36,6 +36,8 @@ import {
 import { TransactionDeliveryInfo } from "@/types/delivery"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { useAuth } from "@/hooks/useAuth"
 import { useGranularPermission } from "@/hooks/useGranularPermission"
 import jsPDF from 'jspdf'
@@ -62,6 +64,25 @@ export default function DeliveryPage() {
 
   const [searchQuery, setSearchQuery] = useState("")
   const [historySearchQuery, setHistorySearchQuery] = useState("")
+  const [itemSearch, setItemSearch] = useState("")
+  const [openActiveItemSearch, setOpenActiveItemSearch] = useState(false)
+  const [openHistoryItemSearch, setOpenHistoryItemSearch] = useState(false)
+
+  const uniqueProducts = React.useMemo(() => {
+    const products = new Set<string>();
+    transactions?.forEach(t => {
+      t.deliverySummary?.forEach(i => {
+        if (i.productName) products.add(i.productName);
+      });
+    });
+    deliveryHistory?.forEach(d => {
+      d.items?.forEach((i: any) => {
+        if (i.productName) products.add(i.productName);
+      });
+    });
+    return Array.from(products).sort();
+  }, [transactions, deliveryHistory]);
+
   const [selectedTransaction, setSelectedTransaction] = useState<TransactionDeliveryInfo | null>(null)
   const [selectedDelivery, setSelectedDelivery] = useState<any>(null)
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
@@ -144,10 +165,29 @@ export default function DeliveryPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 15
 
-  const filteredTransactions = transactions?.filter(transaction =>
-    transaction.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    transaction.id.toLowerCase().includes(searchQuery.toLowerCase())
-  ) || []
+  const filteredTransactions = transactions?.filter(transaction => {
+    const matchesSearch = transaction.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      transaction.id.toLowerCase().includes(searchQuery.toLowerCase())
+
+    const matchesItem = !itemSearch || transaction.deliverySummary.some(item => 
+      item.productName === itemSearch)
+
+    return matchesSearch && matchesItem
+  }) || []
+
+  // Active items sold/delivered metrics
+  const activeMatchedMetrics = React.useMemo(() => {
+    if (!itemSearch || !filteredTransactions) return null;
+    return filteredTransactions.reduce((acc, t) => {
+      const matches = t.deliverySummary.filter(i => i.productName === itemSearch);
+      matches.forEach(match => {
+        acc.ordered += match.orderedQuantity || 0;
+        acc.delivered += match.deliveredQuantity || 0;
+        acc.remaining += match.remainingQuantity || 0;
+      });
+      return acc;
+    }, { ordered: 0, delivered: 0, remaining: 0 });
+  }, [itemSearch, filteredTransactions]);
 
   // Get unique drivers and helpers for filter options
   const uniqueDrivers = Array.from(new Set(
@@ -167,6 +207,10 @@ export default function DeliveryPage() {
       delivery.helperName?.toLowerCase().includes(historySearchQuery.toLowerCase())
     )
 
+    // Item search filter
+    const matchesItem = !itemSearch || delivery.items?.some((item: any) => 
+        item.productName === itemSearch);
+
     // Date range filter
     const deliveryDate = new Date(delivery.deliveryDate)
     const startDateObj = startDate ? new Date(startDate + "T00:00:00") : null
@@ -185,13 +229,26 @@ export default function DeliveryPage() {
       (selectedHelper === "no-helper" && !delivery.helperName) ||
       delivery.helperName === selectedHelper
 
-    return matchesSearch && matchesDateRange && matchesDriver && matchesHelper
+    return matchesItem && matchesSearch && matchesDateRange && matchesDriver && matchesHelper
   }) || []
+
+  const historyMatchedMetrics = React.useMemo(() => {
+    if (!itemSearch || !filteredDeliveryHistory) return null;
+    return filteredDeliveryHistory.reduce((acc, d) => {
+      const matches = d.items?.filter((i: any) => i.productName === itemSearch);
+      if (matches && matches.length > 0) {
+        matches.forEach((match: any) => {
+          acc.delivered += match.quantityDelivered || 0;
+        });
+      }
+      return acc;
+    }, { delivered: 0 });
+  }, [itemSearch, filteredDeliveryHistory]);
 
   // Reset pagination when filters change
   useEffect(() => {
     setCurrentPage(1)
-  }, [historySearchQuery, startDate, endDate, selectedDriver, selectedHelper])
+  }, [historySearchQuery, startDate, endDate, selectedDriver, selectedHelper, itemSearch])
 
   // Pagination Calculation
   const totalPages = Math.ceil(filteredDeliveryHistory.length / itemsPerPage)
@@ -739,24 +796,99 @@ export default function DeliveryPage() {
 
         <TabsContent value="active" className="space-y-4">
           {/* Search - Always visible */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Cari nama pelanggan atau nomor order..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 pr-10"
-            />
-            {searchQuery && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="absolute right-1 top-1/2 transform -translate-y-1/2 h-7 w-7 p-0"
-                onClick={() => setSearchQuery('')}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            )}
+          <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Cari nama pelanggan atau nomor order..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 pr-10"
+              />
+              {searchQuery && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-1 top-1/2 transform -translate-y-1/2 h-7 w-7 p-0"
+                  onClick={() => setSearchQuery('')}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Popover open={openActiveItemSearch} onOpenChange={setOpenActiveItemSearch}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={openActiveItemSearch}
+                    className="w-full justify-between border-blue-200 hover:bg-blue-50 focus:ring-blue-500 font-normal px-3"
+                  >
+                    <div className="flex items-center gap-2 truncate text-muted-foreground w-full">
+                      <Search className="h-4 w-4 shrink-0 opacity-50" />
+                      <span className={itemSearch ? "text-foreground font-medium truncate" : "truncate"}>
+                        {itemSearch ? itemSearch : "Cari berdasar nama item..."}
+                      </span>
+                    </div>
+                    {itemSearch && (
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        className="ml-2 h-4 w-4 flex items-center justify-center shrink-0 hover:text-foreground/80 focus:outline-none"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setItemSearch("");
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setItemSearch("");
+                          }
+                        }}
+                      >
+                        <X className="h-3 w-3" />
+                      </div>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[300px] sm:w-[400px] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Ketik nama item..." />
+                    <CommandList>
+                      <CommandEmpty>Item tidak ditemukan.</CommandEmpty>
+                      <CommandGroup>
+                        {uniqueProducts.map((product) => (
+                          <CommandItem
+                            key={product}
+                            value={product}
+                            onSelect={(currentValue) => {
+                              setItemSearch(product === itemSearch ? "" : product)
+                              setOpenActiveItemSearch(false)
+                            }}
+                          >
+                            <Check
+                              className={`mr-2 h-4 w-4 ${
+                                itemSearch === product ? "opacity-100" : "opacity-0"
+                              }`}
+                            />
+                            {product}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+
+              {itemSearch && activeMatchedMetrics && (
+                <div className="bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900 rounded p-2 text-sm text-blue-700 dark:text-blue-400">
+                  Item ditemukan: <strong className="font-semibold">{activeMatchedMetrics.ordered} dipesan</strong>, {activeMatchedMetrics.delivered} terkirim, <strong className="text-orange-600 dark:text-orange-400">{activeMatchedMetrics.remaining} sisa</strong>.
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Info count */}
@@ -1105,10 +1237,15 @@ export default function DeliveryPage() {
                                           </TableHeader>
                                           <TableBody>
                                             {transaction.deliverySummary && transaction.deliverySummary.length > 0 ? (
-                                              transaction.deliverySummary.map((item: any, index: number) => (
-                                                <TableRow key={item.productId} className="hover:bg-gray-100 dark:hover:bg-gray-800">
+                                              transaction.deliverySummary.map((item: any, index: number) => {
+                                                const searchLower = itemSearch.toLowerCase().trim();
+                                                const isMatch = searchLower && item.productName?.toLowerCase().includes(searchLower);
+                                                if (searchLower && !isMatch) return null; // Only show matched items when filtering
+                                                
+                                                return (
+                                                <TableRow key={item.productId} className={`hover:bg-gray-100 dark:hover:bg-gray-800 ${isMatch ? "bg-blue-50/50 dark:bg-blue-900/20" : ""}`}>
                                                   <TableCell className="text-xs">{index + 1}</TableCell>
-                                                  <TableCell className="text-xs font-medium">{item.productName}</TableCell>
+                                                  <TableCell className={`text-xs ${isMatch ? "font-bold text-blue-700 dark:text-blue-300" : "font-medium"}`}>{item.productName}</TableCell>
                                                   <TableCell className="text-xs text-center">
                                                     <span className="text-gray-600 dark:text-gray-400">
                                                       {item.orderedQuantity}
@@ -1143,7 +1280,7 @@ export default function DeliveryPage() {
                                                     )}
                                                   </TableCell>
                                                 </TableRow>
-                                              ))
+                                              )})
                                             ) : (
                                               <TableRow>
                                                 <TableCell colSpan={6} className="text-xs text-center text-muted-foreground py-4">
@@ -1174,24 +1311,98 @@ export default function DeliveryPage() {
         {canAccessHistory && (
           <TabsContent value="history" className="space-y-4">
             {/* Search - Always visible */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Cari pelanggan, order ID, driver..."
-                value={historySearchQuery}
-                onChange={(e) => setHistorySearchQuery(e.target.value)}
-                className="pl-10 pr-10"
-              />
-              {historySearchQuery && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="absolute right-1 top-1/2 transform -translate-y-1/2 h-7 w-7 p-0"
-                  onClick={() => setHistorySearchQuery('')}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              )}
+            <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Cari pelanggan, order ID, driver..."
+                  value={historySearchQuery}
+                  onChange={(e) => setHistorySearchQuery(e.target.value)}
+                  className="pl-10 pr-10"
+                />
+                {historySearchQuery && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-1 top-1/2 transform -translate-y-1/2 h-7 w-7 p-0"
+                    onClick={() => setHistorySearchQuery('')}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+              <div className="flex flex-col gap-2">
+                <Popover open={openHistoryItemSearch} onOpenChange={setOpenHistoryItemSearch}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={openHistoryItemSearch}
+                      className="w-full justify-between border-blue-200 hover:bg-blue-50 focus:ring-blue-500 font-normal px-3"
+                    >
+                      <div className="flex items-center gap-2 truncate text-muted-foreground w-full">
+                        <Search className="h-4 w-4 shrink-0 opacity-50" />
+                        <span className={itemSearch ? "text-foreground font-medium truncate" : "truncate"}>
+                          {itemSearch ? itemSearch : "Cari berdasar nama item..."}
+                        </span>
+                      </div>
+                      {itemSearch && (
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          className="ml-2 h-4 w-4 flex items-center justify-center shrink-0 hover:text-foreground/80 focus:outline-none"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setItemSearch("");
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setItemSearch("");
+                            }
+                          }}
+                        >
+                          <X className="h-3 w-3" />
+                        </div>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[300px] sm:w-[400px] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Ketik nama item..." />
+                      <CommandList>
+                        <CommandEmpty>Item tidak ditemukan.</CommandEmpty>
+                        <CommandGroup>
+                          {uniqueProducts.map((product) => (
+                            <CommandItem
+                              key={product}
+                              value={product}
+                              onSelect={(currentValue) => {
+                                setItemSearch(product === itemSearch ? "" : product)
+                                setOpenHistoryItemSearch(false)
+                              }}
+                            >
+                              <Check
+                                className={`mr-2 h-4 w-4 ${
+                                  itemSearch === product ? "opacity-100" : "opacity-0"
+                                }`}
+                              />
+                              {product}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+
+                {itemSearch && historyMatchedMetrics && historyMatchedMetrics.delivered > 0 && (
+                  <div className="bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900 rounded p-2 text-sm text-blue-700 dark:text-blue-400">
+                    <strong className="font-semibold">{historyMatchedMetrics.delivered} unit</strong> {itemSearch} ada di hasil history pengantaran saat ini.
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Filter Toggle */}
@@ -1270,6 +1481,7 @@ export default function DeliveryPage() {
                     size="sm"
                     onClick={() => {
                       setHistorySearchQuery("")
+                      setItemSearch("")
                       setStartDate("")
                       setEndDate("")
                       setSelectedDriver("all")
@@ -1607,10 +1819,15 @@ export default function DeliveryPage() {
                                             </TableHeader>
                                             <TableBody>
                                               {delivery.items && delivery.items.length > 0 ? (
-                                                delivery.items.map((item: any, itemIndex: number) => (
-                                                  <TableRow key={item.id} className="hover:bg-gray-100 dark:hover:bg-gray-800">
+                                                delivery.items.map((item: any, itemIndex: number) => {
+                                                  const searchLower = itemSearch.toLowerCase().trim();
+                                                  const isMatch = searchLower && item.productName?.toLowerCase().includes(searchLower);
+                                                  if (searchLower && !isMatch) return null; // Only show matched items when filtering
+                                                  
+                                                  return (
+                                                  <TableRow key={item.id} className={`hover:bg-gray-100 dark:hover:bg-gray-800 ${isMatch ? "bg-blue-50/50 dark:bg-blue-900/20" : ""}`}>
                                                     <TableCell className="text-xs">{itemIndex + 1}</TableCell>
-                                                    <TableCell className="text-xs font-medium">{item.productName}</TableCell>
+                                                    <TableCell className={`text-xs ${isMatch ? "font-bold text-blue-700 dark:text-blue-300" : "font-medium"}`}>{item.productName}</TableCell>
                                                     <TableCell className="text-xs text-center">
                                                       <span className="text-gray-600 dark:text-gray-400">
                                                         {item.orderedQuantity || '-'}
@@ -1632,7 +1849,7 @@ export default function DeliveryPage() {
                                                     </TableCell>
                                                     <TableCell className="text-xs text-center">{item.unit || '-'}</TableCell>
                                                   </TableRow>
-                                                ))
+                                                )})
                                               ) : (
                                                 <TableRow>
                                                   <TableCell colSpan={6} className="text-xs text-center text-muted-foreground py-4">

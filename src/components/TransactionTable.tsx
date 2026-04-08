@@ -9,7 +9,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table"
-import { PlusCircle, FileDown, Trash2, Search, X, Edit, Eye, FileText, Calendar, Truck, Filter, ChevronDown, ChevronUp, Printer } from "lucide-react"
+import { PlusCircle, FileDown, Trash2, Search, X, Edit, Eye, FileText, Calendar, Truck, Filter, ChevronDown, ChevronUp, Printer, Check } from "lucide-react"
 import * as XLSX from "xlsx"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Calendar as CalendarComponent } from "@/components/ui/calendar"
 import {
   Table,
@@ -101,6 +102,8 @@ export function TransactionTable() {
   // Filter states
   const [showFilters, setShowFilters] = React.useState(false);
   const [customerSearch, setCustomerSearch] = React.useState<string>(''); // Search box untuk pelanggan
+  const [itemSearch, setItemSearch] = React.useState<string>(''); // Search box untuk item
+  const [openItemSearch, setOpenItemSearch] = React.useState(false);
   const [dateRange, setDateRange] = React.useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined });
   const [ppnFilter, setPpnFilter] = React.useState<'all' | 'ppn' | 'non-ppn'>('all');
   const [driverFilter, setDriverFilter] = React.useState<string>('all'); // Filter by driver ID (replaces deliveryFilter)
@@ -113,6 +116,16 @@ export function TransactionTable() {
   const [filteredTransactions, setFilteredTransactions] = React.useState<Transaction[]>([]);
 
   const { transactions, isLoading, deleteTransaction } = useTransactions();
+
+  const uniqueProducts = React.useMemo(() => {
+    const products = new Set<string>();
+    transactions?.forEach(t => {
+      t.items?.forEach(i => {
+        if (i.product?.name) products.add(i.product.name);
+      });
+    });
+    return Array.from(products).sort();
+  }, [transactions]);
 
   // Get drivers (supir) for filter dropdown
   const { data: deliveryEmployees } = useDeliveryEmployees();
@@ -301,6 +314,14 @@ export function TransactionTable() {
       });
     }
 
+    // Filter by item search
+    if (itemSearch.trim()) {
+      const searchLower = itemSearch.toLowerCase().trim();
+      filtered = filtered.filter(transaction => {
+        return transaction.items.some(item => item.product?.name?.toLowerCase().includes(searchLower));
+      });
+    }
+
     // Sort: ascending (oldest first) for mobile, descending (newest first) for desktop
     filtered.sort((a, b) => {
       const dateA = new Date(a.orderDate || 0).getTime();
@@ -309,10 +330,11 @@ export function TransactionTable() {
     });
 
     setFilteredTransactions(filtered);
-  }, [transactions, dateRange, ppnFilter, driverFilter, paymentFilter, paymentAccountFilter, customerTypeFilter, retasiFilter, cashierFilter, salesFilter, customerSearch, isMobile, transactionDriverMap]);
+  }, [transactions, dateRange, ppnFilter, driverFilter, paymentFilter, paymentAccountFilter, customerTypeFilter, retasiFilter, cashierFilter, salesFilter, customerSearch, itemSearch, isMobile, transactionDriverMap]);
 
   const clearFilters = () => {
     setCustomerSearch('');
+    setItemSearch('');
     setDateRange({ from: undefined, to: undefined });
     setPpnFilter('all');
     setDriverFilter('all');
@@ -618,15 +640,25 @@ export function TransactionTable() {
       header: "Item Pesanan",
       cell: ({ row }) => {
         const transaction = row.original;
+        const searchLower = itemSearch.toLowerCase().trim();
+        const displayItems = searchLower 
+          ? transaction.items.filter(item => item.product?.name?.toLowerCase().includes(searchLower))
+          : transaction.items;
+
         return (
           <div className="text-sm space-y-1">
-            {transaction.items.map((item, idx) => (
-              <div key={idx} className="flex justify-between gap-4">
-                <span className="truncate max-w-[150px] text-muted-foreground" title={item.product?.name}>
+            {displayItems.map((item, idx) => (
+              <div key={idx} className={cn("flex justify-between gap-4", searchLower && "font-semibold text-blue-600 dark:text-blue-400")}>
+                <span className="truncate max-w-[150px]" title={item.product?.name}>
                   {item.quantity}x {item.product?.name}
                 </span>
               </div>
             ))}
+            {searchLower && transaction.items.length > displayItems.length && (
+              <div className="text-xs text-muted-foreground italic">
+                + {transaction.items.length - displayItems.length} item lainnya
+              </div>
+            )}
           </div>
         );
       },
@@ -1064,10 +1096,19 @@ export function TransactionTable() {
     };
   }, [filteredTransactions]);
 
+  const soldItemCount = React.useMemo(() => {
+    if (!itemSearch.trim() || !filteredTransactions) return 0;
+    const searchLower = itemSearch.toLowerCase().trim();
+    return filteredTransactions.reduce((total, t) => {
+      const matchingItems = t.items?.filter(i => i.product?.name?.toLowerCase().includes(searchLower)) || [];
+      return total + matchingItems.reduce((sum, item) => sum + item.quantity, 0);
+    }, 0);
+  }, [itemSearch, filteredTransactions]);
+
   return (
     <div className="w-full max-w-none">
-      {/* Customer Search Box - Always visible */}
-      <div className="mb-4">
+      {/* Customer & Item Search Box - Always visible */}
+      <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -1087,6 +1128,78 @@ export function TransactionTable() {
             </Button>
           )}
         </div>
+        <div className="flex flex-col gap-2">
+          <Popover open={openItemSearch} onOpenChange={setOpenItemSearch}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                role="combobox"
+                aria-expanded={openItemSearch}
+                className="w-full justify-between border-blue-200 hover:bg-blue-50 focus:ring-blue-500 font-normal px-3"
+              >
+                <div className="flex items-center gap-2 truncate text-muted-foreground w-full">
+                  <Search className="h-4 w-4 shrink-0 opacity-50" />
+                  <span className={itemSearch ? "text-foreground font-medium truncate" : "truncate"}>
+                    {itemSearch ? itemSearch : "Cari berdasarkan nama item..."}
+                  </span>
+                </div>
+                {itemSearch && (
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    className="ml-2 h-4 w-4 flex items-center justify-center shrink-0 hover:text-foreground/80 focus:outline-none"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setItemSearch("");
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setItemSearch("");
+                      }
+                    }}
+                  >
+                    <X className="h-3 w-3" />
+                  </div>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[300px] sm:w-[400px] p-0" align="start">
+              <Command>
+                <CommandInput placeholder="Ketik nama item..." />
+                <CommandList>
+                  <CommandEmpty>Item tidak ditemukan.</CommandEmpty>
+                  <CommandGroup>
+                    {uniqueProducts.map((product) => (
+                      <CommandItem
+                        key={product}
+                        value={product}
+                        onSelect={(currentValue) => {
+                          setItemSearch(product === itemSearch ? "" : product)
+                          setOpenItemSearch(false)
+                        }}
+                      >
+                        <Check
+                          className={`mr-2 h-4 w-4 ${
+                            itemSearch === product ? "opacity-100" : "opacity-0"
+                          }`}
+                        />
+                        {product}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+
+          {itemSearch && soldItemCount > 0 && (
+            <div className="bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900 rounded p-2 text-sm text-blue-700 dark:text-blue-400">
+              <strong className="font-semibold">{soldItemCount} unit</strong> {itemSearch} ada di hasil pencarian.
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Filter Toggle Button */}
@@ -1102,7 +1215,7 @@ export function TransactionTable() {
             Filter Transaksi
             {showFilters ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </Button>
-          {(customerSearch.trim() || dateRange.from || dateRange.to || ppnFilter !== 'all' || driverFilter !== 'all' || paymentFilter !== 'all' || paymentAccountFilter !== 'all' || customerTypeFilter !== 'all' || retasiFilter !== 'all' || cashierFilter !== 'all') && (
+          {(customerSearch.trim() || itemSearch.trim() || dateRange.from || dateRange.to || ppnFilter !== 'all' || driverFilter !== 'all' || paymentFilter !== 'all' || paymentAccountFilter !== 'all' || customerTypeFilter !== 'all' || retasiFilter !== 'all' || cashierFilter !== 'all') && (
             <Badge variant="secondary" className="ml-2">
               Filter aktif
             </Badge>
@@ -1460,11 +1573,15 @@ export function TransactionTable() {
                       {/* Items */}
                       <div className="space-y-2 mb-3">
                         <div className="text-xs font-medium text-gray-600 mb-1">Item Pesanan:</div>
-                        {transaction.items.map((item, idx) => (
-                          <div key={idx} className="bg-card rounded p-2 border border-border">
+                        {transaction.items.map((item, idx) => {
+                          const isMatch = itemSearch.trim() && item.product?.name?.toLowerCase().includes(itemSearch.toLowerCase().trim());
+                          if (itemSearch.trim() && !isMatch) return null; // Optionally only show matches
+                          
+                          return (
+                          <div key={idx} className={cn("bg-card rounded p-2 border", isMatch ? "border-blue-300 bg-blue-50 dark:bg-blue-900/20" : "border-border")}>
                             <div className="flex justify-between items-start">
                               <div className="flex-1 min-w-0">
-                                <div className="text-sm font-medium truncate">{item.product?.name}</div>
+                                <div className={cn("text-sm truncate", isMatch ? "font-bold text-blue-700 dark:text-blue-300" : "font-medium")}>{item.product?.name}</div>
                                 <div className="text-xs text-gray-500">
                                   {item.quantity} {item.unit}
                                   {item.width && item.height && (
@@ -1477,7 +1594,7 @@ export function TransactionTable() {
                               </div>
                             </div>
                           </div>
-                        ))}
+                        )})}
                       </div>
 
                       {/* Payment Status */}

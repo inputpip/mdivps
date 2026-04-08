@@ -131,6 +131,9 @@ JOIN retasi r ON t.retasi_id = r.id
 CROSS JOIN LATERAL jsonb_array_elements(t.items) elem
 WHERE t.is_cancelled = false AND t.is_voided = false
 AND t.retasi_id IS NOT NULL
+AND NOT EXISTS (
+    SELECT 1 FROM deliveries d WHERE d.transaction_id = t.id AND d.status != 'cancelled'
+)
 AND (elem->>'productId' IS NOT NULL OR elem->'product'->>'id' IS NOT NULL);
 
 -- STEP 2: CREATE v_kalkulasi_komisi
