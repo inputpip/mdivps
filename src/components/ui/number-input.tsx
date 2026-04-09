@@ -190,6 +190,10 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
           (e.keyCode < 96 || e.keyCode > 105)) {
         e.preventDefault()
       }
+
+      if (props.onKeyDown) {
+        props.onKeyDown(e)
+      }
     }
 
     return (

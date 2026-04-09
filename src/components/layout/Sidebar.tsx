@@ -310,21 +310,60 @@ export function Sidebar({ isCollapsed, setCollapsed, onHoverChange }: SidebarPro
       )
     })).filter(section => section.items.length > 0);
 
-  // Get first search result for Enter key navigation
-  const firstSearchResult = filteredMenuItems.length > 0 && filteredMenuItems[0].items.length > 0
-    ? filteredMenuItems[0].items[0]
-    : null;
+  // Flatten items for Arrow Key Navigation
+  const flatMenuItems = useMemo(() => {
+    return filteredMenuItems.flatMap(section => 
+       (openSections[section.title] || searchQuery.trim() !== "" || isLocked) ? section.items : []
+    );
+  }, [filteredMenuItems, openSections, searchQuery, isLocked]);
 
-  // Handle search input keydown - navigate on Enter
+  const [selectedIndex, setSelectedIndex] = useState(0);
+
+  // Reset selected index when search changes
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [searchQuery]);
+
+  // Global hotkey to toggle sidebar & focus search using backtick (`)
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (e.key === '`') {
+        const target = e.target as HTMLElement;
+        if (target.tagName !== 'TEXTAREA') {
+          e.preventDefault();
+          setCollapsed(!isCollapsed);
+          setIsHoverExpanded(false);
+          if (isCollapsed) {
+            setTimeout(() => searchInputRef.current?.focus(), 100);
+          }
+        }
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [isCollapsed, setCollapsed]);
+
+  // Handle search input keydown - navigate on Enter / Arrow Keys
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && firstSearchResult) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedIndex(prev => Math.min(prev + 1, Math.max(0, flatMenuItems.length - 1)));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedIndex(prev => Math.max(prev - 1, 0));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const selectedItem = flatMenuItems[selectedIndex];
+      if (selectedItem) {
+        setSearchQuery("");
+        setSelectedIndex(0);
+        setIsHoverExpanded(false);
+        navigate(selectedItem.href);
+      }
+    } else if (e.key === 'Escape') {
       e.preventDefault();
       setSearchQuery("");
-      setIsHoverExpanded(false);
-      navigate(firstSearchResult.href);
-    }
-    if (e.key === 'Escape') {
-      setSearchQuery("");
+      setSelectedIndex(0);
     }
   };
 
@@ -333,11 +372,11 @@ export function Sidebar({ isCollapsed, setCollapsed, onHoverChange }: SidebarPro
     if (searchQuery.trim() !== "" || isLocked) {
       const newOpenSections: Record<string, boolean> = {};
       filteredMenuItems.forEach((section) => {
-        newOpenSections[section.title] = true; // auto-expand sections with results or if locked
+        newOpenSections[section.title] = true;
       });
       setOpenSections(newOpenSections);
     }
-  }, [searchQuery, isLocked]); // Only depend on searchQuery and isLocked
+  }, [searchQuery, isLocked]);
 
   return (
     <div
@@ -395,11 +434,11 @@ export function Sidebar({ isCollapsed, setCollapsed, onHoverChange }: SidebarPro
                 )}
               </div>
               {/* Show first result hint when searching */}
-              {searchQuery && firstSearchResult && (
+              {searchQuery && flatMenuItems[selectedIndex] && (
                 <div className="mt-1.5 text-xs text-muted-foreground flex items-center justify-between">
                   <div className="flex items-center gap-1">
                     <span>Enter →</span>
-                    <span className="font-medium text-foreground">{firstSearchResult.label}</span>
+                    <span className="font-medium text-foreground">{flatMenuItems[selectedIndex].label}</span>
                   </div>
                 </div>
               )}
@@ -443,6 +482,7 @@ export function Sidebar({ isCollapsed, setCollapsed, onHoverChange }: SidebarPro
                   >
                     {section.items.map((item) => {
                       const isActive = location.pathname === item.href;
+                      const isSelectedByKeyboard = showExpanded && flatMenuItems[selectedIndex]?.href === item.href;
 
                       return !showExpanded ? (
                         <Tooltip key={item.href}>
@@ -465,8 +505,11 @@ export function Sidebar({ isCollapsed, setCollapsed, onHoverChange }: SidebarPro
                           key={item.href}
                           to={item.href}
                           className={cn(
-                            "flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:bg-white/10 hover:text-indigo-600 dark:hover:text-indigo-400 whitespace-nowrap",
-                            isActive && cn(colors.activeBg, "text-white shadow-md hover:brightness-110")
+                            "flex items-center gap-3 rounded-lg px-3 py-2 transition-all whitespace-nowrap",
+                            isActive 
+                              ? cn(colors.activeBg, "text-white shadow-md hover:brightness-110") 
+                              : "text-muted-foreground hover:bg-white/10 hover:text-indigo-600 dark:hover:text-indigo-400",
+                            isSelectedByKeyboard && !isActive && "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 shadow-[inset_2px_0_0_0_#4f46e5]"
                           )}
                         >
                           <item.icon className="h-4 w-4" />

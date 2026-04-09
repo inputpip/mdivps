@@ -111,6 +111,13 @@ export const PosForm = () => {
   const [loadingPrices, setLoadingPrices] = useState<{ [key: number]: boolean }>({});
   const [sourceQuotation, setSourceQuotation] = useState<Quotation | null>(null);
   const productSearchInputRef = useRef<HTMLInputElement>(null);
+
+  // Force autofocus on Product Search when Tambah Item is opened
+  useEffect(() => {
+    if (showProductDropdown && productSearchInputRef.current) {
+      setTimeout(() => productSearchInputRef.current?.focus(), 50);
+    }
+  }, [showProductDropdown]);
   const debounceTimers = useRef<Record<number, NodeJS.Timeout>>({});
   // Cache for product pricing data to avoid repeated fetches
   const pricingCache = useRef<Record<string, { bonusPricings: any[], stockPricings: any[], fetchedAt: number }>>({});
@@ -688,17 +695,42 @@ export const PosForm = () => {
     ).slice(0, 10); // Limit to 10 results
   }, [customers, customerSearch]);
 
+  const [selectedCustomerIndex, setSelectedCustomerIndex] = useState(0);
+
+  useEffect(() => {
+    setSelectedCustomerIndex(0);
+  }, [customerSearch]);
+
+  const [selectedProductIndex, setSelectedProductIndex] = useState(0);
+
+  useEffect(() => {
+    setSelectedProductIndex(0);
+  }, [productSearch]);
+
   const addToCart = async (product: Product) => {
     const existing = items.find(item => item.product?.id === product.id && !item.isBonus);
+    let targetId = 0;
     if (existing) {
       // Hilangkan validasi stok agar tetap bisa jual walau stok 0
       const newQty = existing.qty + 1;
       await updateItemWithBonuses(existing, newQty);
+      targetId = existing.id;
     } else {
-      await addNewItemWithBonuses(product, 1);
+      const newItemId = Date.now();
+      await addNewItemWithBonuses(product, 1, newItemId);
+      targetId = newItemId;
     }
     setShowProductDropdown(false);
     setProductSearch('');
+
+    // INPUT CHAIN: Focus and auto-select Qty after adding item
+    setTimeout(() => {
+      const qtyInput = document.getElementById(`qty-input-${targetId}`) as HTMLInputElement;
+      if (qtyInput) {
+        qtyInput.focus();
+        qtyInput.select();
+      }
+    }, 100);
   };
 
   const updateItemWithBonuses = async (existingItem: FormTransactionItem, newQty: number) => {
@@ -746,9 +778,9 @@ export const PosForm = () => {
     setItems(newItems);
   };
 
-  const addNewItemWithBonuses = async (product: Product, quantity: number) => {
+  const addNewItemWithBonuses = async (product: Product, quantity: number, forceId?: number) => {
     const { price, calculation } = await calculateDynamicPrice(product, quantity);
-    const newItemId = Date.now();
+    const newItemId = forceId || Date.now();
 
     const newItem: FormTransactionItem = {
       id: newItemId,
@@ -856,25 +888,52 @@ export const PosForm = () => {
                           setTimeout(() => setShowCustomerDropdown(false), 150)
                         }}
                         disabled={retasiBlocked}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            if (filteredCustomers.length > 0 && showCustomerDropdown) {
+                              const customer = filteredCustomers[selectedCustomerIndex] || filteredCustomers[0];
+                              setSelectedCustomer(customer);
+                              setCustomerSearch(customer.name);
+                              setShowCustomerDropdown(false);
+                            }
+                          } else if (e.key === 'ArrowDown') {
+                            e.preventDefault();
+                            setSelectedCustomerIndex(prev => Math.min(prev + 1, filteredCustomers.length - 1));
+                            const container = document.getElementById('customer-dropdown-container');
+                            const item = document.getElementById(`customer-item-${Math.min(selectedCustomerIndex + 1, filteredCustomers.length - 1)}`);
+                            if (container && item) item.scrollIntoView({ block: 'nearest' });
+                          } else if (e.key === 'ArrowUp') {
+                            e.preventDefault();
+                            setSelectedCustomerIndex(prev => Math.max(prev - 1, 0));
+                            const container = document.getElementById('customer-dropdown-container');
+                            const item = document.getElementById(`customer-item-${Math.max(selectedCustomerIndex - 1, 0)}`);
+                            if (container && item) item.scrollIntoView({ block: 'nearest' });
+                          }
+                        }}
                         className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                       />
 
                       {showCustomerDropdown && filteredCustomers.length > 0 && (
-                        <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-auto">
-                          {filteredCustomers.map((customer) => (
-                            <div
-                              key={customer.id}
-                              className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer text-sm"
-                              onClick={() => {
-                                setSelectedCustomer(customer)
-                                setCustomerSearch(customer.name)
-                                setShowCustomerDropdown(false)
-                              }}
-                            >
-                              <div className="font-medium text-gray-900 dark:text-white">{customer.name}</div>
-                              <div className="text-xs text-gray-500 dark:text-gray-400">{customer.phone}</div>
-                            </div>
-                          ))}
+                        <div id="customer-dropdown-container" className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-auto">
+                          {filteredCustomers.map((customer, index) => {
+                            const isSelected = index === selectedCustomerIndex;
+                            return (
+                              <div
+                                key={customer.id}
+                                id={`customer-item-${index}`}
+                                className={`px-3 py-2 transition-colors cursor-pointer text-sm ${isSelected ? 'bg-blue-50 dark:bg-blue-900/40 border-l-4 border-l-blue-500' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                                onClick={() => {
+                                  setSelectedCustomer(customer)
+                                  setCustomerSearch(customer.name)
+                                  setShowCustomerDropdown(false)
+                                }}
+                              >
+                                <div className={`font-medium ${isSelected ? 'text-blue-700 dark:text-blue-300' : 'text-gray-900 dark:text-white'}`}>{customer.name}</div>
+                                <div className="text-xs text-gray-500 dark:text-gray-400">{customer.phone}</div>
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
@@ -1042,25 +1101,61 @@ export const PosForm = () => {
                         <div className="p-2 border-b dark:border-gray-600 bg-gray-50 dark:bg-gray-700 sticky top-0">
                           <Input
                             ref={productSearchInputRef}
-                            placeholder="Cari produk..."
+                            placeholder="Cari produk (Enter untuk tambah & selesai)"
                             value={productSearch}
                             onChange={(e) => setProductSearch(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                if (filteredProducts.length > 0) {
+                                  addToCart(filteredProducts[selectedProductIndex] || filteredProducts[0]);
+                                } else {
+                                  // Kosong lalu Enter -> Selesai dan lanjut Simpan
+                                  setShowProductDropdown(false);
+                                  document.getElementById('simpan-transaksi-btn')?.focus();
+                                }
+                              } else if (e.key === 'ArrowDown') {
+                                e.preventDefault();
+                                setSelectedProductIndex(prev => Math.min(prev + 1, filteredProducts.length - 1));
+                                // Auto scroll into view
+                                const container = document.getElementById('product-dropdown-container');
+                                const item = document.getElementById(`product-item-${Math.min(selectedProductIndex + 1, filteredProducts.length - 1)}`);
+                                if (container && item) {
+                                  item.scrollIntoView({ block: 'nearest' });
+                                }
+                              } else if (e.key === 'ArrowUp') {
+                                e.preventDefault();
+                                setSelectedProductIndex(prev => Math.max(prev - 1, 0));
+                                // Auto scroll into view
+                                const container = document.getElementById('product-dropdown-container');
+                                const item = document.getElementById(`product-item-${Math.max(selectedProductIndex - 1, 0)}`);
+                                if (container && item) {
+                                  item.scrollIntoView({ block: 'nearest' });
+                                }
+                              }
+                            }}
                             className="w-full text-sm h-9"
                             autoFocus
                           />
                         </div>
-                        <div className="max-h-[calc(40vh-50px)] overflow-y-auto">
-                          {filteredProducts.map((product) => {
+                        <div id="product-dropdown-container" className="max-h-[calc(40vh-50px)] overflow-y-auto">
+                          {filteredProducts.map((product, index) => {
                             const isOutOfStock = (product.currentStock || 0) <= 0;
+                            const isSelected = index === selectedProductIndex;
                             return (
                               <div
                                 key={product.id}
-                                className="px-3 py-2 border-b dark:border-gray-600 last:border-b-0 transition-colors hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
+                                id={`product-item-${index}`}
+                                className={`px-3 py-2 border-b dark:border-gray-600 last:border-b-0 transition-colors cursor-pointer ${
+                                  isSelected 
+                                    ? 'bg-blue-50 dark:bg-blue-900/40 border-l-4 border-l-blue-500' 
+                                    : 'hover:bg-gray-50 dark:hover:bg-gray-700'
+                                }`}
                                 onClick={() => addToCart(product)}
                               >
                                 <div className="flex items-center justify-between gap-2">
                                   <div className="flex-1 min-w-0">
-                                    <span className={`font-medium text-sm ${isOutOfStock ? 'text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-white'}`}>
+                                    <span className={`font-medium text-sm ${isOutOfStock ? 'text-gray-500 dark:text-gray-400' : (isSelected ? 'text-blue-700 dark:text-blue-300' : 'text-gray-900 dark:text-white')}`}>
                                       {product.name}
                                     </span>
                                     <div className={`text-xs ${isOutOfStock ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'}`}>
@@ -1068,14 +1163,14 @@ export const PosForm = () => {
                                     </div>
                                   </div>
                                   <div className="shrink-0 flex items-center gap-3">
-                                    <div className="text-sm font-semibold text-green-600 dark:text-green-400">
+                                    <div className={`text-sm font-semibold ${isSelected ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}`}>
                                       {new Intl.NumberFormat("id-ID", {
                                         style: "currency",
                                         currency: "IDR",
                                         maximumFractionDigits: 0,
                                       }).format(product.basePrice || 0)}
                                     </div>
-                                    <Plus className="h-4 w-4 text-green-600 dark:text-green-400" />
+                                    <Plus className={`h-4 w-4 ${isSelected ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}`} />
                                   </div>
                                 </div>
                               </div>
@@ -1142,10 +1237,10 @@ export const PosForm = () => {
                                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                     </Button>
                                   </PopoverTrigger>
-                                  <PopoverContent className="w-[300px] p-0">
-                                    <Command>
-                                      <CommandInput placeholder="Cari produk..." />
-                                      <CommandEmpty>Produk tidak ditemukan.</CommandEmpty>
+                                    <PopoverContent className="w-[300px] p-0">
+                                      <Command>
+                                        <CommandInput placeholder="Cari produk..." autoFocus />
+                                        <CommandEmpty>Produk tidak ditemukan.</CommandEmpty>
                                       <CommandGroup className="max-h-64 overflow-y-auto">
                                         {(products || []).map((product) => (
                                           <CommandItem
@@ -1182,8 +1277,17 @@ export const PosForm = () => {
                             </td>
                             <td className="px-2 md:px-4 py-2 md:py-3 text-center">
                               <NumberInput
+                                id={`qty-input-${item.id}`}
                                 value={item.qty}
                                 onChange={(value) => handleItemChange(index, 'qty', value || 1)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    // INPUT CHAIN: Jump back to Tambah Item/Search after typing Qty
+                                    setShowProductDropdown(true);
+                                    setTimeout(() => productSearchInputRef.current?.focus(), 100);
+                                  }
+                                }}
                                 min={1}
                                 decimalPlaces={0}
                                 className="w-16 md:w-20 text-center text-xs"
@@ -1398,9 +1502,10 @@ export const PosForm = () => {
                 </div>
 
                 <Button
+                  id="simpan-transaksi-btn"
                   type="submit"
                   disabled={items.length === 0 || addTransaction.isPending || retasiBlocked}
-                  className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-semibold py-3 md:py-4 shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none text-sm md:text-base"
+                  className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-semibold py-3 md:py-4 shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none text-sm md:text-base focus:ring-4 focus:ring-emerald-500"
                 >
                   {addTransaction.isPending ? "Menyimpan..." : "Simpan Transaksi"}
                 </Button>
