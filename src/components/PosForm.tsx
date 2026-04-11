@@ -556,8 +556,11 @@ export const PosForm = () => {
     }
   };
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting || addTransaction.isPending) return;
 
     const validItems = items.filter(item => item.product && item.qty > 0);
 
@@ -573,6 +576,8 @@ export const PosForm = () => {
       toast({ variant: "destructive", title: "Validasi Gagal", description: "Harap pilih Kas/Bank untuk menerima pembayaran." });
       return;
     }
+
+    setIsSubmitting(true);
 
     const transactionItems: TransactionItem[] = validItems.map(item => ({
       product: {
@@ -645,9 +650,11 @@ export const PosForm = () => {
 
         // Show print dialog and redirect to transactions page
         setIsPrintDialogOpen(true);
+        setIsSubmitting(false);
         navigate('/transactions');
       },
       onError: (error) => {
+        setIsSubmitting(false);
         toast({ variant: "destructive", title: "Gagal Menyimpan", description: error.message });
       }
     });
@@ -1504,10 +1511,10 @@ export const PosForm = () => {
                 <Button
                   id="simpan-transaksi-btn"
                   type="submit"
-                  disabled={items.length === 0 || addTransaction.isPending || retasiBlocked}
+                  disabled={items.length === 0 || addTransaction.isPending || isSubmitting || retasiBlocked}
                   className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-semibold py-3 md:py-4 shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none text-sm md:text-base focus:ring-4 focus:ring-emerald-500"
                 >
-                  {addTransaction.isPending ? "Menyimpan..." : "Simpan Transaksi"}
+                  {isSubmitting || addTransaction.isPending ? "Menyimpan..." : "Simpan Transaksi"}
                 </Button>
 
                 {/* Due Date Section - Only show if payment is not full */}

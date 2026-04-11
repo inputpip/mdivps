@@ -1593,6 +1593,11 @@ export function TransactionTable() {
                                 {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(item.price * item.quantity)}
                               </div>
                             </div>
+                            {item.notes && (
+                              <div className="mt-1.5 text-xs text-gray-600 dark:text-gray-400 bg-muted/50 p-1.5 rounded italic border border-border/50">
+                                Catatan: {item.notes}
+                              </div>
+                            )}
                           </div>
                         )})}
                       </div>
@@ -1749,6 +1754,11 @@ export function TransactionTable() {
                                             {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(item.price * item.quantity)}
                                           </div>
                                         </div>
+                                        {item.notes && (
+                                          <div className="mt-2 text-xs text-muted-foreground bg-muted p-2 rounded border border-border/50 italic">
+                                            Catatan: {item.notes}
+                                          </div>
+                                        )}
                                       </div>
                                     ))}
                                   </div>

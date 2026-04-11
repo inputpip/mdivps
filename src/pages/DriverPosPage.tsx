@@ -358,6 +358,7 @@ export default function DriverPosPage() {
       toast({ variant: "destructive", title: "Error", description: "Pilih akun pembayaran" })
       return
     }
+    if (isSubmitting) return;
 
     setIsSubmitting(true)
 
