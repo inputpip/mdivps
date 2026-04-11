@@ -453,6 +453,12 @@ export const useRetasi = (filters?: {
       }
       if (updateData.departure_time !== undefined) dbData.departure_time = updateData.departure_time;
       if (updateData.notes !== undefined) dbData.notes = updateData.notes;
+      if ((updateData as any).is_returned !== undefined) dbData.is_returned = (updateData as any).is_returned;
+      if ((updateData as any).returned_items_count !== undefined) dbData.returned_items_count = (updateData as any).returned_items_count;
+      if ((updateData as any).error_items_count !== undefined) dbData.error_items_count = (updateData as any).error_items_count;
+      if ((updateData as any).barang_laku !== undefined) dbData.barang_laku = (updateData as any).barang_laku;
+      if ((updateData as any).barang_tidak_laku !== undefined) dbData.barang_tidak_laku = (updateData as any).barang_tidak_laku;
+      if ((updateData as any).return_notes !== undefined) dbData.return_notes = (updateData as any).return_notes;
 
       const { data: updated, error } = await supabase
         .from('retasi')
