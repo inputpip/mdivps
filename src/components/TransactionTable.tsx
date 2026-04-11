@@ -1593,13 +1593,19 @@ export function TransactionTable() {
                                 {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(item.price * item.quantity)}
                               </div>
                             </div>
-                            {item.notes && (
-                              <div className="mt-1.5 text-xs text-gray-600 dark:text-gray-400 bg-muted/50 p-1.5 rounded italic border border-border/50">
-                                Catatan: {item.notes}
-                              </div>
-                            )}
+                            <div className="mt-1.5 text-xs text-gray-600 dark:text-gray-400 bg-muted/50 p-1.5 rounded italic border border-border/50">
+                              Keterangan: {item.notes?.trim() ? item.notes : "-"}
+                            </div>
                           </div>
                         )})}
+
+                        {/* Transaction Notes */}
+                        <div className="mt-3 border-t border-dashed border-gray-200 dark:border-gray-700 pt-2">
+                          <div className="text-xs font-semibold text-amber-600 dark:text-amber-400 mb-1">Catatan Transaksi:</div>
+                          <div className="text-xs text-gray-700 dark:text-gray-300 bg-amber-50 dark:bg-amber-900/20 p-2 rounded min-h-[30px]">
+                            {transaction.notes?.trim() ? transaction.notes : "-"}
+                          </div>
+                        </div>
                       </div>
 
                       {/* Payment Status */}
@@ -1626,16 +1632,8 @@ export function TransactionTable() {
                           </div>
                         )}
                       </div>
-
-                      {/* Notes if any */}
-                      {transaction.notes && (
-                        <div className="text-xs text-gray-600">
-                          <div className="font-medium mb-1">Catatan:</div>
-                          <div className="bg-amber-500/10 border border-amber-500/20 rounded p-2 text-foreground">
-                            {transaction.notes}
-                          </div>
-                        </div>
-                      )}
+                        )}
+                      </div>
 
                       {/* Action Buttons */}
                       <div className="flex gap-2 mt-3 pt-3 border-t">
@@ -1754,17 +1752,22 @@ export function TransactionTable() {
                                             {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(item.price * item.quantity)}
                                           </div>
                                         </div>
-                                        {item.notes && (
-                                          <div className="mt-2 text-xs text-muted-foreground bg-muted p-2 rounded border border-border/50 italic">
-                                            Catatan: {item.notes}
-                                          </div>
-                                        )}
+                                        <div className="mt-2 text-xs text-muted-foreground bg-muted p-2 rounded border border-border/50 italic">
+                                          Keterangan: {item.notes?.trim() ? item.notes : "-"}
+                                        </div>
                                       </div>
                                     ))}
+                                    
+                                    <div className="mt-4 pt-3 border-t border-dashed border-gray-200 dark:border-gray-700">
+                                      <h4 className="font-semibold text-xs text-amber-600 dark:text-amber-400 mb-1.5">Catatan Transaksi:</h4>
+                                      <div className="bg-amber-50 dark:bg-amber-900/20 rounded p-2.5 text-sm text-gray-800 dark:text-gray-200 border border-amber-100 dark:border-amber-900/50 min-h-[36px]">
+                                        {transaction.notes?.trim() ? transaction.notes : "-"}
+                                      </div>
+                                    </div>
                                   </div>
                                 </div>
 
-                                {/* Payment Status & Notes */}
+                                {/* Payment Status */}
                                 <div className="space-y-4">
                                   <div>
                                     <h4 className="font-medium mb-2 text-sm">Status Pembayaran:</h4>
@@ -1789,15 +1792,6 @@ export function TransactionTable() {
                                       )}
                                     </div>
                                   </div>
-
-                                  {transaction.notes && (
-                                    <div>
-                                      <h4 className="font-medium mb-2 text-sm">Catatan:</h4>
-                                      <div className="bg-amber-500/10 border border-amber-500/20 rounded p-2 text-sm text-foreground">
-                                        {transaction.notes}
-                                      </div>
-                                    </div>
-                                  )}
 
                                   {/* Quick Actions */}
                                   <div className="flex gap-2 pt-2 border-t">
