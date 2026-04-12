@@ -159,6 +159,7 @@ const getMenuItems = (hasPermission: (permission: Permission) => boolean, hasGra
       { href: "/branches", label: "Manajemen Cabang", icon: Building2, permission: PERMISSIONS.SETTINGS },
       { href: "/web-management", label: "Web Management", icon: Server, permission: PERMISSIONS.SETTINGS, roles: ['owner'] },
       { href: "/company-archive", label: "Arsip Berkas", icon: FolderArchive, permission: PERMISSIONS.SETTINGS, roles: ['owner'] },
+      { href: "/audit-logs", label: "Log Aktivitas (Audit)", icon: History, permission: PERMISSIONS.SETTINGS, roles: ['owner'] },
 
     ].filter(item => {
       if (!hasPermission(item.permission)) return false;

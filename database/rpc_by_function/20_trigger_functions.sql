@@ -25,6 +25,7 @@ CREATE OR REPLACE FUNCTION public.audit_trigger_func() RETURNS trigger
 DECLARE
   old_data jsonb := NULL;
   new_data jsonb := NULL;
+  target_data jsonb := NULL;
   changed_fields jsonb := NULL;
   record_id text := NULL;
   current_user_id uuid := NULL;
@@ -34,42 +35,44 @@ DECLARE
   old_value jsonb;
   new_value jsonb;
 BEGIN
-  -- Coba ambil info user dari JWT
-  BEGIN
-    current_user_id := (current_setting('request.jwt.claims', true)::jsonb->>'sub')::uuid;
-    current_user_email := current_setting('request.jwt.claims', true)::jsonb->>'email';
-    current_user_role := current_setting('request.jwt.claims', true)::jsonb->>'role';
-  EXCEPTION WHEN OTHERS THEN
-    current_user_email := current_user;
-  END;
   IF (TG_OP = 'DELETE') THEN
-    old_data := to_jsonb(OLD);
-    record_id := COALESCE(OLD.id::text, 'unknown');
+    old_data := to_jsonb(OLD); target_data := old_data; record_id := COALESCE(OLD.id::text, 'unknown');
   ELSIF (TG_OP = 'UPDATE') THEN
-    old_data := to_jsonb(OLD);
-    new_data := to_jsonb(NEW);
-    record_id := COALESCE(NEW.id::text, OLD.id::text, 'unknown');
-    -- Hitung field yang berubah
+    old_data := to_jsonb(OLD); new_data := to_jsonb(NEW); target_data := new_data; record_id := COALESCE(NEW.id::text, OLD.id::text, 'unknown');
     changed_fields := '{}'::jsonb;
-    FOR key IN SELECT jsonb_object_keys(new_data)
-    LOOP
-      old_value := old_data->key;
-      new_value := new_data->key;
+    FOR key IN SELECT jsonb_object_keys(new_data) LOOP
+      old_value := old_data->key; new_value := new_data->key;
       IF old_value IS DISTINCT FROM new_value AND key NOT IN ('updated_at') THEN
-        changed_fields := changed_fields || jsonb_build_object(
-          key, jsonb_build_object('old', old_value, 'new', new_value)
-        );
+        changed_fields := changed_fields || jsonb_build_object(key, jsonb_build_object('old', old_value, 'new', new_value));
       END IF;
     END LOOP;
-    IF changed_fields = '{}'::jsonb THEN
-      RETURN NEW;
-    END IF;
+    IF changed_fields = '{}'::jsonb THEN RETURN NEW; END IF;
   ELSIF (TG_OP = 'INSERT') THEN
-    new_data := to_jsonb(NEW);
-    record_id := COALESCE(NEW.id::text, 'unknown');
+    new_data := to_jsonb(NEW); target_data := new_data; record_id := COALESCE(NEW.id::text, 'unknown');
   END IF;
+
+  -- 1. Coba dari Token
+  BEGIN current_user_id := COALESCE((current_setting('request.jwt.claims', true)::jsonb->>'sub')::uuid, auth.uid()); EXCEPTION WHEN OTHERS THEN current_user_id := NULL; END;
+
+  -- 2. JURUS PAMUNGKAS (Karena Web sudah terhubung ke Cashier_id, kita CURI DARI SINI!)
+  IF current_user_id IS NULL AND target_data IS NOT NULL THEN
+    IF target_data ? 'cashier_id' AND target_data->>'cashier_id' IS NOT NULL THEN current_user_id := (target_data->>'cashier_id')::uuid;
+    ELSIF target_data ? 'created_by' AND target_data->>'created_by' IS NOT NULL THEN current_user_id := (target_data->>'created_by')::uuid;
+    ELSIF target_data ? 'voided_by' AND target_data->>'voided_by' IS NOT NULL THEN current_user_id := (target_data->>'voided_by')::uuid;
+    ELSIF target_data ? 'user_id' AND target_data->>'user_id' IS NOT NULL THEN current_user_id := (target_data->>'user_id')::uuid;
+    ELSIF target_data ? 'cancelled_by' AND target_data->>'cancelled_by' IS NOT NULL THEN current_user_id := (target_data->>'cancelled_by')::uuid;
+    END IF;
+  END IF;
+
+  -- 3. KONVERSI ID KE NAMA ASLI MAKKI
+  IF current_user_id IS NOT NULL THEN
+    SELECT COALESCE(p.full_name, 'Kasir') || ' (' || COALESCE(p.email, '') || ')', COALESCE(p.role, 'User') 
+    INTO current_user_email, current_user_role FROM public.profiles p WHERE p.id = current_user_id;
+  END IF;
+
   INSERT INTO audit_logs (table_name, operation, record_id, old_data, new_data, changed_fields, user_id, user_email, user_role, created_at)
-  VALUES (TG_TABLE_NAME, TG_OP, record_id, old_data, new_data, changed_fields, current_user_id, current_user_email, current_user_role, NOW());
+  VALUES (TG_TABLE_NAME, TG_OP, record_id, old_data, new_data, changed_fields, current_user_id, COALESCE(current_user_email, 'Gagal Menyadap KTP'), COALESCE(current_user_role, 'Sistem'), NOW());
+
   IF (TG_OP = 'DELETE') THEN RETURN OLD; ELSE RETURN NEW; END IF;
 END;
 $function$;

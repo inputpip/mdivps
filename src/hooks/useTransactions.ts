@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client'
 import { useExpenses } from './useExpenses'
 import { useBranch } from '@/contexts/BranchContext'
 import { useTimezone } from '@/contexts/TimezoneContext'
+import { useAuth } from '@/hooks/useAuth'
 import { getOfficeDateString } from '@/utils/officeTime'
 import { findAccountByLookup, AccountLookupType } from '@/services/accountLookupService'
 import { Account } from '@/types/account'
@@ -114,6 +115,7 @@ export const useTransactions = (filters?: {
   const queryClient = useQueryClient()
   const { currentBranch } = useBranch()
   const { timezone } = useTimezone()
+  const { user } = useAuth()
 
   const { data: transactions, isLoading } = useQuery<Transaction[]>({
     queryKey: ['transactions', filters, currentBranch?.id],
@@ -241,8 +243,8 @@ export const useTransactions = (filters?: {
           p_transaction: transactionData,
           p_items: itemsData,
           p_branch_id: currentBranch.id,
-          p_cashier_id: newTransaction.cashierId || null,
-          p_cashier_name: newTransaction.cashierName || null,
+          p_cashier_id: newTransaction.cashierId || user?.id || null,
+          p_cashier_name: newTransaction.cashierName || user?.full_name || null,
           p_quotation_id: quotationId || null
         });
 
@@ -354,8 +356,8 @@ export const useTransactions = (filters?: {
           p_transaction_id: updatedTransaction.id,
           p_transaction: transactionData,
           p_branch_id: currentBranch.id,
-          p_user_id: null,
-          p_user_name: null
+          p_user_id: user?.id || null,
+          p_user_name: user?.full_name || null
         });
 
       if (rpcError) {
@@ -408,10 +410,10 @@ export const useTransactions = (filters?: {
           p_transaction_id: transactionId, 
           p_amount: amount,
           p_payment_account_id: accountId, 
-          p_notes: notes || `Pelunasan Piutang by ${recordedBy || 'User'}`,
+          p_notes: notes || `Pelunasan Piutang by ${recordedBy || user?.full_name || 'User'}`,
           p_branch_id: currentBranch.id,
-          p_user_id: null,
-          p_recorded_by_name: recordedBy || 'User',
+          p_user_id: user?.id || null,
+          p_recorded_by_name: recordedBy || user?.full_name || 'User',
           p_payment_date: getOfficeDateString(timezone)
         });
 
@@ -447,7 +449,7 @@ export const useTransactions = (filters?: {
           p_transaction_id: transactionId,
           p_branch_id: currentBranch.id,
           p_reason: 'Piutang dihapus/dibatalkan',
-          p_user_id: null
+          p_user_id: user?.id || null
         });
 
       if (rpcError) throw new Error(rpcError.message);
@@ -500,8 +502,8 @@ export const useTransactions = (filters?: {
         .rpc('void_transaction_atomic', {
           p_transaction_id: transactionId,
           p_branch_id: currentBranch.id,
-          p_reason: reason || 'Transaksi dihapus oleh user',
-          p_user_id: userId || null
+          p_reason: reason || 'Dibatalkan oleh User',
+          p_user_id: user?.id || null
         });
 
       if (rpcError) {
