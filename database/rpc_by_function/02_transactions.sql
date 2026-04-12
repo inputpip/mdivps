@@ -657,6 +657,12 @@ DECLARE
   v_sales_name TEXT;
   v_retasi_id UUID;
   v_retasi_number TEXT;
+  v_due_date TIMESTAMPTZ;
+  v_subtotal NUMERIC;
+  v_ppn_enabled BOOLEAN;
+  v_ppn_mode TEXT;
+  v_ppn_percentage NUMERIC;
+  v_ppn_amount NUMERIC;
 
   v_item JSONB;
   v_product_id UUID;
@@ -743,6 +749,12 @@ BEGIN
   v_payment_account_id := (p_transaction->>'payment_account_id')::TEXT;
   v_retasi_id := (p_transaction->>'retasi_id')::UUID;
   v_retasi_number := p_transaction->>'retasi_number';
+  v_due_date := (p_transaction->>'due_date')::TIMESTAMPTZ;
+  v_subtotal := COALESCE((p_transaction->>'subtotal')::NUMERIC, v_total);
+  v_ppn_enabled := COALESCE((p_transaction->>'ppn_enabled')::BOOLEAN, FALSE);
+  v_ppn_mode := COALESCE(p_transaction->>'ppn_mode', 'exclude');
+  v_ppn_percentage := COALESCE((p_transaction->>'ppn_percentage')::NUMERIC, 0);
+  v_ppn_amount := COALESCE((p_transaction->>'ppn_amount')::NUMERIC, 0);
 
   -- ==================== VALIDASI AKUN PEMBAYARAN ====================
 
@@ -924,6 +936,12 @@ BEGIN
     notes,
     retasi_id,
     retasi_number,
+    due_date,
+    subtotal,
+    ppn_enabled,
+    ppn_mode,
+    ppn_percentage,
+    ppn_amount,
     created_at,
     updated_at
   ) VALUES (
@@ -947,6 +965,12 @@ BEGIN
     v_notes,
     v_retasi_id,
     v_retasi_number,
+    v_due_date,
+    v_subtotal,
+    v_ppn_enabled,
+    v_ppn_mode,
+    v_ppn_percentage,
+    v_ppn_amount,
     NOW(),
     NOW()
   );
@@ -1028,13 +1052,30 @@ BEGIN
       );
     END IF;
 
-    -- Credit: Pendapatan
-    v_journal_lines := v_journal_lines || jsonb_build_object(
-      'account_code', '4100',
-      'debit_amount', 0,
-      'credit_amount', v_total,
-      'description', 'Pendapatan penjualan'
-    );
+    -- Credit: Pendapatan & Pajak
+    IF v_ppn_enabled THEN
+      -- PPN Aktif: Pendapatan bersih (Subtotal) ke 4100, pajak ke 2130
+      v_journal_lines := v_journal_lines || jsonb_build_object(
+        'account_code', '4100',
+        'debit_amount', 0,
+        'credit_amount', v_subtotal,
+        'description', 'Pendapatan penjualan (Subtotal)'
+      );
+      v_journal_lines := v_journal_lines || jsonb_build_object(
+        'account_code', '2130',
+        'debit_amount', 0,
+        'credit_amount', v_ppn_amount,
+        'description', 'PPN Keluaran (Pajak Penjualan)'
+      );
+    ELSE
+      -- PPN Nonaktif: Seluruh total masuk ke Pendapatan 4100
+      v_journal_lines := v_journal_lines || jsonb_build_object(
+        'account_code', '4100',
+        'debit_amount', 0,
+        'credit_amount', v_total,
+        'description', 'Pendapatan penjualan'
+      );
+    END IF;
 
     -- Debit: HPP (regular items)
     IF v_total_hpp > 0 THEN
@@ -1247,6 +1288,11 @@ DECLARE
   v_customer_name TEXT;
   v_date DATE;
   v_total_hpp NUMERIC := 0;
+  v_new_subtotal NUMERIC;
+  v_new_ppn_enabled BOOLEAN;
+  v_new_ppn_mode TEXT;
+  v_new_ppn_percentage NUMERIC;
+  v_new_ppn_amount NUMERIC;
   v_fifo_result RECORD;
 BEGIN
   -- ==================== VALIDASI ====================
@@ -1292,6 +1338,12 @@ BEGIN
   v_customer_name := COALESCE(p_transaction->>'customer_name', v_old_transaction.customer_name);
   v_date := COALESCE(v_old_transaction.order_date, CURRENT_DATE);
 
+  v_new_subtotal := COALESCE((p_transaction->>'subtotal')::NUMERIC, COALESCE(v_old_transaction.subtotal, v_new_total));
+  v_new_ppn_enabled := COALESCE((p_transaction->>'ppn_enabled')::BOOLEAN, COALESCE(v_old_transaction.ppn_enabled, FALSE));
+  v_new_ppn_mode := COALESCE(p_transaction->>'ppn_mode', COALESCE(v_old_transaction.ppn_mode, 'exclude'));
+  v_new_ppn_percentage := COALESCE((p_transaction->>'ppn_percentage')::NUMERIC, COALESCE(v_old_transaction.ppn_percentage, 0));
+  v_new_ppn_amount := COALESCE((p_transaction->>'ppn_amount')::NUMERIC, COALESCE(v_old_transaction.ppn_amount, 0));
+
   -- Detect changes
   IF v_new_total != v_old_transaction.total THEN
     v_changes := array_append(v_changes, 'total');
@@ -1301,6 +1353,15 @@ BEGIN
   END IF;
   IF COALESCE(v_new_payment_account_id::TEXT, '') != COALESCE(v_old_transaction.payment_account_id::TEXT, '') THEN
     v_changes := array_append(v_changes, 'payment_account_id');
+  END IF;
+  IF v_new_subtotal != COALESCE(v_old_transaction.subtotal, v_old_transaction.total) THEN
+    v_changes := array_append(v_changes, 'subtotal');
+  END IF;
+  IF v_new_ppn_amount != COALESCE(v_old_transaction.ppn_amount, 0) THEN
+    v_changes := array_append(v_changes, 'ppn_amount');
+  END IF;
+  IF v_new_ppn_enabled != COALESCE(v_old_transaction.ppn_enabled, FALSE) THEN
+    v_changes := array_append(v_changes, 'ppn_enabled');
   END IF;
 
   -- ==================== UPDATE TRANSACTION ====================
@@ -1312,12 +1373,17 @@ BEGIN
     payment_status = CASE WHEN v_new_paid_amount >= v_new_total THEN 'Lunas' ELSE 'Belum Lunas' END,
     customer_name = v_customer_name,
     notes = COALESCE(p_transaction->>'notes', notes),
+    subtotal = v_new_subtotal,
+    ppn_enabled = v_new_ppn_enabled,
+    ppn_mode = v_new_ppn_mode,
+    ppn_percentage = v_new_ppn_percentage,
+    ppn_amount = v_new_ppn_amount,
     updated_at = NOW()
   WHERE id = p_transaction_id;
 
   -- ==================== UPDATE JOURNAL IF AMOUNTS CHANGED ====================
 
-  IF 'total' = ANY(v_changes) OR 'paid_amount' = ANY(v_changes) OR 'payment_account_id' = ANY(v_changes) THEN
+  IF 'total' = ANY(v_changes) OR 'paid_amount' = ANY(v_changes) OR 'payment_account_id' = ANY(v_changes) OR 'subtotal' = ANY(v_changes) OR 'ppn_amount' = ANY(v_changes) OR 'ppn_enabled' = ANY(v_changes) THEN
     -- Void old journal
     UPDATE journal_entries
     SET is_voided = TRUE, voided_at = NOW(), voided_reason = 'Transaction updated'
@@ -1363,13 +1429,28 @@ BEGIN
       );
     END IF;
 
-    -- Credit: Pendapatan
-    v_journal_lines := v_journal_lines || jsonb_build_object(
-      'account_code', '4100',
-      'debit_amount', 0,
-      'credit_amount', v_new_total,
-      'description', 'Pendapatan penjualan'
-    );
+    -- Credit: Pendapatan & Pajak
+    IF v_new_ppn_enabled THEN
+      v_journal_lines := v_journal_lines || jsonb_build_object(
+        'account_code', '4100',
+        'debit_amount', 0,
+        'credit_amount', v_new_subtotal,
+        'description', 'Pendapatan penjualan (Subtotal)'
+      );
+      v_journal_lines := v_journal_lines || jsonb_build_object(
+        'account_code', '2130',
+        'debit_amount', 0,
+        'credit_amount', v_new_ppn_amount,
+        'description', 'PPN Keluaran (Pajak Penjualan)'
+      );
+    ELSE
+      v_journal_lines := v_journal_lines || jsonb_build_object(
+        'account_code', '4100',
+        'debit_amount', 0,
+        'credit_amount', v_new_total,
+        'description', 'Pendapatan penjualan'
+      );
+    END IF;
 
     -- HPP entries
     IF v_total_hpp > 0 THEN

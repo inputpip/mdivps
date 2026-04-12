@@ -201,7 +201,12 @@ export const useTransactions = (filters?: {
         retasi_number: newTransaction.retasiNumber || null,
         due_date: newTransaction.dueDate instanceof Date
           ? newTransaction.dueDate.toISOString()
-          : newTransaction.dueDate || null
+          : newTransaction.dueDate || null,
+        subtotal: newTransaction.subtotal || newTransaction.total,
+        ppn_enabled: newTransaction.ppnEnabled || false,
+        ppn_mode: newTransaction.ppnMode || 'exclude',
+        ppn_percentage: newTransaction.ppnPercentage || 0,
+        ppn_amount: newTransaction.ppnAmount || 0
       };
 
       // Prepare Items Data (Snake Case for RPC JSONB)
@@ -269,13 +274,7 @@ export const useTransactions = (filters?: {
         ).catch(console.warn);
       }
 
-      // Save due_date separately (RPC doesn't handle it)
-      if (newTransaction.dueDate) {
-        await supabase
-          .from('transactions')
-          .update({ due_date: newTransaction.dueDate instanceof Date ? newTransaction.dueDate.toISOString() : newTransaction.dueDate })
-          .eq('id', rpcResult.transaction_id || newTransaction.id);
-      }
+      // No need to save due_date separately, already included atomically.
 
       // Return constructed transaction object (optimistic) or fetch from DB
       return {
