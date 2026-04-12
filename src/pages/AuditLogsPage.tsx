@@ -77,13 +77,25 @@ export default function AuditLogsPage() {
     }
   };
 
-  const getOperationColor = (op: string) => {
+  const getOperationColor = (op: string, isVoid: boolean = false) => {
+    if (isVoid) return 'bg-red-600 text-white font-bold tracking-wider';
     switch (op) {
       case 'INSERT': return 'bg-emerald-100 text-emerald-800';
       case 'UPDATE': return 'bg-blue-100 text-blue-800';
       case 'DELETE': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
     }
+  };
+
+  const isVoidAction = (log: AuditLog) => {
+    if (log.operation !== 'UPDATE' || !log.changed_fields) return false;
+    const changes = log.changed_fields as any;
+    // Cek ciri khas tabel transaksi dibatalkan
+    return (
+      changes.is_voided?.new === true || 
+      changes.is_cancelled?.new === true || 
+      changes.status?.new === 'voided'
+    );
   };
 
   const filteredLogs = logs?.filter(log => 
@@ -216,8 +228,8 @@ export default function AuditLogsPage() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className={getOperationColor(mainLog.operation)}>
-                            {mainLog.operation}
+                          <Badge variant="outline" className={getOperationColor(mainLog.operation, isVoidAction(mainLog))}>
+                            {isVoidAction(mainLog) ? 'VOID TRANSAKSI' : mainLog.operation}
                           </Badge>
                           {isMulti && (
                             <Badge variant="secondary" className="ml-2 bg-indigo-50 text-indigo-700">
@@ -312,18 +324,20 @@ export default function AuditLogsPage() {
                       <h4 className="font-bold text-slate-800 capitalize">
                         {log.table_name.replace(/_/g, ' ')}
                       </h4>
-                      <p className="text-xs font-mono text-slate-500 mt-0.5">ID: {log.record_id}</p>
+                      <p className="text-xs font-mono text-slate-500 mt-0.5">ID: {log.record_id?.substring(0, 18)}...</p>
                     </div>
                   </div>
-                  <Badge variant="outline" className={`px-3 py-1 ${getOperationColor(log.operation)}`}>
-                    {log.operation}
+                  <Badge variant="outline" className={`px-3 py-1 ${getOperationColor(log.operation, isVoidAction(log))}`}>
+                    {isVoidAction(log) ? 'VOID / BATAL' : log.operation}
                   </Badge>
                 </div>
 
                 <div className="p-4 bg-white">
                   {log.operation === 'UPDATE' && (
-                    <div className="mb-4 p-3 bg-amber-50/50 border border-amber-100 rounded-md text-amber-900 text-sm">
-                      <span className="font-bold text-amber-700">Terdeteksi Perubahan pada Kolom:</span>{' '}
+                    <div className={`mb-4 p-3 border rounded-md text-sm ${isVoidAction(log) ? 'bg-red-50 border-red-200 text-red-900' : 'bg-amber-50/50 border-amber-100 text-amber-900'}`}>
+                      <span className={`font-bold ${isVoidAction(log) ? 'text-red-700' : 'text-amber-700'}`}>
+                        {isVoidAction(log) ? '⚠️ Peringatan Void! Kolom ini dinonaktifkan:' : 'Terdeteksi Perubahan pada Kolom:'}
+                      </span>{' '}
                       {log.changed_fields && typeof log.changed_fields === 'object' ? Object.keys(log.changed_fields).join(', ') : 'N/A'}
                     </div>
                   )}
