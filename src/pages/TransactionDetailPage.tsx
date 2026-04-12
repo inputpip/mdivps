@@ -1026,9 +1026,9 @@ export default function TransactionDetailPage() {
                           >
                             {item.product.name}
                           </Link>
-                          {item.notes && (
-                            <p className="text-xs text-muted-foreground">{item.notes}</p>
-                          )}
+                          <p className="text-xs text-muted-foreground italic">
+                            Keterangan: {item.notes?.trim() ? item.notes : "-"}
+                          </p>
                         </div>
                         <div className="text-right ml-2">
                           <p className="font-medium text-sm">
@@ -1075,9 +1075,9 @@ export default function TransactionDetailPage() {
                             >
                               {item.product.name}
                             </Link>
-                            {item.notes && (
-                              <p className="text-sm text-muted-foreground">{item.notes}</p>
-                            )}
+                            <p className="text-sm text-muted-foreground italic mt-1 bg-muted p-1.5 rounded">
+                              Keterangan: {item.notes?.trim() ? item.notes : "-"}
+                            </p>
                           </div>
                         </TableCell>
                         <TableCell className="text-center">
@@ -1139,6 +1139,14 @@ export default function TransactionDetailPage() {
                       minimumFractionDigits: 0,
                     }).format(transaction.total)}
                   </span>
+                </div>
+              </div>
+
+              <Separator className="my-4" />
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-amber-600 dark:text-amber-400">Catatan Transaksi:</p>
+                <div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg border border-amber-100 dark:border-amber-900/50 min-h-[40px]">
+                  <p className="text-sm text-gray-800 dark:text-gray-200">{transaction.notes?.trim() ? transaction.notes : "-"}</p>
                 </div>
               </div>
             </CardContent>

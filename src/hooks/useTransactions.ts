@@ -403,16 +403,17 @@ export const useTransactions = (filters?: {
 
       console.log('💸 Processing Receivable Payment via RPC...', { transactionId, amount });
 
-      // Use receive_payment_atomic from 08_purchase_order.sql
+      // Use pay_receivable_complete_rpc to store in payment_history (Source of Truth)
       const { data: rpcResultRaw, error: rpcError } = await supabase
-        .rpc('receive_payment_atomic', {
-          p_receivable_id: transactionId, // Transaction ID acting as receivable ID
-          p_branch_id: currentBranch.id,
+        .rpc('pay_receivable_complete_rpc', {
+          p_transaction_id: transactionId, 
           p_amount: amount,
-          p_payment_account_id: accountId, // User-selected payment account
-          p_payment_method: 'cash', // Default to cash/transfer based on account
-          p_payment_date: getOfficeDateString(timezone),
-          p_notes: notes || `Pelunasan Piutang by ${recordedBy || 'User'}`
+          p_payment_account_id: accountId, 
+          p_notes: notes || `Pelunasan Piutang by ${recordedBy || 'User'}`,
+          p_branch_id: currentBranch.id,
+          p_user_id: null,
+          p_recorded_by_name: recordedBy || 'User',
+          p_payment_date: getOfficeDateString(timezone)
         });
 
       if (rpcError) {

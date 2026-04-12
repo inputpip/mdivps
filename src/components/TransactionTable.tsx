@@ -1632,9 +1632,6 @@ export function TransactionTable() {
                           </div>
                         )}
                       </div>
-                        )}
-                      </div>
-
                       {/* Action Buttons */}
                       <div className="flex gap-2 mt-3 pt-3 border-t">
                         <Button

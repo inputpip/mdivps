@@ -92,8 +92,8 @@ BEGIN
   
   -- Calculate total payments (active only)
   SELECT COALESCE(SUM(amount), 0) INTO total_paid
-  FROM transaction_payments 
-  WHERE transaction_id = p_transaction_id AND status = 'active';
+  FROM payment_history 
+  WHERE transaction_id = p_transaction_id AND is_cancelled = false;
   
   -- Return status
   IF total_paid = 0 THEN RETURN 'unpaid';
