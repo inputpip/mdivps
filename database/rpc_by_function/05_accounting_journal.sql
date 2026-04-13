@@ -1575,7 +1575,7 @@ BEGIN
     v_entry_number,
     p_payment_date,
     'Pembayaran Piutang - ' || p_transaction_id || ' - ' || p_customer_name,
-    'receivable',
+    'receivable_payment', -- FIXED: was 'receivable', now consistent with TEXT overload
     p_transaction_id,
     'posted',
     FALSE,

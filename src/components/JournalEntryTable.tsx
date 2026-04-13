@@ -111,6 +111,8 @@ const getReferenceTypeBadge = (type?: string) => {
       return <Badge variant="outline" className="bg-orange-500/10 text-orange-600 dark:text-orange-400 hover:bg-orange-500/20">Gaji</Badge>;
     case 'receivable':
       return <Badge variant="outline" className="bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-500/20">Piutang</Badge>;
+    case 'receivable_payment':
+      return <Badge variant="outline" className="bg-teal-500/10 text-teal-600 dark:text-teal-400 hover:bg-teal-500/20">Bayar Piutang</Badge>;
     case 'payable':
       return <Badge variant="outline" className="bg-pink-500/10 text-pink-600 dark:text-pink-400 hover:bg-pink-500/20">Hutang</Badge>;
     default:
@@ -128,6 +130,7 @@ const getReferenceTypeLabel = (type?: string) => {
     'expense': 'Pengeluaran',
     'payroll': 'Gaji',
     'receivable': 'Piutang',
+    'receivable_payment': 'Bayar Piutang',
     'payable': 'Hutang',
     'transfer': 'Transfer',
     'advance': 'Panjar',

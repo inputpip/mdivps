@@ -243,6 +243,12 @@ BEGIN
         RAISE EXCEPTION 'Failed to create journal: %', v_journal_result.error_message;
     END IF;
 
+    -- FIX: Re-link journal reference_id to payment_id (bukan transaction_id)
+    -- Supaya void_payment_history_rpc bisa menemukan jurnal ini via payment_id
+    UPDATE journal_entries
+    SET reference_id = v_payment_id::TEXT
+    WHERE id = v_journal_result.journal_id;
+
     RETURN QUERY SELECT 
         TRUE, 
         v_payment_id, 
