@@ -199,28 +199,55 @@ export const TransactionItemsReport = () => {
         throw error
       }
 
+      const retasiIds = [...new Set((records || [])
+        .map((r: any) => r.retasi_id)
+        .filter((value: any) => !!value))]
+
+      let retasiMap: Record<string, { retasi_ke?: number; retasi_number?: string; driver_name?: string }> = {}
+      if (retasiIds.length > 0) {
+        const { data: retasiRows, error: retasiError } = await supabase
+          .from('retasi')
+          .select('id, retasi_ke, retasi_number, driver_name')
+          .in('id', retasiIds)
+
+        if (retasiError) {
+          console.error('[TransactionItemsReport] Error fetching retasi details:', retasiError)
+        } else {
+          retasiMap = (retasiRows || []).reduce((acc, row: any) => {
+            acc[row.id] = {
+              retasi_ke: row.retasi_ke,
+              retasi_number: row.retasi_number,
+              driver_name: row.driver_name,
+            }
+            return acc
+          }, {} as Record<string, { retasi_ke?: number; retasi_number?: string; driver_name?: string }>)
+        }
+      }
+
       const items: SoldProduct[] = (records || []).map(r => {
         const soldDate = new Date(r.realization_date || new Date())
         const paymentAcct = paymentAccounts.find(a => a.id === r.payment_account_id)
+        const retasiInfo = r.retasi_id ? retasiMap[r.retasi_id] : undefined
 
-        // Prefer direct retasi_ke from source data, fallback to parsing display text if needed
         let retasiKeValue: number | undefined =
-          r.retasi_ke !== undefined && r.retasi_ke !== null && !Number.isNaN(Number(r.retasi_ke))
-            ? Number(r.retasi_ke)
-            : undefined;
+          retasiInfo?.retasi_ke !== undefined && retasiInfo?.retasi_ke !== null && !Number.isNaN(Number(retasiInfo.retasi_ke))
+            ? Number(retasiInfo.retasi_ke)
+            : r.retasi_ke !== undefined && r.retasi_ke !== null && !Number.isNaN(Number(r.retasi_ke))
+              ? Number(r.retasi_ke)
+              : undefined
 
-        let retasiDisplay = r.retasi_number || '-';
+        const retasiDisplay = retasiInfo?.retasi_number || r.retasi_number || '-'
         if (retasiKeValue === undefined && r.retasi_number && r.retasi_number.includes('ke-')) {
-          const match = r.retasi_number.match(/ke-(\d+)/i);
+          const match = r.retasi_number.match(/ke-(\d+)/i)
           if (match) {
-            retasiKeValue = parseInt(match[1]);
+            retasiKeValue = parseInt(match[1])
           }
         }
 
         return {
           transactionId: r.transaction_id,
-          transactionDate: soldDate, 
-          soldDate: soldDate,
+          transactionDate: soldDate,
+          soldDate,
           customerName: r.customer_name || 'Walk-in Customer',
           productName: r.product_name || 'Unknown',
           quantity: r.quantity || 0,
@@ -229,7 +256,7 @@ export const TransactionItemsReport = () => {
           total: (r.quantity || 0) * (Number(r.price) || 0),
           source: r.source_type as any,
           driverId: r.driver_id,
-          driverName: r.driver_name || undefined,
+          driverName: r.driver_name || retasiInfo?.driver_name || undefined,
           retasiNumber: retasiDisplay,
           retasiKe: retasiKeValue,
           cashierId: r.cashier_id,
