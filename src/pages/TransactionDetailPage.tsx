@@ -300,10 +300,10 @@ export default function TransactionDetailPage() {
             <span>${new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(transaction.total)}</span>
           </div>
           <div class="border-t border-dashed border-black pt-1 space-y-1">
-                            <div class="flex justify-between items-center">
-                              <span>Status:</span>
-                              <span class="text-right break-words">${getPaymentStatusText(transaction.paidAmount || 0, transaction.total)}</span>
-                            </div>
+            <div class="flex justify-between items-center">
+              <span>Status:</span>
+              <span class="text-right break-words">${getPaymentStatusText(transaction.paidAmount || 0, transaction.total)}</span>
+            </div>
             <div class="flex justify-between items-center">
               <span>Jumlah Bayar:</span>
               <span class="text-right whitespace-nowrap">${new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(transaction.paidAmount || 0)}</span>
@@ -312,6 +312,12 @@ export default function TransactionDetailPage() {
               <div class="flex justify-between items-center">
                 <span>Sisa Tagihan:</span>
                 <span class="text-right whitespace-nowrap">${new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(transaction.total - (transaction.paidAmount || 0))}</span>
+              </div>
+            ` : ''}
+            ${(transaction.dueDate || (transaction as any).due_date) && transaction.paymentStatus !== 'Lunas' ? `
+              <div class="flex justify-between items-center">
+                <span>Jatuh Tempo:</span>
+                <span class="text-right whitespace-nowrap">${format(new Date(transaction.dueDate || (transaction as any).due_date), "dd/MM/yyyy", { locale: id })}</span>
               </div>
             ` : ''}
           </div>
@@ -553,7 +559,7 @@ export default function TransactionDetailPage() {
                     <tr><td>Pelanggan</td><td colspan="3">: ${transaction.customerName}</td></tr>
                     <tr><td>Alamat</td><td colspan="3">: ${customer?.address || customer?.full_address || '-'}</td></tr>
                     <tr><td>Telepon</td><td colspan="3">: ${String(customer?.phone || '-').replace(/,/g, '')}</td></tr>
-                    ${transaction.dueDate ? `<tr><td>Jt. Tempo</td><td colspan="3">: ${format(new Date(transaction.dueDate), "dd/MM/yyyy", { locale: id })}</td></tr>` : ''}
+                    ${(transaction.dueDate || (transaction as any).due_date) ? `<tr><td>Jt. Tempo</td><td colspan="3">: ${format(new Date(transaction.dueDate || (transaction as any).due_date), "dd/MM/yyyy", { locale: id })}</td></tr>` : ''}
                   </table>
                 </td>
               </tr>
@@ -616,7 +622,7 @@ export default function TransactionDetailPage() {
                     ${paidAmount > 0 ? `<tr><td>Tunai</td><td style="text-align: right;">:</td><td style="text-align: right;">${formatNumber(paidAmount)}</td></tr>` : ''}
                     ${remaining > 0 ? `<tr><td>Kredit</td><td style="text-align: right;">:</td><td style="text-align: right;">${formatNumber(remaining)}</td></tr>` : ''}
                     ${paidAmount > transaction.total ? `<tr><td>Kembali</td><td style="text-align: right;">:</td><td style="text-align: right;">${formatNumber(paidAmount - transaction.total)}</td></tr>` : ''}
-                    ${transaction.dueDate && remaining > 0 ? `<tr><td>Jt. Tempo</td><td style="text-align: right;">:</td><td style="text-align: right;">${format(new Date(transaction.dueDate), "dd/MM/yyyy", { locale: id })}</td></tr>` : ''}
+                    ${(transaction.dueDate || (transaction as any).due_date) && transaction.paymentStatus !== 'Lunas' ? `<tr><td>Jt. Tempo</td><td style="text-align: right;">:</td><td style="text-align: right;">${format(new Date(transaction.dueDate || (transaction as any).due_date), "dd/MM/yyyy", { locale: id })}</td></tr>` : ''}
                   </table>
                 </td>
               </tr>
@@ -798,6 +804,13 @@ export default function TransactionDetailPage() {
       const remainingAmount = formatCurrency(transaction.total - (transaction.paidAmount || 0));
       const remainingSpacing = charWidth - remainingText.length - remainingAmount.length;
       receiptText += remainingText + ' '.repeat(Math.max(0, remainingSpacing)) + remainingAmount + '\n';
+    }
+
+    if ((transaction.dueDate || (transaction as any).due_date) && transaction.paymentStatus !== 'Lunas') {
+      const dueLabel = 'Jt. Tempo:';
+      const dueValue = format(new Date(transaction.dueDate || (transaction as any).due_date), "dd/MM/yyyy", { locale: id });
+      const dueSpacing = charWidth - dueLabel.length - dueValue.length;
+      receiptText += dueLabel + ' '.repeat(Math.max(0, dueSpacing)) + dueValue + '\n';
     }
 
     receiptText += '\n';

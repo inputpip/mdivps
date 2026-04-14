@@ -462,7 +462,8 @@ export function TransactionTable() {
                     <tr><td>Tanggal</td><td>: ${orderDate ? format(orderDate, "dd/MM/yy HH:mm", { locale: id }) : '-'}</td><td>PPN</td><td>: ${transaction.ppnEnabled ? 'Ya' : '-'}</td></tr>
                     <tr><td>Pelanggan</td><td colspan="3">: ${transaction.customerName}</td></tr>
                     <tr><td>Alamat</td><td colspan="3">: ${transaction.customerAddress || '-'}</td></tr>
-                    ${transaction.dueDate ? `<tr><td>Jt. Tempo</td><td colspan="3">: ${format(new Date(transaction.dueDate), "dd/MM/yyyy", { locale: id })}</td></tr>` : ''}
+                    <tr><td>Telepon</td><td colspan="3">: ${transaction.customerPhone || '-'}</td></tr>
+                    ${(transaction.dueDate || (transaction as any).due_date) ? `<tr><td>Jt. Tempo</td><td colspan="3">: ${format(new Date(transaction.dueDate || (transaction as any).due_date), "dd/MM/yyyy", { locale: id })}</td></tr>` : ''}
                   </table>
                 </td>
               </tr>
@@ -525,7 +526,7 @@ export function TransactionTable() {
                     ${paidAmount > 0 ? `<tr><td>Tunai</td><td style="text-align: right;">:</td><td style="text-align: right;">${formatNumber(paidAmount)}</td></tr>` : ''}
                     ${remaining > 0 ? `<tr><td>Kredit</td><td style="text-align: right;">:</td><td style="text-align: right;">${formatNumber(remaining)}</td></tr>` : ''}
                     ${paidAmount > transaction.total ? `<tr><td>Kembali</td><td style="text-align: right;">:</td><td style="text-align: right;">${formatNumber(paidAmount - transaction.total)}</td></tr>` : ''}
-                    ${transaction.dueDate && remaining > 0 ? `<tr><td>Jt. Tempo</td><td style="text-align: right;">:</td><td style="text-align: right;">${format(new Date(transaction.dueDate), "dd/MM/yyyy", { locale: id })}</td></tr>` : ''}
+                    ${(transaction.dueDate || (transaction as any).due_date) && (transaction.paymentStatus !== 'Lunas' || (transaction as any).payment_status !== 'Lunas') ? `<tr><td>Jt. Tempo</td><td style="text-align: right;">:</td><td style="text-align: right;">${format(new Date(transaction.dueDate || (transaction as any).due_date), "dd/MM/yyyy", { locale: id })}</td></tr>` : ''}
                   </table>
                 </td>
               </tr>

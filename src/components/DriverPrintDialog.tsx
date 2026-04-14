@@ -180,12 +180,12 @@ export function DriverPrintDialog({
       summaryY += 12;
     }
 
-    if (transaction.paymentStatus !== 'Lunas' && transaction.dueDate) {
+    if (transaction.paymentStatus !== 'Lunas' && (transaction.dueDate || (transaction as any).due_date)) {
       doc.setFillColor(254, 226, 226);
       doc.roundedRect(summaryX, summaryY, summaryWidth, 10, 3, 3, 'F');
       doc.setFontSize(10).setFont("helvetica", "bold").setTextColor(185, 28, 28);
       doc.text("JATUH TEMPO:", summaryX + 5, summaryY + 6);
-      doc.text(safePdfFormatDate(transaction.dueDate, "d MMMM yyyy"), pageWidth - margin - 5, summaryY + 6, { align: 'right' });
+      doc.text(safePdfFormatDate(transaction.dueDate || (transaction as any).due_date, "d MMMM yyyy"), pageWidth - margin - 5, summaryY + 6, { align: 'right' });
       summaryY += 12;
     }
 
