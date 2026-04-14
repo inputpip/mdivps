@@ -203,14 +203,18 @@ export const TransactionItemsReport = () => {
         const soldDate = new Date(r.realization_date || new Date())
         const paymentAcct = paymentAccounts.find(a => a.id === r.payment_account_id)
 
-        // Parse Retasi Ke if possible
-        let retasiKeValue: number | undefined = undefined;
+        // Prefer direct retasi_ke from source data, fallback to parsing display text if needed
+        let retasiKeValue: number | undefined =
+          r.retasi_ke !== undefined && r.retasi_ke !== null && !Number.isNaN(Number(r.retasi_ke))
+            ? Number(r.retasi_ke)
+            : undefined;
+
         let retasiDisplay = r.retasi_number || '-';
-        if (r.retasi_number && r.retasi_number.includes('ke-')) {
-            const match = r.retasi_number.match(/ke-(\d+)/i);
-            if (match) {
-                retasiKeValue = parseInt(match[1]);
-            }
+        if (retasiKeValue === undefined && r.retasi_number && r.retasi_number.includes('ke-')) {
+          const match = r.retasi_number.match(/ke-(\d+)/i);
+          if (match) {
+            retasiKeValue = parseInt(match[1]);
+          }
         }
 
         return {
