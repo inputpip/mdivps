@@ -34,6 +34,7 @@ BEGIN
     LEFT JOIN accounts a ON ph.account_id = a.id
     LEFT JOIN profiles pr ON ph.recorded_by = pr.id
     WHERE ph.branch_id = p_branch_id
+      AND COALESCE(ph.is_cancelled, FALSE) = FALSE
     ORDER BY ph.payment_date DESC
     LIMIT p_limit;
 END;
@@ -61,6 +62,7 @@ BEGIN
     LEFT JOIN accounts a ON ph.account_id = a.id
     LEFT JOIN profiles pr ON ph.recorded_by = pr.id
     WHERE ph.branch_id = p_branch_id
+      AND COALESCE(ph.is_cancelled, FALSE) = FALSE
       AND (p_date_from IS NULL OR DATE(ph.payment_date) >= p_date_from)
       AND (p_date_to IS NULL OR DATE(ph.payment_date) <= p_date_to)
       AND (p_account_id IS NULL OR p_account_id = 'all' OR ph.account_id = p_account_id)

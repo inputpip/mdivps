@@ -829,7 +829,8 @@ BEGIN
     d.delivery_number
   INTO v_delivery
   FROM deliveries d
-  WHERE d.id = p_delivery_id AND d.branch_id = p_branch_id;
+  WHERE d.id = p_delivery_id AND d.branch_id = p_branch_id
+  FOR UPDATE;
   IF v_delivery.id IS NULL THEN
     RETURN QUERY SELECT FALSE, 0, 0,
       'Delivery not found in this branch'::TEXT;
@@ -838,7 +839,8 @@ BEGIN
   -- Get transaction info (transaction_id is TEXT in deliveries table)
   SELECT * INTO v_transaction
   FROM transactions
-  WHERE id::TEXT = v_delivery.transaction_id;
+  WHERE id::TEXT = v_delivery.transaction_id
+  FOR UPDATE;
   IF v_transaction.id IS NULL THEN
     RETURN QUERY SELECT FALSE, 0, 0,
       'Transaction not found for this delivery'::TEXT;
@@ -892,8 +894,11 @@ BEGIN
   SET
     is_voided = TRUE,
     voided_at = NOW(),
-    voided_reason = COALESCE(p_reason, 'Delivery voided')
-  WHERE reference_id = p_delivery_id::TEXT
+    voided_reason = COALESCE(p_reason, 'Delivery voided'),
+    status = 'voided',
+    updated_at = NOW()
+  WHERE reference_type = 'delivery'
+    AND reference_id = p_delivery_id::TEXT
     AND branch_id = p_branch_id
     AND is_voided = FALSE;
   GET DIAGNOSTICS v_journals_voided = ROW_COUNT;

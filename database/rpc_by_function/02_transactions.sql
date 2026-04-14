@@ -1294,6 +1294,9 @@ DECLARE
   v_new_ppn_percentage NUMERIC;
   v_new_ppn_amount NUMERIC;
   v_fifo_result RECORD;
+  v_new_items JSONB;
+  v_has_deliveries BOOLEAN := FALSE;
+  v_has_payment_history BOOLEAN := FALSE;
 BEGIN
   -- ==================== VALIDASI ====================
 
@@ -1312,7 +1315,8 @@ BEGIN
   -- Get existing transaction
   SELECT * INTO v_old_transaction
   FROM transactions
-  WHERE id = p_transaction_id AND branch_id = p_branch_id;
+  WHERE id = p_transaction_id AND branch_id = p_branch_id
+  FOR UPDATE;
 
   IF v_old_transaction.id IS NULL THEN
     RETURN QUERY SELECT FALSE, NULL::TEXT, NULL::UUID, '{}'::TEXT[],
@@ -1337,6 +1341,7 @@ BEGIN
 
   v_customer_name := COALESCE(p_transaction->>'customer_name', v_old_transaction.customer_name);
   v_date := COALESCE(v_old_transaction.order_date, CURRENT_DATE);
+  v_new_items := COALESCE(p_transaction->'items', v_old_transaction.items, '[]'::JSONB);
 
   v_new_subtotal := COALESCE((p_transaction->>'subtotal')::NUMERIC, COALESCE(v_old_transaction.subtotal, v_new_total));
   v_new_ppn_enabled := COALESCE((p_transaction->>'ppn_enabled')::BOOLEAN, COALESCE(v_old_transaction.ppn_enabled, FALSE));
@@ -1363,6 +1368,39 @@ BEGIN
   IF v_new_ppn_enabled != COALESCE(v_old_transaction.ppn_enabled, FALSE) THEN
     v_changes := array_append(v_changes, 'ppn_enabled');
   END IF;
+  IF v_new_items IS DISTINCT FROM COALESCE(v_old_transaction.items, '[]'::JSONB) THEN
+    v_changes := array_append(v_changes, 'items');
+  END IF;
+
+  -- Guard: transaksi yang sudah punya delivery tidak boleh diubah item/qty/harga sembarangan
+  SELECT EXISTS(
+    SELECT 1 FROM deliveries d
+    WHERE d.transaction_id = p_transaction_id
+  ) INTO v_has_deliveries;
+
+  SELECT EXISTS(
+    SELECT 1
+    FROM payment_history ph
+    WHERE ph.transaction_id = p_transaction_id
+      AND ph.branch_id = p_branch_id
+      AND COALESCE(ph.is_cancelled, FALSE) = FALSE
+  ) INTO v_has_payment_history;
+
+  IF v_has_deliveries AND v_new_items IS DISTINCT FROM COALESCE(v_old_transaction.items, '[]'::JSONB) THEN
+    RETURN QUERY SELECT FALSE, NULL::TEXT, NULL::UUID, v_changes,
+      'Transaksi sudah memiliki pengiriman. Edit item harus dilakukan lewat alur pembatalan/penyesuaian delivery terlebih dahulu.'::TEXT;
+    RETURN;
+  END IF;
+
+  IF v_has_payment_history AND (
+    v_new_paid_amount IS DISTINCT FROM v_old_transaction.paid_amount
+    OR v_new_total IS DISTINCT FROM v_old_transaction.total
+    OR COALESCE(v_new_payment_account_id, '') IS DISTINCT FROM COALESCE(v_old_transaction.payment_account_id, '')
+  ) THEN
+    RETURN QUERY SELECT FALSE, NULL::TEXT, NULL::UUID, v_changes,
+      'Transaksi sudah memiliki history pembayaran. Edit total/paid amount/akun pembayaran harus lewat void payment atau payment flow resmi agar ledger tetap konsisten.'::TEXT;
+    RETURN;
+  END IF;
 
   -- ==================== UPDATE TRANSACTION ====================
 
@@ -1373,6 +1411,7 @@ BEGIN
     payment_status = CASE WHEN v_new_paid_amount >= v_new_total THEN 'Lunas' ELSE 'Belum Lunas' END,
     customer_name = v_customer_name,
     notes = COALESCE(p_transaction->>'notes', notes),
+    items = v_new_items,
     subtotal = v_new_subtotal,
     ppn_enabled = v_new_ppn_enabled,
     ppn_mode = v_new_ppn_mode,
@@ -1383,18 +1422,26 @@ BEGIN
 
   -- ==================== UPDATE JOURNAL IF AMOUNTS CHANGED ====================
 
-  IF 'total' = ANY(v_changes) OR 'paid_amount' = ANY(v_changes) OR 'payment_account_id' = ANY(v_changes) OR 'subtotal' = ANY(v_changes) OR 'ppn_amount' = ANY(v_changes) OR 'ppn_enabled' = ANY(v_changes) THEN
+  IF 'total' = ANY(v_changes) OR 'paid_amount' = ANY(v_changes) OR 'payment_account_id' = ANY(v_changes) OR 'subtotal' = ANY(v_changes) OR 'ppn_amount' = ANY(v_changes) OR 'ppn_enabled' = ANY(v_changes) OR 'items' = ANY(v_changes) THEN
     -- Void old journal
     UPDATE journal_entries
-    SET is_voided = TRUE, voided_at = NOW(), voided_reason = 'Transaction updated'
+    SET is_voided = TRUE,
+        voided_at = NOW(),
+        voided_reason = 'Transaction updated',
+        status = 'voided',
+        updated_at = NOW()
     WHERE reference_type = 'transaction'
       AND reference_id = p_transaction_id
       AND branch_id = p_branch_id
       AND is_voided = FALSE;
 
-    -- Calculate HPP from items
-    SELECT COALESCE(SUM((item->>'hppAmount')::NUMERIC), 0) INTO v_total_hpp
-    FROM jsonb_array_elements(v_old_transaction.items) AS item;
+    -- Calculate HPP from latest items payload, fallback ke cost_price * quantity bila hppAmount tidak ada
+    SELECT COALESCE(SUM(
+      COALESCE((item->>'hppAmount')::NUMERIC,
+               COALESCE((item->>'cost_price')::NUMERIC, (item->>'costPrice')::NUMERIC, 0) * COALESCE((item->>'quantity')::NUMERIC, 0)
+      )
+    ), 0) INTO v_total_hpp
+    FROM jsonb_array_elements(v_new_items) AS item;
 
     -- Build new journal lines
     v_journal_lines := '[]'::JSONB;
@@ -1536,6 +1583,8 @@ DECLARE
   v_item RECORD;
   v_batch RECORD;
   v_restore_qty NUMERIC;
+  v_receivable_payment_voided INTEGER := 0;
+  v_payment_history_cancelled INTEGER := 0;
 BEGIN
   -- ==================== VALIDASI ====================
 
@@ -1661,6 +1710,27 @@ BEGIN
 
   GET DIAGNOSTICS v_journals_voided = ROW_COUNT;
 
+  -- Void jurnal pembayaran piutang yang terhubung lewat payment_history
+  UPDATE journal_entries
+  SET
+    is_voided = TRUE,
+    voided_at = NOW(),
+    voided_reason = 'Transaction voided (' || p_transaction_id || '): ' || p_reason,
+    status = 'voided',
+    updated_at = NOW()
+  WHERE reference_type = 'receivable_payment'
+    AND reference_id IN (
+      SELECT ph.id::TEXT
+      FROM payment_history ph
+      WHERE ph.transaction_id = p_transaction_id
+        AND ph.branch_id = p_branch_id
+    )
+    AND branch_id = p_branch_id
+    AND is_voided = FALSE;
+
+  GET DIAGNOSTICS v_receivable_payment_voided = ROW_COUNT;
+  v_journals_voided := v_journals_voided + v_receivable_payment_voided;
+
   -- Void ALL related delivery journals
   UPDATE journal_entries
   SET
@@ -1705,6 +1775,20 @@ BEGIN
   UPDATE receivables
   SET status = 'cancelled', updated_at = NOW()
   WHERE transaction_id = p_transaction_id AND branch_id = p_branch_id;
+
+  -- ==================== CANCEL PAYMENT HISTORY ====================
+
+  UPDATE payment_history
+  SET
+    is_cancelled = TRUE,
+    cancelled_at = NOW(),
+    notes = TRIM(BOTH FROM COALESCE(notes, '') || ' [AUTO-VOID TRANSACTION ' || p_transaction_id || ': ' || p_reason || ']'),
+    updated_at = NOW()
+  WHERE transaction_id = p_transaction_id
+    AND branch_id = p_branch_id
+    AND COALESCE(is_cancelled, FALSE) = FALSE;
+
+  GET DIAGNOSTICS v_payment_history_cancelled = ROW_COUNT;
 
   -- ==================== CANCEL (SOFT DELETE) TRANSACTION ====================
 

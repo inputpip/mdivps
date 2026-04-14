@@ -278,13 +278,28 @@ export const useTransactions = (filters?: {
 
       // No need to save due_date separately, already included atomically.
 
-      // Return constructed transaction object (optimistic) or fetch from DB
-      return {
-        ...newTransaction,
-        createdAt: new Date(),
-        status: 'Pesanan Masuk',
-        paymentStatus: transactionData.paid_amount >= transactionData.total ? 'Lunas' : 'Belum Lunas'
-      } as Transaction;
+      // Read back the saved transaction from DB so print/detail flows use the real stored values
+      const { data: createdRow, error: fetchError } = await supabase
+        .from('transactions')
+        .select(`
+          *,
+          customer:customers(classification, address),
+          payment_account:payment_account_id(name)
+        `)
+        .eq('id', rpcResult.transaction_id)
+        .single();
+
+      if (fetchError) {
+        console.warn('⚠️ Failed to refetch created transaction, falling back to optimistic object:', fetchError);
+        return {
+          ...newTransaction,
+          createdAt: new Date(),
+          status: 'Pesanan Masuk',
+          paymentStatus: transactionData.paid_amount >= transactionData.total ? 'Lunas' : 'Belum Lunas'
+        } as Transaction;
+      }
+
+      return fromDb(createdRow);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] })
