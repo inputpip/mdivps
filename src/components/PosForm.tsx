@@ -85,7 +85,7 @@ export const PosForm = () => {
   const [orderDate, setOrderDate] = useState<Date | undefined>(() => getOfficeTime(timezone))
   const [dueDate, setDueDate] = useState(() => {
     const date = getOfficeTime(timezone);
-    date.setDate(date.getDate() + 14);
+    date.setDate(date.getDate() + 7);
     return date.toISOString().split('T')[0];
   });
   const [paymentAccountId, setPaymentAccountId] = useState<string>('')
@@ -548,7 +548,7 @@ export const PosForm = () => {
 
       // Reset due date
       const newDueDate = getOfficeTime(timezone);
-      newDueDate.setDate(newDueDate.getDate() + 14);
+      newDueDate.setDate(newDueDate.getDate() + 7);
       setDueDate(newDueDate.toISOString().split('T')[0]);
 
       // Navigate to transactions page
@@ -614,7 +614,11 @@ export const PosForm = () => {
       paymentAccountId: paymentAccountId || null,
       orderDate: orderDate || getOfficeTime(timezone),
       finishDate: null,
-      dueDate: sisaTagihan > 0 ? new Date(dueDate) : null,
+      dueDate: sisaTagihan > 0 ? new Date(dueDate || (() => {
+        const fallbackDate = getOfficeTime(timezone);
+        fallbackDate.setDate(fallbackDate.getDate() + 7);
+        return fallbackDate.toISOString().split('T')[0];
+      })()) : null,
       items: transactionItems,
       subtotal: ppnCalculation.subtotal,
       ppnEnabled: ppnEnabled,

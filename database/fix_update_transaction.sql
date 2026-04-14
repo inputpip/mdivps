@@ -184,6 +184,61 @@ BEGIN
     updated_at = NOW()
   WHERE id = p_transaction_id;
 
+  IF v_new_paid_amount < v_new_total THEN
+    UPDATE receivables r
+    SET
+      customer_id = v_new_customer_id,
+      customer_name = v_new_customer_name,
+      amount = v_new_total,
+      paid_amount = v_new_paid_amount,
+      status = CASE
+        WHEN v_new_paid_amount >= v_new_total THEN 'paid'
+        WHEN v_new_paid_amount > 0 THEN 'partial'
+        ELSE 'pending'
+      END,
+      due_date = v_new_due_date::DATE,
+      notes = v_new_notes,
+      updated_at = NOW()
+    WHERE r.transaction_id = p_transaction_id
+      AND r.branch_id = p_branch_id;
+
+    IF NOT FOUND THEN
+      INSERT INTO receivables (
+        transaction_id,
+        branch_id,
+        customer_id,
+        customer_name,
+        amount,
+        paid_amount,
+        status,
+        due_date,
+        notes,
+        created_at,
+        updated_at
+      ) VALUES (
+        p_transaction_id,
+        p_branch_id,
+        v_new_customer_id,
+        v_new_customer_name,
+        v_new_total,
+        v_new_paid_amount,
+        CASE
+          WHEN v_new_paid_amount >= v_new_total THEN 'paid'
+          WHEN v_new_paid_amount > 0 THEN 'partial'
+          ELSE 'pending'
+        END,
+        v_new_due_date::DATE,
+        v_new_notes,
+        NOW(),
+        NOW()
+      );
+    END IF;
+  ELSE
+    DELETE FROM receivables r
+    WHERE r.transaction_id = p_transaction_id
+      AND r.branch_id = p_branch_id;
+  END IF;
+
   -- ==================== SYNC SALES TO COMMISSIONS ====================
 
   IF 'sales' = ANY(v_changes) THEN

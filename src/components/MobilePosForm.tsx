@@ -73,6 +73,11 @@ export const MobilePosForm = ({ preselectedCustomerId }: MobilePosFormProps) => 
   const [selectedSales, setSelectedSales] = useState<string>('none')
   const [orderDate, setOrderDate] = useState<Date | undefined>(() => getOfficeTime(timezone))
   const [finishDate, setFinishDate] = useState<Date | undefined>()
+  const [dueDate, setDueDate] = useState(() => {
+    const date = getOfficeTime(timezone);
+    date.setDate(date.getDate() + 7);
+    return date.toISOString().split('T')[0];
+  });
   const [designerId, setDesignerId] = useState<string>('')
   const [operatorId, setOperatorId] = useState<string>('')
   const [paymentAccountId, setPaymentAccountId] = useState<string>('')
@@ -266,6 +271,9 @@ export const MobilePosForm = ({ preselectedCustomerId }: MobilePosFormProps) => 
     setDiskon(0);
     setPaidAmount(0);
     setPaymentAccountId('');
+    const newDueDate = getOfficeTime(timezone);
+    newDueDate.setDate(newDueDate.getDate() + 7);
+    setDueDate(newDueDate.toISOString().split('T')[0]);
     setSavedTransaction(null);
   };
 
@@ -655,6 +663,11 @@ export const MobilePosForm = ({ preselectedCustomerId }: MobilePosFormProps) => 
       branchId: currentBranch?.id,
       orderDate: orderDate || getOfficeTime(timezone),
       finishDate: finishDate || null,
+      dueDate: sisaTagihan > 0 ? new Date(dueDate || (() => {
+        const fallbackDate = getOfficeTime(timezone);
+        fallbackDate.setDate(fallbackDate.getDate() + 7);
+        return fallbackDate.toISOString().split('T')[0];
+      })()) : null,
       items: transactionItems,
       subtotal: totalTagihan,
       ppnEnabled: false,

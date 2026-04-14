@@ -622,7 +622,7 @@ export default function TransactionDetailPage() {
                     ${paidAmount > 0 ? `<tr><td>Tunai</td><td style="text-align: right;">:</td><td style="text-align: right;">${formatNumber(paidAmount)}</td></tr>` : ''}
                     ${remaining > 0 ? `<tr><td>Kredit</td><td style="text-align: right;">:</td><td style="text-align: right;">${formatNumber(remaining)}</td></tr>` : ''}
                     ${paidAmount > transaction.total ? `<tr><td>Kembali</td><td style="text-align: right;">:</td><td style="text-align: right;">${formatNumber(paidAmount - transaction.total)}</td></tr>` : ''}
-                    ${(transaction.dueDate || (transaction as any).due_date) && transaction.paymentStatus !== 'Lunas' ? `<tr><td>Jt. Tempo</td><td style="text-align: right;">:</td><td style="text-align: right;">${format(new Date(transaction.dueDate || (transaction as any).due_date), "dd/MM/yyyy", { locale: id })}</td></tr>` : ''}
+                    ${(transaction.dueDate || (transaction as any).due_date) ? `<tr><td>Jt. Tempo</td><td style="text-align: right;">:</td><td style="text-align: right;">${format(new Date(transaction.dueDate || (transaction as any).due_date), "dd/MM/yyyy", { locale: id })}</td></tr>` : ''}
                   </table>
                 </td>
               </tr>
@@ -806,7 +806,7 @@ export default function TransactionDetailPage() {
       receiptText += remainingText + ' '.repeat(Math.max(0, remainingSpacing)) + remainingAmount + '\n';
     }
 
-    if ((transaction.dueDate || (transaction as any).due_date) && transaction.paymentStatus !== 'Lunas') {
+    if ((transaction.dueDate || (transaction as any).due_date)) {
       const dueLabel = 'Jt. Tempo:';
       const dueValue = format(new Date(transaction.dueDate || (transaction as any).due_date), "dd/MM/yyyy", { locale: id });
       const dueSpacing = charWidth - dueLabel.length - dueValue.length;

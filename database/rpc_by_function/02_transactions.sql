@@ -1005,6 +1005,63 @@ BEGIN
     );
   END IF;
 
+  -- ==================== SYNC RECEIVABLE ====================
+
+  IF v_paid_amount < v_total THEN
+    UPDATE receivables r
+    SET
+      customer_id = v_customer_id,
+      customer_name = v_customer_name,
+      amount = v_total,
+      paid_amount = v_paid_amount,
+      status = CASE
+        WHEN v_paid_amount >= v_total THEN 'paid'
+        WHEN v_paid_amount > 0 THEN 'partial'
+        ELSE 'pending'
+      END,
+      due_date = v_due_date::DATE,
+      notes = v_notes,
+      updated_at = NOW()
+    WHERE r.transaction_id = v_transaction_id
+      AND r.branch_id = p_branch_id;
+
+    IF NOT FOUND THEN
+      INSERT INTO receivables (
+        transaction_id,
+        branch_id,
+        customer_id,
+        customer_name,
+        amount,
+        paid_amount,
+        status,
+        due_date,
+        notes,
+        created_at,
+        updated_at
+      ) VALUES (
+        v_transaction_id,
+        p_branch_id,
+        v_customer_id,
+        v_customer_name,
+        v_total,
+        v_paid_amount,
+        CASE
+          WHEN v_paid_amount >= v_total THEN 'paid'
+          WHEN v_paid_amount > 0 THEN 'partial'
+          ELSE 'pending'
+        END,
+        v_due_date::DATE,
+        v_notes,
+        NOW(),
+        NOW()
+      );
+    END IF;
+  ELSE
+    DELETE FROM receivables r
+    WHERE r.transaction_id = v_transaction_id
+      AND r.branch_id = p_branch_id;
+  END IF;
+
   -- ==================== UPDATE QUOTATION IF EXISTS ====================
 
   IF p_quotation_id IS NOT NULL THEN

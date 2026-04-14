@@ -411,15 +411,52 @@ export function TransactionTable() {
 
 
   // Cetak Dot Matrix - optimal untuk 1/2 A4 (A5: 148mm x 210mm)
-  const handleDotMatrixPrint = (transaction: Transaction) => {
+  const handleDotMatrixPrint = async (transaction: Transaction) => {
     if (!transaction) return;
+
+    let printTransaction: any = transaction;
+
+    try {
+      const [{ data: freshTransaction, error }, { data: receivable }] = await Promise.all([
+        supabase
+          .from('transactions')
+          .select('*')
+          .eq('id', transaction.id)
+          .single(),
+        supabase
+          .from('receivables')
+          .select('due_date')
+          .eq('transaction_id', transaction.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+      ]);
+
+      if (!error && freshTransaction) {
+        printTransaction = {
+          ...transaction,
+          ...freshTransaction,
+          receivable_due_date: receivable?.due_date || null,
+          dueDate: receivable?.due_date
+            ? new Date(receivable.due_date)
+            : (freshTransaction.due_date ? new Date(freshTransaction.due_date) : transaction.dueDate),
+          orderDate: freshTransaction.order_date ? new Date(freshTransaction.order_date) : transaction.orderDate,
+          paidAmount: freshTransaction.paid_amount ?? transaction.paidAmount,
+          paymentStatus: freshTransaction.payment_status ?? transaction.paymentStatus,
+          subtotal: freshTransaction.subtotal ?? transaction.subtotal,
+          total: freshTransaction.total ?? transaction.total,
+        };
+      }
+    } catch (err) {
+      console.warn('Failed to refetch transaction before dot matrix print:', err);
+    }
 
     // Use branch or company info
     const info = currentBranch || companyInfo;
 
-    const orderDate = transaction.orderDate ? new Date(transaction.orderDate) : null;
-    const paidAmount = transaction.paidAmount || 0;
-    const remaining = transaction.total - paidAmount;
+    const orderDate = printTransaction.orderDate ? new Date(printTransaction.orderDate) : null;
+    const paidAmount = printTransaction.paidAmount || 0;
+    const remaining = printTransaction.total - paidAmount;
 
     const formatNumber = (num: number) => new Intl.NumberFormat("id-ID", { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(num);
 
@@ -458,12 +495,11 @@ export function TransactionTable() {
                 </td>
                 <td style="width: 60%; vertical-align: top; font-size: 11pt;">
                   <table style="width: 100%;">
-                    <tr><td width="80">No</td><td>: ${transaction.id}</td><td width="50">SALES</td><td>: ${transaction.salesName?.split(' ')[0] || 'KANTOR'}</td></tr>
-                    <tr><td>Tanggal</td><td>: ${orderDate ? format(orderDate, "dd/MM/yy HH:mm", { locale: id }) : '-'}</td><td>PPN</td><td>: ${transaction.ppnEnabled ? 'Ya' : '-'}</td></tr>
-                    <tr><td>Pelanggan</td><td colspan="3">: ${transaction.customerName}</td></tr>
-                    <tr><td>Alamat</td><td colspan="3">: ${transaction.customerAddress || '-'}</td></tr>
-                    <tr><td>Telepon</td><td colspan="3">: ${transaction.customerPhone || '-'}</td></tr>
-                    ${(transaction.dueDate || (transaction as any).due_date) ? `<tr><td>Jt. Tempo</td><td colspan="3">: ${format(new Date(transaction.dueDate || (transaction as any).due_date), "dd/MM/yyyy", { locale: id })}</td></tr>` : ''}
+                    <tr><td width="80">No</td><td>: ${printTransaction.id}</td><td width="50">SALES</td><td>: ${printTransaction.salesName?.split(' ')[0] || 'KANTOR'}</td></tr>
+                    <tr><td>Tanggal</td><td>: ${orderDate ? format(orderDate, "dd/MM/yy HH:mm", { locale: id }) : '-'}</td><td>PPN</td><td>: ${printTransaction.ppnEnabled ? 'Ya' : '-'}</td></tr>
+                    <tr><td>Pelanggan</td><td colspan="3">: ${printTransaction.customerName}</td></tr>
+                    <tr><td>Alamat</td><td colspan="3">: ${printTransaction.customerAddress || '-'}</td></tr>
+                    <tr><td>Telepon</td><td colspan="3">: ${printTransaction.customerPhone || '-'}</td></tr>
                   </table>
                 </td>
               </tr>
@@ -481,7 +517,7 @@ export function TransactionTable() {
         </tr>
 
         <!-- Items -->
-        ${transaction.items.filter(item => item.product?.name).map((item, idx) => `
+        ${printTransaction.items.filter(item => item.product?.name).map((item, idx) => `
           <tr>
             <td style="padding: 0.5mm 1mm; font-size: 11pt;">${idx + 1}</td>
             <td style="padding: 0.5mm 1mm; font-size: 11pt;">${item.product?.name}</td>
@@ -520,13 +556,13 @@ export function TransactionTable() {
                 </td>
                 <td style="width: 45%; vertical-align: top; font-size: 11pt;">
                   <table style="width: 100%;">
-                    <tr><td>Sub Total</td><td style="text-align: right;">:</td><td style="text-align: right; width: 40%;">${formatNumber(transaction.subtotal || transaction.total)}</td></tr>
-                    ${transaction.ppnEnabled && (transaction.ppnAmount || 0) > 0 ? `<tr><td>PPN (${transaction.ppnPercentage || 11}%)</td><td style="text-align: right;">:</td><td style="text-align: right;">${formatNumber(transaction.ppnAmount || 0)}</td></tr>` : ''}
-                    <tr><td>Total Akhir</td><td style="text-align: right;">:</td><td style="text-align: right;">${formatNumber(transaction.total)}</td></tr>
+                    <tr><td>Sub Total</td><td style="text-align: right;">:</td><td style="text-align: right; width: 40%;">${formatNumber(printTransaction.subtotal || printTransaction.total)}</td></tr>
+                    ${printTransaction.ppnEnabled && (printTransaction.ppnAmount || 0) > 0 ? `<tr><td>PPN (${printTransaction.ppnPercentage || 11}%)</td><td style="text-align: right;">:</td><td style="text-align: right;">${formatNumber(printTransaction.ppnAmount || 0)}</td></tr>` : ''}
+                    <tr><td>Total Akhir</td><td style="text-align: right;">:</td><td style="text-align: right;">${formatNumber(printTransaction.total)}</td></tr>
                     ${paidAmount > 0 ? `<tr><td>Tunai</td><td style="text-align: right;">:</td><td style="text-align: right;">${formatNumber(paidAmount)}</td></tr>` : ''}
                     ${remaining > 0 ? `<tr><td>Kredit</td><td style="text-align: right;">:</td><td style="text-align: right;">${formatNumber(remaining)}</td></tr>` : ''}
-                    ${paidAmount > transaction.total ? `<tr><td>Kembali</td><td style="text-align: right;">:</td><td style="text-align: right;">${formatNumber(paidAmount - transaction.total)}</td></tr>` : ''}
-                    ${(transaction.dueDate || (transaction as any).due_date) && (transaction.paymentStatus !== 'Lunas' || (transaction as any).payment_status !== 'Lunas') ? `<tr><td>Jt. Tempo</td><td style="text-align: right;">:</td><td style="text-align: right;">${format(new Date(transaction.dueDate || (transaction as any).due_date), "dd/MM/yyyy", { locale: id })}</td></tr>` : ''}
+                    ${remaining > 0 ? `<tr><td>Jt. Tempo</td><td style="text-align: right;">:</td><td style="text-align: right;">${(printTransaction.receivable_due_date || printTransaction.dueDate || printTransaction.due_date) ? format(new Date(printTransaction.receivable_due_date || printTransaction.dueDate || printTransaction.due_date), "dd/MM/yyyy", { locale: id }) : '-'}</td></tr>` : ''}
+                    ${paidAmount > printTransaction.total ? `<tr><td>Kembali</td><td style="text-align: right;">:</td><td style="text-align: right;">${formatNumber(paidAmount - printTransaction.total)}</td></tr>` : ''}
                   </table>
                 </td>
               </tr>
@@ -559,7 +595,7 @@ export function TransactionTable() {
         <!DOCTYPE html>
         <html>
             <head>
-            <title>Faktur ${transaction.id}</title>
+            <title>Faktur ${printTransaction.id}</title>
             <meta charset="UTF-8">
             <style>
                 * { margin: 0; padding: 0; box-sizing: border-box; font-weight: bold !important; }

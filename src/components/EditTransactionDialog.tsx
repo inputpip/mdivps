@@ -65,7 +65,14 @@ export function EditTransactionDialog({ open, onOpenChange, transaction }: EditT
       const customer = customers?.find(c => c.id === transaction.customerId)
       setSelectedCustomer(customer || null)
       setOrderDate(transaction.orderDate)
-      setDueDate(transaction.dueDate ? transaction.dueDate.toISOString().split('T')[0] : '')
+      setDueDate(transaction.dueDate ? transaction.dueDate.toISOString().split('T')[0] : (() => {
+        if ((transaction.total - (transaction.paidAmount || 0)) > 0) {
+          const fallbackDate = getOfficeTime(timezone)
+          fallbackDate.setDate(fallbackDate.getDate() + 7)
+          return fallbackDate.toISOString().split('T')[0]
+        }
+        return ''
+      })())
       setPaymentAccountId(transaction.paymentAccountId || '')
       setPaidAmount(transaction.paidAmount)
       setPreviousPaidAmount(transaction.paidAmount) // Simpan jumlah dibayar sebelumnya
@@ -167,7 +174,11 @@ export function EditTransactionDialog({ open, onOpenChange, transaction }: EditT
       salesId: salesId || null,
       salesName: salesName || null,
       orderDate: orderDate || getOfficeTime(timezone),
-      dueDate: sisaTagihan > 0 && dueDate ? new Date(dueDate) : null,
+      dueDate: sisaTagihan > 0 ? new Date(dueDate || (() => {
+        const fallbackDate = getOfficeTime(timezone)
+        fallbackDate.setDate(fallbackDate.getDate() + 7)
+        return fallbackDate.toISOString().split('T')[0]
+      })()) : null,
       items: transactionItems,
       subtotal: ppnCalculation.subtotal,
       ppnEnabled: ppnEnabled,

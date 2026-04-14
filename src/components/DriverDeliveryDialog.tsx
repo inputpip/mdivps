@@ -22,7 +22,7 @@ import { compressImage, isImageFile } from "@/utils/imageCompression"
 import { useDrivers, Driver } from "@/hooks/useDrivers"
 import { useDeliveries } from "@/hooks/useDeliveries"
 import { CreateDeliveryRequest } from "@/types/delivery"
-import { format } from "date-fns"
+import { format, isValid } from "date-fns"
 import { id as idLocale } from "date-fns/locale/id"
 import { useAuth } from "@/hooks/useAuth"
 import { Retasi } from "@/types/retasi"
@@ -35,6 +35,17 @@ interface DriverDeliveryDialogProps {
   transaction: Transaction
   onDeliveryComplete: () => void
   activeRetasi?: Retasi | null // Active retasi for auto-filling helper
+}
+
+function safeFormatDateTime(date: Date | string | null | undefined, formatStr: string) {
+  if (!date) return '-'
+  try {
+    const parsed = date instanceof Date ? date : new Date(date)
+    if (!isValid(parsed)) return '-'
+    return format(parsed, formatStr, { locale: idLocale })
+  } catch {
+    return '-'
+  }
 }
 
 export function DriverDeliveryDialog({
@@ -349,7 +360,7 @@ export function DriverDeliveryDialog({
             <CardContent className="text-sm space-y-1">
               <div className="flex justify-between">
                 <span>Tanggal:</span>
-                <span>{format(transaction.orderDate, "d MMM yyyy, HH:mm", { locale: idLocale })}</span>
+                <span>{safeFormatDateTime(transaction.orderDate, "d MMM yyyy, HH:mm")}</span>
               </div>
               <div className="flex justify-between">
                 <span>Total:</span>

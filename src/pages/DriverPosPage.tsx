@@ -90,7 +90,7 @@ export default function DriverPosPage() {
   }, [items])
   const [dueDate, setDueDate] = useState(() => {
     const date = getOfficeTime(timezone);
-    date.setDate(date.getDate() + 30);
+    date.setDate(date.getDate() + 7);
     return date.toISOString().split('T')[0];
   })
 
@@ -365,6 +365,21 @@ export default function DriverPosPage() {
     try {
       const transactionId = `TXN-${Date.now()}`
 
+      const resolvedDueDate = (() => {
+        if (!(paidAmount < total)) return null
+        const source = dueDate || (() => {
+          const fallbackDate = getOfficeTime(timezone)
+          fallbackDate.setDate(fallbackDate.getDate() + 7)
+          return fallbackDate.toISOString().split('T')[0]
+        })()
+        const parsed = new Date(source)
+        return Number.isNaN(parsed.getTime()) ? null : parsed
+      })()
+
+      if (paidAmount < total && !resolvedDueDate) {
+        throw new Error('Tanggal jatuh tempo tidak valid')
+      }
+
       const newTransaction: Omit<Transaction, 'createdAt'> = {
         id: transactionId,
         customerId: selectedCustomerData?.id || 'manual-customer',
@@ -386,11 +401,46 @@ export default function DriverPosPage() {
         paymentStatus: paidAmount >= total ? 'Lunas' : 'Belum Lunas',
         status: 'Pesanan Masuk',
         isOfficeSale: false,
-        dueDate: paidAmount < total ? new Date(dueDate) : null
+        dueDate: resolvedDueDate
       }
 
       const savedTransaction = await addTransaction.mutateAsync({ newTransaction })
-      setCreatedTransaction(savedTransaction)
+      const sanitizedTransaction: Transaction = {
+        ...newTransaction,
+        ...savedTransaction,
+        id: savedTransaction?.id || newTransaction.id,
+        customerId: savedTransaction?.customerId || newTransaction.customerId,
+        customerName: savedTransaction?.customerName || newTransaction.customerName,
+        cashierId: savedTransaction?.cashierId || newTransaction.cashierId,
+        cashierName: savedTransaction?.cashierName || newTransaction.cashierName,
+        paymentAccountId: savedTransaction?.paymentAccountId ?? newTransaction.paymentAccountId,
+        retasiId: savedTransaction?.retasiId ?? newTransaction.retasiId,
+        retasiNumber: savedTransaction?.retasiNumber ?? newTransaction.retasiNumber,
+        orderDate: savedTransaction?.orderDate && !Number.isNaN(new Date(savedTransaction.orderDate).getTime())
+          ? new Date(savedTransaction.orderDate)
+          : newTransaction.orderDate,
+        finishDate: savedTransaction?.finishDate && !Number.isNaN(new Date(savedTransaction.finishDate).getTime())
+          ? new Date(savedTransaction.finishDate)
+          : (newTransaction.finishDate || null),
+        items: Array.isArray(savedTransaction?.items) && savedTransaction.items.length > 0 ? savedTransaction.items : newTransaction.items,
+        subtotal: Number(savedTransaction?.subtotal ?? newTransaction.subtotal ?? total) || 0,
+        ppnEnabled: savedTransaction?.ppnEnabled ?? newTransaction.ppnEnabled,
+        ppnMode: savedTransaction?.ppnMode ?? newTransaction.ppnMode,
+        ppnPercentage: Number(savedTransaction?.ppnPercentage ?? newTransaction.ppnPercentage ?? 0) || 0,
+        ppnAmount: Number(savedTransaction?.ppnAmount ?? newTransaction.ppnAmount ?? 0) || 0,
+        total: Number(savedTransaction?.total ?? newTransaction.total ?? total) || 0,
+        paidAmount: Number(savedTransaction?.paidAmount ?? newTransaction.paidAmount ?? 0) || 0,
+        paymentStatus: savedTransaction?.paymentStatus || newTransaction.paymentStatus,
+        status: savedTransaction?.status || newTransaction.status,
+        isOfficeSale: savedTransaction?.isOfficeSale ?? newTransaction.isOfficeSale,
+        dueDate: savedTransaction?.dueDate && !Number.isNaN(new Date(savedTransaction.dueDate).getTime())
+          ? new Date(savedTransaction.dueDate)
+          : resolvedDueDate,
+        createdAt: savedTransaction?.createdAt && !Number.isNaN(new Date(savedTransaction.createdAt).getTime())
+          ? new Date(savedTransaction.createdAt)
+          : new Date(),
+      }
+      setCreatedTransaction(sanitizedTransaction)
 
       // Reset form
       setSelectedCustomer("")
@@ -399,7 +449,7 @@ export default function DriverPosPage() {
       setPaymentAccount("")
       setPaidAmount(0)
       const newDueDate = getOfficeTime(timezone);
-      newDueDate.setDate(newDueDate.getDate() + 30);
+      newDueDate.setDate(newDueDate.getDate() + 7);
       setDueDate(newDueDate.toISOString().split('T')[0])
 
       toast({ title: "Berhasil", description: `Transaksi ${transactionId} disimpan` })
@@ -851,23 +901,35 @@ export default function DriverPosPage() {
           })
         }}
       />
-      {createdTransaction && (
-        <>
-          <DriverDeliveryDialog
-            open={deliveryDialogOpen}
-            onOpenChange={setDeliveryDialogOpen}
-            transaction={createdTransaction}
-            onDeliveryComplete={() => { setDeliveryDialogOpen(false); setPrintDialogOpen(true); }}
-            activeRetasi={activeRetasi}
-          />
-          <DriverPrintDialog
-            open={printDialogOpen}
-            onOpenChange={setPrintDialogOpen}
-            transaction={createdTransaction}
-            onComplete={() => { setPrintDialogOpen(false); setCreatedTransaction(null); }}
-          />
-        </>
-      )}
+      {createdTransaction && (() => {
+        const safeTransaction = {
+          ...createdTransaction,
+          orderDate: createdTransaction.orderDate && !Number.isNaN(new Date(createdTransaction.orderDate).getTime())
+            ? new Date(createdTransaction.orderDate)
+            : getOfficeTime(timezone),
+          dueDate: createdTransaction.dueDate && !Number.isNaN(new Date(createdTransaction.dueDate).getTime())
+            ? new Date(createdTransaction.dueDate)
+            : null,
+        }
+
+        return (
+          <>
+            <DriverDeliveryDialog
+              open={deliveryDialogOpen}
+              onOpenChange={setDeliveryDialogOpen}
+              transaction={safeTransaction}
+              onDeliveryComplete={() => { setDeliveryDialogOpen(false); setPrintDialogOpen(true); }}
+              activeRetasi={activeRetasi}
+            />
+            <DriverPrintDialog
+              open={printDialogOpen}
+              onOpenChange={setPrintDialogOpen}
+              transaction={safeTransaction}
+              onComplete={() => { setPrintDialogOpen(false); setCreatedTransaction(null); }}
+            />
+          </>
+        )
+      })()}
     </div>
   )
 }

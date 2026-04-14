@@ -708,7 +708,7 @@ export function PrintReceiptDialog({ open, onOpenChange, transaction, template, 
             <td style="width: 50%; vertical-align: top; text-align: right;">
               <div style="font-size: 10.5pt;"><strong>Sales:</strong> ${transaction.salesName || 'KANTOR'}</div>
               <div style="font-size: 10.5pt;"><strong>Kasir:</strong> ${transaction.cashierName}</div>
-              ${transaction.dueDate || (transaction as any).due_date ? `<div style="font-size: 10.5pt;"><strong>Jatuh Tempo:</strong> ${safeFormatDate(transaction.dueDate || (transaction as any).due_date, "dd/MM/yyyy")}</div>` : ''}
+              ${(transaction.dueDate || (transaction as any).due_date) ? `<div style="font-size: 10.5pt;"><strong>Jatuh Tempo:</strong> ${safeFormatDate(transaction.dueDate || (transaction as any).due_date, "dd/MM/yyyy")}</div>` : ''}
             </td>
           </tr>
         </table>
@@ -782,7 +782,7 @@ export function PrintReceiptDialog({ open, onOpenChange, transaction, template, 
               Sisa: <strong style="color: ${(transaction.total - (transaction.paidAmount || 0)) > 0 ? '#dc2626' : '#16a34a'};">${new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(transaction.total - (transaction.paidAmount || 0))}</strong>
             </td>
           </tr>
-          ${(transaction.dueDate || (transaction as any).due_date) && transaction.paymentStatus !== 'Lunas' ? `
+          ${(transaction.dueDate || (transaction as any).due_date) ? `
           <tr>
             <td colspan="2" style="padding: 2mm 3mm; font-size: 10pt; text-align: center; background: #fef2f2; border-top: 1px solid #ccc;">
               <strong>Jatuh Tempo: ${safeFormatDate(transaction.dueDate || (transaction as any).due_date, "dd MMMM yyyy")}</strong>
