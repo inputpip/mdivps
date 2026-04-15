@@ -1,6 +1,6 @@
 "use client"
 
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -186,7 +186,6 @@ interface SidebarProps {
 
 export function Sidebar({ isCollapsed, setCollapsed, onHoverChange }: SidebarProps) {
   const location = useLocation();
-  const navigate = useNavigate();
   const { settings } = useCompanySettings();
   const { hasPermission } = usePermissions();
   const { user } = useAuth();
@@ -344,7 +343,7 @@ export function Sidebar({ isCollapsed, setCollapsed, onHoverChange }: SidebarPro
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, [isCollapsed, setCollapsed]);
 
-  // Handle search input keydown - navigate on Enter / Arrow Keys
+  // Handle search input keydown - open selected result in new tab on Enter / Arrow Keys
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -359,7 +358,7 @@ export function Sidebar({ isCollapsed, setCollapsed, onHoverChange }: SidebarPro
         setSearchQuery("");
         setSelectedIndex(0);
         setIsHoverExpanded(false);
-        navigate(selectedItem.href);
+        window.open(selectedItem.href, '_blank', 'noopener,noreferrer');
       }
     } else if (e.key === 'Escape') {
       e.preventDefault();
