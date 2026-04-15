@@ -1,6 +1,8 @@
 "use client"
 
 import { useMemo, useState, useEffect } from 'react'
+import { format, differenceInDays } from 'date-fns'
+import { id as idLocale } from 'date-fns/locale'
 import { Customer } from '@/types/customer'
 import { sortCustomersByDistance, filterByRadius } from '@/utils/geoUtils'
 import { Button } from '@/components/ui/button'
@@ -9,7 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
-import { Phone, Navigation, Store, Home, MapPin, AlertCircle, ShoppingCart, Eye, EyeOff, FileText, UserCheck } from 'lucide-react'
+import { Phone, Navigation, Store, Home, MapPin, AlertCircle, ShoppingCart, Eye, EyeOff, FileText, UserCheck, Clock3 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { SalesVisitDialog } from '@/components/SalesVisitDialog'
 import { useAuth } from '@/hooks/useAuth'
@@ -38,6 +40,44 @@ const RADIUS_OPTIONS = [
   { value: 10000, label: '10 km' },
   { value: 999999, label: 'Semua' },
 ]
+
+const getLastOrderInfo = (lastOrderDate?: Date | string | null) => {
+  if (!lastOrderDate) {
+    return {
+      label: 'Belum pernah order',
+      sublabel: 'Belum ada transaksi',
+      colorClass: 'text-muted-foreground'
+    }
+  }
+
+  const parsedDate = lastOrderDate instanceof Date ? lastOrderDate : new Date(lastOrderDate)
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return {
+      label: 'Tanggal tidak valid',
+      sublabel: 'Cek data transaksi',
+      colorClass: 'text-orange-600 dark:text-orange-400'
+    }
+  }
+
+  const daysSinceLastOrder = differenceInDays(new Date(), parsedDate)
+  const formattedDate = format(parsedDate, 'd MMM yyyy', { locale: idLocale })
+
+  let colorClass = 'text-emerald-600 dark:text-emerald-400'
+  if (daysSinceLastOrder > 90) {
+    colorClass = 'text-red-600 dark:text-red-400'
+  } else if (daysSinceLastOrder > 60) {
+    colorClass = 'text-orange-600 dark:text-orange-400'
+  } else if (daysSinceLastOrder > 30) {
+    colorClass = 'text-amber-600 dark:text-amber-400'
+  }
+
+  return {
+    label: formattedDate,
+    sublabel: daysSinceLastOrder === 0 ? 'Hari ini' : `${daysSinceLastOrder} hari lalu`,
+    colorClass
+  }
+}
 
 export function NearbyCustomerList({
   customers,
@@ -232,6 +272,7 @@ export function NearbyCustomerList({
         <div className="space-y-3 overflow-y-auto pb-4" style={{ maxHeight: 'calc(100vh - 20rem)' }}>
           {nearbyCustomers.map((customer, index) => {
             const isKiosk = customer.classification === 'Kios/Toko'
+            const lastOrderInfo = getLastOrderInfo(customer.lastOrderDate)
 
             return (
               <Card
@@ -293,16 +334,30 @@ export function NearbyCustomerList({
                         {customer.address}
                       </p>
                       {/* Classification */}
-                      <Badge
-                        variant="secondary"
-                        className={`text-xs mt-1 ${
-                          isKiosk
-                            ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
-                            : 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
-                        }`}
-                      >
-                        {customer.classification || 'Umum'}
-                      </Badge>
+                      <div className="flex flex-wrap items-center gap-1 mt-1">
+                        <Badge
+                          variant="secondary"
+                          className={`text-xs ${
+                            isKiosk
+                              ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
+                              : 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
+                          }`}
+                        >
+                          {customer.classification || 'Umum'}
+                        </Badge>
+                        <Badge variant="outline" className="text-xs">
+                          {customer.orderCount || 0} order
+                        </Badge>
+                      </div>
+
+                      <div className="mt-2 flex items-start gap-2 rounded-md bg-muted/50 px-2 py-1.5 dark:bg-slate-700/40">
+                        <Clock3 className="h-3.5 w-3.5 mt-0.5 text-muted-foreground" />
+                        <div className="min-w-0">
+                          <p className="text-[11px] text-muted-foreground">Order terakhir</p>
+                          <p className="text-xs font-medium dark:text-white">{lastOrderInfo.label}</p>
+                          <p className={`text-[11px] ${lastOrderInfo.colorClass}`}>{lastOrderInfo.sublabel}</p>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
