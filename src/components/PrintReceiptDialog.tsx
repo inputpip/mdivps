@@ -17,6 +17,69 @@ function safeFormatDate(date: Date | string | null | undefined, formatStr: strin
     return '-';
   }
 }
+
+function shortenAddress(address: string | null | undefined): string {
+  if (!address) return '-';
+
+  return address
+    .replace(/\s+/g, ' ')
+    .replace(/\bJalan\b/gi, 'Jl')
+    .replace(/\bGang\b/gi, 'Gg')
+    .replace(/\bNomor\b/gi, 'No')
+    .replace(/\bNomor\.\b/gi, 'No')
+    .replace(/\bPerumahan\b/gi, 'Perum')
+    .replace(/\bKomplek\b/gi, 'Komp')
+    .replace(/\bKelurahan\b/gi, 'Kel')
+    .replace(/\bKecamatan\b/gi, 'Kec')
+    .replace(/\bKabupaten\b/gi, 'Kab')
+    .replace(/\bProvinsi\b/gi, 'Prov')
+    .replace(/\bRukun Tetangga\b/gi, 'RT')
+    .replace(/\bRukun Warga\b/gi, 'RW')
+    .replace(/\bBlok\b/gi, 'Blk')
+    .replace(/\bApartemen\b/gi, 'Apt')
+    .replace(/\bLantai\b/gi, 'Lt')
+    .replace(/\bNomor\s+/gi, 'No ')
+    .trim();
+}
+
+function wrapText(text: string, maxCharsPerLine: number, maxLines = 3): string[] {
+  if (!text || text === '-') return ['-'];
+
+  const words = text.split(' ');
+  const lines: string[] = [];
+  let currentLine = '';
+
+  for (const word of words) {
+    const candidate = currentLine ? `${currentLine} ${word}` : word;
+
+    if (candidate.length <= maxCharsPerLine) {
+      currentLine = candidate;
+      continue;
+    }
+
+    if (currentLine) {
+      lines.push(currentLine);
+      currentLine = word;
+    } else {
+      lines.push(word);
+      currentLine = '';
+    }
+
+    if (lines.length >= maxLines - 1) {
+      break;
+    }
+  }
+
+  const usedWords = lines.join(' ').split(' ').filter(Boolean).length;
+  const remainingWords = words.slice(usedWords);
+  const finalLineSource = [currentLine, ...remainingWords].filter(Boolean).join(' ');
+
+  if (lines.length < maxLines && finalLineSource) {
+    lines.push(finalLineSource);
+  }
+
+  return lines.slice(0, maxLines);
+}
 import { Printer, X, FileDown } from "lucide-react"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
@@ -675,6 +738,8 @@ export function PrintReceiptDialog({ open, onOpenChange, transaction, template, 
   const handleDotMatrixPrint = () => {
     if (!transaction) return;
     const orderDate = transaction.orderDate ? new Date(transaction.orderDate) : null;
+    const shortCustomerAddress = shortenAddress(transaction.customerAddress);
+    const wrappedCustomerAddress = wrapText(shortCustomerAddress, 42, 3);
 
     const dotMatrixContent = `
       <div style="width: 100%; max-width: 241mm;">
@@ -706,6 +771,7 @@ export function PrintReceiptDialog({ open, onOpenChange, transaction, template, 
             <td style="width: 50%; vertical-align: top;">
               <div style="font-size: 10.5pt; font-weight: bold; margin-bottom: 1mm;">KEPADA:</div>
               <div style="font-size: 11.5pt; font-weight: bold;">${transaction.customerName}</div>
+              ${wrappedCustomerAddress.map(line => `<div style="font-size: 10pt; line-height: 1.35;">${line}</div>`).join('')}
               ${transaction.customerPhone ? `<div style="font-size: 10.5pt;">Telp: ${transaction.customerPhone}</div>` : ''}
               <div style="font-size: 10.5pt;">Pelanggan</div>
             </td>
