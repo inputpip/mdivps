@@ -38,6 +38,7 @@ export interface Transaction {
   customerId: string;
   customerName: string;
   customerAddress?: string;
+  customerPhone?: string;
   customerClassification?: CustomerClassification; // Klasifikasi pelanggan: Rumahan atau Kios/Toko
   cashierId: string;
   cashierName: string;

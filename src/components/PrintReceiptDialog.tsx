@@ -46,6 +46,9 @@ const ReceiptTemplate = ({ transaction, companyInfo }: { transaction: Transactio
         <div className="flex justify-between"><span>No:</span> <strong>{transaction.id}</strong></div>
         <div className="flex justify-between"><span>Tgl:</span> <span>{safeFormatDate(orderDate, "dd/MM/yy HH:mm")}</span></div>
         <div className="flex justify-between"><span>Plgn:</span> <span>{transaction.customerName}</span></div>
+        {transaction.customerPhone && (
+          <div className="flex justify-between"><span>Telp:</span> <span>{transaction.customerPhone}</span></div>
+        )}
         <div className="flex justify-between"><span>Kasir:</span> <span>{transaction.cashierName}</span></div>
       </div>
       <table className="w-full text-xs">
@@ -703,6 +706,7 @@ export function PrintReceiptDialog({ open, onOpenChange, transaction, template, 
             <td style="width: 50%; vertical-align: top;">
               <div style="font-size: 10.5pt; font-weight: bold; margin-bottom: 1mm;">KEPADA:</div>
               <div style="font-size: 11.5pt; font-weight: bold;">${transaction.customerName}</div>
+              ${transaction.customerPhone ? `<div style="font-size: 10.5pt;">Telp: ${transaction.customerPhone}</div>` : ''}
               <div style="font-size: 10.5pt;">Pelanggan</div>
             </td>
             <td style="width: 50%; vertical-align: top; text-align: right;">
@@ -964,6 +968,9 @@ export function PrintReceiptDialog({ open, onOpenChange, transaction, template, 
     receipt += 'No: ' + transaction.id + '\n';
     receipt += 'Tgl: ' + safeFormatDate(orderDate, "dd/MM/yy HH:mm") + '\n';
     receipt += 'Plgn: ' + transaction.customerName + '\n';
+    if (transaction.customerPhone) {
+      receipt += 'Telp: ' + transaction.customerPhone + '\n';
+    }
     receipt += 'Kasir: ' + transaction.cashierName + '\n';
     receipt += CENTER + separator + '\n';
 
@@ -1078,6 +1085,10 @@ export function PrintReceiptDialog({ open, onOpenChange, transaction, template, 
     currentY += 4;
     doc.text(`Plgn: ${transaction.customerName}`, 5, currentY);
     currentY += 4;
+    if (transaction.customerPhone) {
+      doc.text(`Telp: ${transaction.customerPhone}`, 5, currentY);
+      currentY += 4;
+    }
     doc.text(`Kasir: ${transaction.cashierName}`, 5, currentY);
     currentY += 8;
 

@@ -77,6 +77,7 @@ const fromDb = (dbTransaction: any): Transaction => {
     customerId: dbTransaction.customer_id,
     customerName: dbTransaction.customer_name,
     customerAddress: dbTransaction.customer?.address,
+    customerPhone: dbTransaction.customer?.phone,
     customerClassification: dbTransaction.customer?.classification || undefined,
     cashierId: dbTransaction.cashier_id,
     cashierName: dbTransaction.cashier_name,
@@ -124,7 +125,7 @@ export const useTransactions = (filters?: {
       // Join dengan accounts untuk mendapatkan nama akun pembayaran
       const selectFields = `
         *,
-        customer:customers(classification, address),
+        customer:customers(classification, address, phone),
         payment_account:payment_account_id(name)
       `;
 
@@ -283,7 +284,7 @@ export const useTransactions = (filters?: {
         .from('transactions')
         .select(`
           *,
-          customer:customers(classification, address),
+          customer:customers(classification, address, phone),
           payment_account:payment_account_id(name)
         `)
         .eq('id', rpcResult.transaction_id)
