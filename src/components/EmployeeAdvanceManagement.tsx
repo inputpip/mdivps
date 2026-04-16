@@ -16,7 +16,7 @@ import { useEmployeeAdvances } from "@/hooks/useEmployeeAdvances"
 import { canManageCash, isOwner } from '@/utils/roleUtils'
 import { EmployeeAdvance } from "@/types/employeeAdvance"
 import { RepayAdvanceDialog } from "./RepayAdvanceDialog"
-import { format } from "date-fns"
+import { format, endOfDay, isAfter, isBefore, isSameDay, parseISO, startOfDay } from "date-fns"
 import { id } from "date-fns/locale/id"
 import { Badge } from "./ui/badge"
 import { useAccounts } from "@/hooks/useAccounts"
@@ -60,6 +60,8 @@ export function EmployeeAdvanceManagement() {
   const [isRepayDialogOpen, setIsRepayDialogOpen] = useState(false)
   const [selectedAdvance, setSelectedAdvance] = useState<EmployeeAdvance | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
+  const [dateFromFilter, setDateFromFilter] = useState("")
+  const [dateToFilter, setDateToFilter] = useState("")
 
   // Check if user has management privileges (kasir, admin, owner)
   const canManageAdvances = canManageCash(user)
@@ -148,18 +150,25 @@ export function EmployeeAdvanceManagement() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, sortConfig]);
+  }, [searchQuery, sortConfig, dateFromFilter, dateToFilter]);
 
   const filteredAndSortedAdvances = useMemo(() => {
     if (!advances) return [];
     const query = searchQuery.toLowerCase();
 
     let result = advances.filter(adv => {
-      return (
+      const advanceDate = adv.date instanceof Date ? adv.date : new Date(adv.date)
+      const fromDate = dateFromFilter ? startOfDay(parseISO(dateFromFilter)) : null
+      const toDate = dateToFilter ? endOfDay(parseISO(dateToFilter)) : null
+      const matchesSearch = (
         adv.employeeName.toLowerCase().includes(query) ||
         (adv.notes?.toLowerCase() || "").includes(query) ||
         (adv.accountName?.toLowerCase() || "").includes(query)
-      );
+      )
+      const matchesFrom = !fromDate || isSameDay(advanceDate, fromDate) || isAfter(advanceDate, fromDate)
+      const matchesTo = !toDate || isSameDay(advanceDate, toDate) || isBefore(advanceDate, toDate)
+
+      return matchesSearch && matchesFrom && matchesTo
     });
 
     if (sortConfig) {
@@ -181,7 +190,7 @@ export function EmployeeAdvanceManagement() {
       });
     }
     return result;
-  }, [advances, searchQuery, sortConfig]);
+  }, [advances, searchQuery, sortConfig, dateFromFilter, dateToFilter]);
 
   const totalPages = Math.ceil(filteredAndSortedAdvances.length / itemsPerPage);
   const paginatedAdvances = filteredAndSortedAdvances.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
@@ -287,16 +296,32 @@ export function EmployeeAdvanceManagement() {
 
           <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto items-start md:items-center">
             {!isViewOnly && (
-              <div className="relative w-full sm:w-64">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="search"
-                  placeholder="Cari data..."
-                  className="pl-8"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
+              <>
+                <div className="relative w-full sm:w-64">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    type="search"
+                    placeholder="Cari data..."
+                    className="pl-8"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
+                <div className="w-full sm:w-auto">
+                  <Input
+                    type="date"
+                    value={dateFromFilter}
+                    onChange={(e) => setDateFromFilter(e.target.value)}
+                  />
+                </div>
+                <div className="w-full sm:w-auto">
+                  <Input
+                    type="date"
+                    value={dateToFilter}
+                    onChange={(e) => setDateToFilter(e.target.value)}
+                  />
+                </div>
+              </>
             )}
             {!isViewOnly && advances && (
               <EmployeeAdvancesReport advances={advances} />
