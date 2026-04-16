@@ -224,11 +224,18 @@ export const TransactionItemsReport = () => {
         .map((r: any) => r.retasi_id)
         .filter((value: any) => !!value))]
 
-      let retasiMap: Record<string, { retasi_ke?: number; retasi_number?: string; driver_name?: string }> = {}
+      let retasiMap: Record<string, {
+        retasi_ke?: number;
+        retasi_number?: string;
+        driver_name?: string;
+        helper_name?: string;
+        helper_name_2?: string;
+        helper_name_3?: string;
+      }> = {}
       if (retasiIds.length > 0) {
         const { data: retasiRows, error: retasiError } = await supabase
           .from('retasi')
-          .select('id, retasi_ke, retasi_number, driver_name')
+          .select('id, retasi_ke, retasi_number, driver_name, helper_name, helper_name_2, helper_name_3')
           .in('id', retasiIds)
 
         if (retasiError) {
@@ -239,6 +246,9 @@ export const TransactionItemsReport = () => {
               retasi_ke: row.retasi_ke,
               retasi_number: row.retasi_number,
               driver_name: row.driver_name,
+              helper_name: row.helper_name,
+              helper_name_2: row.helper_name_2,
+              helper_name_3: row.helper_name_3,
             }
             return acc
           }, {} as Record<string, { retasi_ke?: number; retasi_number?: string; driver_name?: string }>)
@@ -278,9 +288,9 @@ export const TransactionItemsReport = () => {
           source: r.source_type as any,
           driverId: r.driver_id,
           driverName: r.driver_name || retasiInfo?.driver_name || undefined,
-          helperName: r.helper_name || undefined,
-          helperName2: r.helper_name_2 || undefined,
-          helperName3: r.helper_name_3 || undefined,
+          helperName: r.helper_name || retasiInfo?.helper_name || undefined,
+          helperName2: r.helper_name_2 || retasiInfo?.helper_name_2 || undefined,
+          helperName3: r.helper_name_3 || retasiInfo?.helper_name_3 || undefined,
           retasiNumber: retasiDisplay,
           retasiKe: retasiKeValue,
           cashierId: r.cashier_id,
