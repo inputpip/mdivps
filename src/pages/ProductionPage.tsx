@@ -107,6 +107,10 @@ export default function ProductionPage() {
     setCurrentPage(1)
   }, [dateFrom, dateTo, selectedItemFilter, selectedInputByFilter])
 
+  const totalFilteredQuantity = useMemo(() => {
+    return filteredProductions.reduce((sum, record) => sum + (Number(record.quantity) || 0), 0)
+  }, [filteredProductions])
+
   const totalPages = Math.max(1, Math.ceil(filteredProductions.length / itemsPerPage))
   const paginatedProductions = filteredProductions.slice(
     (currentPage - 1) * itemsPerPage,
@@ -500,8 +504,15 @@ export default function ProductionPage() {
           </div>
         </div>
 
-        <div className="px-4 py-2 text-sm text-slate-500 dark:text-slate-400 border-b">
-          Menampilkan {filteredProductions.length} data riwayat produksi
+        <div className="px-4 py-3 border-b bg-slate-50/60 dark:bg-slate-800/40">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+            <div className="text-slate-600 dark:text-slate-300">
+              Menampilkan <span className="font-semibold">{filteredProductions.length}</span> data riwayat produksi
+            </div>
+            <div className="text-slate-600 dark:text-slate-300 md:text-right">
+              Total jumlah dari filter: <span className="font-semibold">{formatNumber(totalFilteredQuantity)}</span>
+            </div>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
