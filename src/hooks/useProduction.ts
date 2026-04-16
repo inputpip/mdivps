@@ -24,8 +24,7 @@ export const useProduction = () => {
         .from('production_records')
         .select('*, products (name), profiles (name)')
         .eq('branch_id', currentBranch.id)
-        .order('created_at', { ascending: false })
-        .limit(50);
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
 
