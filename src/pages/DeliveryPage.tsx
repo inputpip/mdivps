@@ -195,7 +195,7 @@ export default function DeliveryPage() {
   )).sort()
 
   const uniqueHelpers = Array.from(new Set(
-    deliveryHistory?.map(d => d.helperName).filter(Boolean) || []
+    deliveryHistory?.flatMap(d => [d.helperName, d.helperName2, d.helperName3]).filter(Boolean) || []
   )).sort()
 
   const filteredDeliveryHistory = deliveryHistory?.filter(delivery => {
@@ -204,7 +204,9 @@ export default function DeliveryPage() {
       delivery.customerName.toLowerCase().includes(historySearchQuery.toLowerCase()) ||
       delivery.transactionId.toLowerCase().includes(historySearchQuery.toLowerCase()) ||
       delivery.driverName?.toLowerCase().includes(historySearchQuery.toLowerCase()) ||
-      delivery.helperName?.toLowerCase().includes(historySearchQuery.toLowerCase())
+      delivery.helperName?.toLowerCase().includes(historySearchQuery.toLowerCase()) ||
+      delivery.helperName2?.toLowerCase().includes(historySearchQuery.toLowerCase()) ||
+      delivery.helperName3?.toLowerCase().includes(historySearchQuery.toLowerCase())
     )
 
     // Item search filter
@@ -225,9 +227,10 @@ export default function DeliveryPage() {
       delivery.driverName === selectedDriver
 
     // Helper filter  
+    const deliveryHelpers = [delivery.helperName, delivery.helperName2, delivery.helperName3].filter(Boolean)
     const matchesHelper = selectedHelper === "all" ||
-      (selectedHelper === "no-helper" && !delivery.helperName) ||
-      delivery.helperName === selectedHelper
+      (selectedHelper === "no-helper" && deliveryHelpers.length === 0) ||
+      deliveryHelpers.includes(selectedHelper)
 
     return matchesItem && matchesSearch && matchesDateRange && matchesDriver && matchesHelper
   }) || []
