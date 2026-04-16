@@ -106,27 +106,26 @@ export function useOptimizedCommissionEntries(
       // Filter out zero-amount commissions immediately to keep UI clean
       const nonZeroData = (data || []).filter(e => e.rate_per_qty > 0 && e.quantity > 0)
 
-      // Deduplicate overlapping entries (e.g., if a transaction appears both as retasi and delivery)
+      // Deduplicate only true overlap between non-delivery and delivery representations.
+      // Keep distinct lines when the same product appears multiple times in one transaction.
       const deduplicatedData = [];
       const seenKeys = new Set();
 
       for (const entry of nonZeroData) {
-        // Build a unique key for the transaction, role, user, and product combination
-        const uniqueKey = `${entry.transaction_id}_${entry.user_id}_${entry.role}_${entry.product_id}`;
-        
+        const uniqueKey = [
+          entry.transaction_id,
+          entry.delivery_id || 'no-delivery',
+          entry.user_id,
+          entry.role,
+          entry.product_id,
+          entry.quantity,
+          entry.rate_per_qty,
+          entry.realization_date,
+        ].join('_');
+
         if (!seenKeys.has(uniqueKey)) {
           seenKeys.add(uniqueKey);
           deduplicatedData.push(entry);
-        } else {
-          // If a duplicate happens, prioritize the one WITH a delivery_id (which usually contains more precise assignment)
-          if (entry.delivery_id) {
-            const existingIndex = deduplicatedData.findIndex(
-              e => `${e.transaction_id}_${e.user_id}_${e.role}_${e.product_id}` === uniqueKey
-            );
-            if (existingIndex !== -1 && !deduplicatedData[existingIndex].delivery_id) {
-               deduplicatedData[existingIndex] = entry; 
-            }
-          }
         }
       }
 
@@ -260,21 +259,20 @@ export function useCommissionSummary(
       const nonZeroData = (data || []).filter(e => e.rate_per_qty > 0 && e.quantity > 0)
 
       for (const entry of nonZeroData) {
-        const uniqueKey = `${entry.transaction_id}_${entry.user_id}_${entry.role}_${entry.product_id}`;
-        
+        const uniqueKey = [
+          entry.transaction_id,
+          entry.delivery_id || 'no-delivery',
+          entry.user_id,
+          entry.role,
+          entry.product_id,
+          entry.quantity,
+          entry.rate_per_qty,
+          entry.realization_date,
+        ].join('_');
+
         if (!seenKeys.has(uniqueKey)) {
           seenKeys.add(uniqueKey);
           deduplicatedData.push(entry);
-        } else {
-          // If duplicate, prefer the one with delivery_id
-          if (entry.delivery_id) {
-            const existingIndex = deduplicatedData.findIndex(
-              e => `${e.transaction_id}_${e.user_id}_${e.role}_${e.product_id}` === uniqueKey
-            );
-            if (existingIndex !== -1 && !deduplicatedData[existingIndex].delivery_id) {
-               deduplicatedData[existingIndex] = entry; 
-            }
-          }
         }
       }
       
@@ -351,15 +349,19 @@ export function usePrefetchCommissions() {
         const nonZeroData = (data || []).filter(e => e.rate_per_qty > 0 && e.quantity > 0)
 
         for (const entry of nonZeroData) {
-          const uniqueKey = `${entry.transaction_id}_${entry.user_id}_${entry.role}_${entry.product_id}`;
+          const uniqueKey = [
+            entry.transaction_id,
+            entry.delivery_id || 'no-delivery',
+            entry.user_id,
+            entry.role,
+            entry.product_id,
+            entry.quantity,
+            entry.rate_per_qty,
+            entry.realization_date,
+          ].join('_');
           if (!seenKeys.has(uniqueKey)) {
             seenKeys.add(uniqueKey);
             deduplicatedData.push(entry);
-          } else if (entry.delivery_id) {
-            const existingIndex = deduplicatedData.findIndex(e => `${e.transaction_id}_${e.user_id}_${e.role}_${e.product_id}` === uniqueKey);
-            if (existingIndex !== -1 && !deduplicatedData[existingIndex].delivery_id) {
-               deduplicatedData[existingIndex] = entry; 
-            }
           }
         }
 
