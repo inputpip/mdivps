@@ -14,9 +14,10 @@ import { useCompanySettings } from "@/hooks/useCompanySettings"
 
 interface EmployeeAdvancesReportProps {
     advances: EmployeeAdvance[];
+    titleSuffix?: string;
 }
 
-export function EmployeeAdvancesReport({ advances }: EmployeeAdvancesReportProps) {
+export function EmployeeAdvancesReport({ advances, titleSuffix }: EmployeeAdvancesReportProps) {
     const { currentBranch } = useBranch()
     const { settings } = useCompanySettings()
 
@@ -29,7 +30,7 @@ export function EmployeeAdvancesReport({ advances }: EmployeeAdvancesReportProps
         doc.text(currentBranch?.name || settings?.name || 'AQUVIT', 105, 15, { align: 'center' });
 
         doc.setFontSize(14);
-        doc.text('LAPORAN DAFTAR PANJAR KARYAWAN', 105, 23, { align: 'center' });
+        doc.text(`LAPORAN DAFTAR PANJAR KARYAWAN${titleSuffix ? ` ${titleSuffix}` : ''}`, 105, 23, { align: 'center' });
 
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');

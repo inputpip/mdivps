@@ -323,8 +323,11 @@ export function EmployeeAdvanceManagement() {
                 </div>
               </>
             )}
-            {!isViewOnly && advances && (
-              <EmployeeAdvancesReport advances={advances} />
+            {!isViewOnly && filteredAndSortedAdvances && (
+              <EmployeeAdvancesReport
+                advances={filteredAndSortedAdvances}
+                titleSuffix={dateFromFilter || dateToFilter ? '(Sesuai Filter)' : ''}
+              />
             )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
