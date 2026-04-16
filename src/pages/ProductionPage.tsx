@@ -117,6 +117,22 @@ export default function ProductionPage() {
     currentPage * itemsPerPage
   )
 
+  const visiblePages = useMemo(() => {
+    if (totalPages <= 5) {
+      return Array.from({ length: totalPages }, (_, index) => index + 1)
+    }
+
+    if (currentPage <= 3) {
+      return [1, 2, 3, '...', totalPages]
+    }
+
+    if (currentPage >= totalPages - 2) {
+      return [1, '...', totalPages - 2, totalPages - 1, totalPages]
+    }
+
+    return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages]
+  }, [currentPage, totalPages])
+
   const handleExportExcel = () => {
     const dataToExport = filteredProductions.map((p, index) => ({
       'No': index + 1,
@@ -628,16 +644,22 @@ export default function ProductionPage() {
               <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>
                 <ChevronLeft className="h-4 w-4" /> Prev
               </Button>
-              {Array.from({ length: totalPages }, (_, index) => index + 1).map((page) => (
-                <Button
-                  key={page}
-                  variant={page === currentPage ? "default" : "outline"}
-                  size="sm"
-                  className="min-w-9"
-                  onClick={() => setCurrentPage(page)}
-                >
-                  {page}
-                </Button>
+              {visiblePages.map((page, index) => (
+                page === '...' ? (
+                  <span key={`ellipsis-${index}`} className="px-2 text-sm text-slate-500">
+                    ...
+                  </span>
+                ) : (
+                  <Button
+                    key={page}
+                    variant={page === currentPage ? "default" : "outline"}
+                    size="sm"
+                    className="min-w-9"
+                    onClick={() => setCurrentPage(page as number)}
+                  >
+                    {page}
+                  </Button>
+                )
               ))}
               <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>
                 Next <ChevronRight className="h-4 w-4" />
