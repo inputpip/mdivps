@@ -67,8 +67,12 @@ export const TransactionItemsReport = () => {
   const [productFilter, setProductFilter] = useState<string>('all') // Filter by product name
   const [availableProducts, setAvailableProducts] = useState<string[]>([]) // List of unique product names
   const [sourceFilter, setSourceFilter] = useState<'all' | 'delivery' | 'office_sale' | 'retasi' | 'migration' | 'pos_kasir'>('all')
-  const [driverKasirFilter, setDriverKasirFilter] = useState<string>('all')
-  const [availableDriversKasir, setAvailableDriversKasir] = useState<string[]>([])
+  const [driverFilter, setDriverFilter] = useState<string>('all')
+  const [availableDrivers, setAvailableDrivers] = useState<string[]>([])
+  const [helperFilter, setHelperFilter] = useState<string>('all')
+  const [availableHelpers, setAvailableHelpers] = useState<string[]>([])
+  const [cashierFilter, setCashierFilter] = useState<string>('all')
+  const [availableCashiers, setAvailableCashiers] = useState<string[]>([])
   const [retasiKeFilter, setRetasiKeFilter] = useState<string>('all')
   const [availableRetasiKe, setAvailableRetasiKe] = useState<{ value: string, label: string }[]>([])
   const [paymentAccountFilter, setPaymentAccountFilter] = useState<string>('all')
@@ -108,14 +112,31 @@ export const TransactionItemsReport = () => {
       filteredItems = filteredItems.filter(item => item.source === sourceFilter)
     }
 
-    // Apply driver/kasir filter if selected
-    if (driverKasirFilter !== 'all') {
+    // Apply driver filter if selected
+    if (driverFilter !== 'all') {
+      filteredItems = filteredItems.filter(item =>
+        (item.source === 'delivery' || item.source === 'retasi') && item.driverName === driverFilter
+      )
+    }
+
+    // Apply helper filter if selected
+    if (helperFilter !== 'all') {
       filteredItems = filteredItems.filter(item => {
-        if (item.source === 'delivery' || item.source === 'retasi') {
-          return item.driverName === driverKasirFilter
-        }
-        return item.cashierName === driverKasirFilter
+        if (item.source !== 'delivery' && item.source !== 'retasi') return false
+        const helpers = [
+          (item as any).helperName,
+          (item as any).helperName2,
+          (item as any).helperName3,
+        ].filter(Boolean)
+        return helpers.includes(helperFilter)
       })
+    }
+
+    // Apply cashier filter if selected
+    if (cashierFilter !== 'all') {
+      filteredItems = filteredItems.filter(item =>
+        (item.source === 'office_sale' || item.source === 'pos_kasir' || item.source === 'migration') && item.cashierName === cashierFilter
+      )
     }
 
     // Apply retasi ke filter if selected
@@ -141,7 +162,7 @@ export const TransactionItemsReport = () => {
     }
 
     return filteredItems
-  }, [allItems, productFilter, sourceFilter, driverKasirFilter, retasiKeFilter, paymentAccountFilter, paymentStatusFilter, salesFilter])
+  }, [allItems, productFilter, sourceFilter, driverFilter, helperFilter, cashierFilter, retasiKeFilter, paymentAccountFilter, paymentStatusFilter, salesFilter])
 
 
   const months = [
@@ -257,6 +278,9 @@ export const TransactionItemsReport = () => {
           source: r.source_type as any,
           driverId: r.driver_id,
           driverName: r.driver_name || retasiInfo?.driver_name || undefined,
+          helperName: r.helper_name || undefined,
+          helperName2: r.helper_name_2 || undefined,
+          helperName3: r.helper_name_3 || undefined,
           retasiNumber: retasiDisplay,
           retasiKe: retasiKeValue,
           cashierId: r.cashier_id,
@@ -322,16 +346,36 @@ export const TransactionItemsReport = () => {
       )].sort()
       setAvailableProducts(uniqueProducts)
 
-      // Extract unique driver/kasir names for filter dropdown
-      const uniqueDriversKasir = [...new Set(
-        items.map(item => {
-          if (item.source === 'delivery' || item.source === 'retasi') {
-            return item.driverName || ''
-          }
-          return item.cashierName || ''
-        }).filter(Boolean)
+      // Extract unique drivers for filter dropdown
+      const uniqueDrivers = [...new Set(
+        items
+          .filter(item => item.source === 'delivery' || item.source === 'retasi')
+          .map(item => item.driverName)
+          .filter((name): name is string => !!name)
       )].sort()
-      setAvailableDriversKasir(uniqueDriversKasir)
+      setAvailableDrivers(uniqueDrivers)
+
+      // Extract unique helpers for filter dropdown
+      const uniqueHelpers = [...new Set(
+        items
+          .filter(item => item.source === 'delivery' || item.source === 'retasi')
+          .flatMap(item => [
+            (item as any).helperName,
+            (item as any).helperName2,
+            (item as any).helperName3,
+          ])
+          .filter((name): name is string => !!name)
+      )].sort()
+      setAvailableHelpers(uniqueHelpers)
+
+      // Extract unique cashiers for filter dropdown
+      const uniqueCashiers = [...new Set(
+        items
+          .filter(item => item.source === 'office_sale' || item.source === 'pos_kasir' || item.source === 'migration')
+          .map(item => item.cashierName)
+          .filter((name): name is string => !!name)
+      )].sort()
+      setAvailableCashiers(uniqueCashiers)
 
       // Extract unique retasi_ke values for filter dropdown
       const uniqueRetasiKe = [...new Set(
@@ -743,15 +787,55 @@ export const TransactionItemsReport = () => {
               <div className="space-y-2">
                 <Label className="text-sm font-medium flex items-center gap-1">
                   <User className="h-3 w-3" />
-                  Supir/Kasir
+                  Supir
                 </Label>
-                <Select value={driverKasirFilter} onValueChange={setDriverKasirFilter}>
+                <Select value={driverFilter} onValueChange={setDriverFilter}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Semua" />
+                    <SelectValue placeholder="Semua Supir" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Semua Supir/Kasir</SelectItem>
-                    {availableDriversKasir.map(name => (
+                    <SelectItem value="all">Semua Supir</SelectItem>
+                    {availableDrivers.map(name => (
+                      <SelectItem key={name} value={name}>
+                        {name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm font-medium flex items-center gap-1">
+                  <User className="h-3 w-3" />
+                  Helper
+                </Label>
+                <Select value={helperFilter} onValueChange={setHelperFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Semua Helper" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Semua Helper</SelectItem>
+                    {availableHelpers.map(name => (
+                      <SelectItem key={name} value={name}>
+                        {name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm font-medium flex items-center gap-1">
+                  <User className="h-3 w-3" />
+                  Kasir
+                </Label>
+                <Select value={cashierFilter} onValueChange={setCashierFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Semua Kasir" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Semua Kasir</SelectItem>
+                    {availableCashiers.map(name => (
                       <SelectItem key={name} value={name}>
                         {name}
                       </SelectItem>
