@@ -67,8 +67,10 @@ export default function RetasiPage() {
   const [dateTo, setDateTo] = useState(() => getOfficeDateWithOffset(0, 'Asia/Jayapura'));
   const [driverFilter, setDriverFilter] = useState("all");
   const [helperFilter, setHelperFilter] = useState("all");
+  const [productFilter, setProductFilter] = useState("all");
   const [driverFilterOpen, setDriverFilterOpen] = useState(false);
   const [helperFilterOpen, setHelperFilterOpen] = useState(false);
+  const [productFilterOpen, setProductFilterOpen] = useState(false);
   const [returnDialogOpen, setReturnDialogOpen] = useState(false);
   const [selectedRetasi, setSelectedRetasi] = useState<any>(null);
   const [selectedRetasiItems, setSelectedRetasiItems] = useState<any[]>([]);
@@ -118,7 +120,51 @@ export default function RetasiPage() {
   const { retasiList, stats, isLoading, markRetasiReturned, getRetasiItems, deleteRetasi, updateRetasi } = useRetasi(filters);
   const { drivers } = useDrivers();
 
-  const filteredRetasi = retasiList || [];
+  const productFilterOptions = useMemo(() => {
+    const productSet = new Set<string>();
+
+    (retasiList || []).forEach((retasi: any) => {
+      ((retasi as any).items || []).forEach((item: any) => {
+        if (item?.product_name) {
+          productSet.add(item.product_name);
+        }
+      });
+    });
+
+    return Array.from(productSet).sort((a, b) => a.localeCompare(b));
+  }, [retasiList]);
+
+  const filteredRetasi = useMemo(() => {
+    const baseRetasi = retasiList || [];
+
+    if (productFilter === "all") {
+      return baseRetasi;
+    }
+
+    return baseRetasi
+      .map((retasi: any) => {
+        const items = ((retasi as any).items || []).filter((item: any) => item?.product_name === productFilter);
+
+        if (items.length === 0) {
+          return null;
+        }
+
+        const totalItems = items.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0);
+        const returnedItemsCount = items.reduce((sum: number, item: any) => sum + (item.returned_quantity || item.returned_qty || 0), 0);
+        const barangLaku = items.reduce((sum: number, item: any) => sum + (item.sold_quantity || item.sold_qty || 0), 0);
+
+        return {
+          ...retasi,
+          items,
+          total_items: totalItems,
+          returned_items_count: returnedItemsCount,
+          barang_laku: barangLaku,
+          barang_tidak_laku: 0,
+          error_items_count: 0,
+        };
+      })
+      .filter(Boolean);
+  }, [retasiList, productFilter]);
 
   // Calculate totals with correct formula: Bawa = Kembali + Error + Laku + Tidak Laku + Selisih
   const totals = useMemo(() => {
@@ -348,7 +394,7 @@ export default function RetasiPage() {
             <CardTitle className="text-lg">Filter</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
               <div className="space-y-2">
                 <Label>Tanggal Dari</Label>
                 <Input
@@ -480,6 +526,65 @@ export default function RetasiPage() {
                                 )}
                               />
                               {driver.name}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div className="space-y-2">
+                <Label>Item Terjual</Label>
+                <Popover open={productFilterOpen} onOpenChange={setProductFilterOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={productFilterOpen}
+                      className="w-full justify-between"
+                    >
+                      {productFilter === "all" ? "Semua Item" : productFilter}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[260px] p-0">
+                    <Command>
+                      <CommandInput placeholder="Cari item terjual..." />
+                      <CommandList>
+                        <CommandEmpty>Item tidak ditemukan.</CommandEmpty>
+                        <CommandGroup>
+                          <CommandItem
+                            value="all"
+                            onSelect={() => {
+                              setProductFilter("all");
+                              setProductFilterOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                productFilter === "all" ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            Semua Item
+                          </CommandItem>
+                          {productFilterOptions.map((productName) => (
+                            <CommandItem
+                              key={productName}
+                              value={productName}
+                              onSelect={() => {
+                                setProductFilter(productName);
+                                setProductFilterOpen(false);
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  productFilter === productName ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {productName}
                             </CommandItem>
                           ))}
                         </CommandGroup>
