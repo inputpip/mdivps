@@ -10,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/components/ui/use-toast"
 import { Truck, Plus, Trash2, ShoppingCart, User, Package, CreditCard, AlertCircle, Phone, MapPin, Calendar, Minus, Gift, UserPlus } from "lucide-react"
+import { format } from "date-fns"
+import { id } from "date-fns/locale"
 import { useCustomers } from "@/hooks/useCustomers"
 import { useProducts } from "@/hooks/useProducts"
 import { useAccounts } from "@/hooks/useAccounts"
@@ -115,6 +117,11 @@ export default function DriverPosPage() {
   }, [customers, customerSearch]);
 
   const selectedCustomerData = customers?.find(c => c.id === selectedCustomer)
+  const customerOutstandingReceivable = Math.max(0, Number(selectedCustomerData?.sisaPiutang) || 0)
+  const customerReceivableCount = Number(selectedCustomerData?.jumlahPiutang) || 0
+  const customerNearestDueDate = selectedCustomerData?.jatuhTempoTerdekat
+    ? format(new Date(selectedCustomerData.jatuhTempoTerdekat), 'dd MMM yyyy', { locale: id })
+    : null
 
   // Products sorted by stock
   const availableProducts = useMemo(() => {
@@ -567,21 +574,42 @@ export default function DriverPosPage() {
 
         {/* Customer quick actions - Larger buttons */}
         {selectedCustomerData && (
-          <div className="flex gap-2 mt-3 flex-wrap">
-            {selectedCustomerData.phone && (
-              <Button variant="outline" size="lg" className="text-base h-11 px-4" onClick={() => window.location.href = `tel:${selectedCustomerData.phone}`}>
-                <Phone className="h-5 w-5 mr-2" /> Telepon
-              </Button>
+          <>
+            {customerOutstandingReceivable > 0 && (
+              <div className="mt-3 rounded-xl border-2 border-orange-200 dark:border-orange-700 bg-orange-50 dark:bg-orange-900/20 p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-orange-800 dark:text-orange-200">Piutang pelanggan</div>
+                    <div className="text-2xl font-bold text-orange-600 dark:text-orange-300">
+                      {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(customerOutstandingReceivable)}
+                    </div>
+                    <div className="mt-1 text-sm text-orange-700 dark:text-orange-300">
+                      {customerReceivableCount} tagihan belum lunas{customerNearestDueDate ? ` • JT terdekat ${customerNearestDueDate}` : ''}
+                    </div>
+                  </div>
+                  <Badge variant="outline" className="border-orange-300 bg-white/70 text-orange-700 dark:border-orange-600 dark:bg-orange-950/30 dark:text-orange-300">
+                    Ada Piutang
+                  </Badge>
+                </div>
+              </div>
             )}
-            {selectedCustomerData.latitude && (
-              <Button variant="outline" size="lg" className="text-base h-11 px-4" onClick={() => window.open(`https://www.google.com/maps/dir//${selectedCustomerData.latitude},${selectedCustomerData.longitude}`, '_blank')}>
-                <MapPin className="h-5 w-5 mr-2" /> Navigasi
-              </Button>
-            )}
-            {selectedCustomerData.jumlah_galon_titip > 0 && (
-              <Badge variant="secondary" className="text-base px-3 py-2">🥤 {selectedCustomerData.jumlah_galon_titip} galon titip</Badge>
-            )}
-          </div>
+
+            <div className="flex gap-2 mt-3 flex-wrap">
+              {selectedCustomerData.phone && (
+                <Button variant="outline" size="lg" className="text-base h-11 px-4" onClick={() => window.location.href = `tel:${selectedCustomerData.phone}`}>
+                  <Phone className="h-5 w-5 mr-2" /> Telepon
+                </Button>
+              )}
+              {selectedCustomerData.latitude && (
+                <Button variant="outline" size="lg" className="text-base h-11 px-4" onClick={() => window.open(`https://www.google.com/maps/dir//${selectedCustomerData.latitude},${selectedCustomerData.longitude}`, '_blank')}>
+                  <MapPin className="h-5 w-5 mr-2" /> Navigasi
+                </Button>
+              )}
+              {selectedCustomerData.jumlah_galon_titip > 0 && (
+                <Badge variant="secondary" className="text-base px-3 py-2">🥤 {selectedCustomerData.jumlah_galon_titip} galon titip</Badge>
+              )}
+            </div>
+          </>
         )}
       </div>
 

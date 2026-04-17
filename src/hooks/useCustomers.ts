@@ -23,44 +23,96 @@ export const useCustomers = () => {
       const { data, error } = await query;
       if (error) throw new Error(error.message);
 
-      // Fetch order count and last order date for each customer
+      // Fetch order count, last order date, and receivable summary for each customer
       const customerIds = (data || []).map(c => c.id);
       if (customerIds.length > 0) {
-        // Get all orders for these customers to calculate count and last order date
-        const { data: orders, error: ordersError } = await supabase
-          .from('transactions')
-          .select('customer_id, order_date')
-          .in('customer_id', customerIds)
-          .order('order_date', { ascending: false });
+        const [ordersResult, receivablesResult] = await Promise.all([
+          supabase
+            .from('transactions')
+            .select('customer_id, order_date')
+            .in('customer_id', customerIds)
+            .order('order_date', { ascending: false }),
+          supabase
+            .from('transactions')
+            .select('customer_id, total, paid_amount, due_date, payment_status')
+            .in('customer_id', customerIds)
+            .in('payment_status', ['Belum Lunas', 'Partial'])
+        ]);
+
+        const { data: orders, error: ordersError } = ordersResult;
+        const { data: receivables, error: receivablesError } = receivablesResult;
+
+        const orderCountMap = new Map<string, number>();
+        const lastOrderMap = new Map<string, string>();
+        const receivableSummaryMap = new Map<string, {
+          totalPiutang: number;
+          sisaPiutang: number;
+          jumlahPiutang: number;
+          jatuhTempoTerdekat: string | null;
+        }>();
 
         if (!ordersError && orders) {
-          // Create maps for customer_id -> order count and last order date
-          const orderCountMap = new Map<string, number>();
-          const lastOrderMap = new Map<string, string>();
-
           for (const order of orders) {
-            // Count orders per customer
             orderCountMap.set(order.customer_id, (orderCountMap.get(order.customer_id) || 0) + 1);
 
-            // Set last order date (first occurrence since sorted desc)
             if (!lastOrderMap.has(order.customer_id)) {
               lastOrderMap.set(order.customer_id, order.order_date);
             }
           }
+        }
 
-          // Enrich customers with orderCount and lastOrderDate
-          return (data || []).map(customer => ({
+        if (!receivablesError && receivables) {
+          for (const receivable of receivables) {
+            const customerId = receivable.customer_id;
+            const totalPiutang = Number(receivable.total) || 0;
+            const paidAmount = Number(receivable.paid_amount) || 0;
+            const sisaPiutang = Math.max(0, totalPiutang - paidAmount);
+
+            if (sisaPiutang <= 0) continue;
+
+            const current = receivableSummaryMap.get(customerId) || {
+              totalPiutang: 0,
+              sisaPiutang: 0,
+              jumlahPiutang: 0,
+              jatuhTempoTerdekat: null,
+            };
+
+            const dueDate = receivable.due_date || null;
+            const nextDueDate = dueDate && (!current.jatuhTempoTerdekat || dueDate < current.jatuhTempoTerdekat)
+              ? dueDate
+              : current.jatuhTempoTerdekat;
+
+            receivableSummaryMap.set(customerId, {
+              totalPiutang: current.totalPiutang + totalPiutang,
+              sisaPiutang: current.sisaPiutang + sisaPiutang,
+              jumlahPiutang: current.jumlahPiutang + 1,
+              jatuhTempoTerdekat: nextDueDate,
+            });
+          }
+        }
+
+        return (data || []).map(customer => {
+          const receivableSummary = receivableSummaryMap.get(customer.id);
+          return {
             ...customer,
+            totalPiutang: receivableSummary?.totalPiutang || 0,
+            sisaPiutang: receivableSummary?.sisaPiutang || 0,
+            jumlahPiutang: receivableSummary?.jumlahPiutang || 0,
+            jatuhTempoTerdekat: receivableSummary?.jatuhTempoTerdekat || null,
             orderCount: orderCountMap.get(customer.id) || 0,
             lastOrderDate: lastOrderMap.has(customer.id)
               ? new Date(lastOrderMap.get(customer.id)!)
               : null
-          }));
-        }
+          };
+        });
       }
 
       return (data || []).map(customer => ({
         ...customer,
+        totalPiutang: 0,
+        sisaPiutang: 0,
+        jumlahPiutang: 0,
+        jatuhTempoTerdekat: null,
         orderCount: 0,
         lastOrderDate: null
       }));
