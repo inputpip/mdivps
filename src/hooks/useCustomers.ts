@@ -34,9 +34,9 @@ export const useCustomers = () => {
             .order('order_date', { ascending: false }),
           supabase
             .from('receivables')
-            .select('customer_id, total_amount, paid_amount, due_date, status')
+            .select('customer_id, amount, paid_amount, due_date, status')
             .in('customer_id', customerIds)
-            .in('status', ['outstanding', 'partial'])
+            .in('status', ['pending', 'partial'])
         ]);
 
         const { data: orders, error: ordersError } = ordersResult;
@@ -64,7 +64,7 @@ export const useCustomers = () => {
         if (!receivablesError && receivables) {
           for (const receivable of receivables) {
             const customerId = receivable.customer_id;
-            const totalPiutang = Number(receivable.total_amount) || 0;
+            const totalPiutang = Number(receivable.amount) || 0;
             const paidAmount = Number(receivable.paid_amount) || 0;
             const sisaPiutang = Math.max(0, totalPiutang - paidAmount);
 
