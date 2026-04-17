@@ -33,10 +33,10 @@ export const useCustomers = () => {
             .in('customer_id', customerIds)
             .order('order_date', { ascending: false }),
           supabase
-            .from('transactions')
-            .select('customer_id, total, paid_amount, due_date, payment_status')
+            .from('receivables')
+            .select('customer_id, total_amount, paid_amount, due_date, status')
             .in('customer_id', customerIds)
-            .in('payment_status', ['Belum Lunas', 'Partial'])
+            .in('status', ['outstanding', 'partial'])
         ]);
 
         const { data: orders, error: ordersError } = ordersResult;
@@ -64,7 +64,7 @@ export const useCustomers = () => {
         if (!receivablesError && receivables) {
           for (const receivable of receivables) {
             const customerId = receivable.customer_id;
-            const totalPiutang = Number(receivable.total) || 0;
+            const totalPiutang = Number(receivable.total_amount) || 0;
             const paidAmount = Number(receivable.paid_amount) || 0;
             const sisaPiutang = Math.max(0, totalPiutang - paidAmount);
 
