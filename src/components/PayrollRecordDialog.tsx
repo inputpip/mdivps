@@ -10,11 +10,14 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { cn } from "@/lib/utils"
 import { useEmployees } from "@/hooks/useEmployees"
 import { useAccounts } from "@/hooks/useAccounts"
 import { usePayrollRecords } from "@/hooks/usePayroll"
 import { PayrollCalculation } from "@/types/payroll"
-import { Calculator, DollarSign, AlertTriangle, Users, CreditCard } from "lucide-react"
+import { Calculator, DollarSign, AlertTriangle, Users, CreditCard, Check, ChevronsUpDown } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 
 interface PayrollRecordDialogProps {
@@ -44,6 +47,7 @@ export function PayrollRecordDialog({
 
 
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>("")
+  const [employeePickerOpen, setEmployeePickerOpen] = useState(false)
   const [calculation, setCalculation] = useState<PayrollCalculation | null>(null)
   const [isCalculating, setIsCalculating] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
@@ -198,26 +202,56 @@ export function PayrollRecordDialog({
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Pilih Karyawan</Label>
-              <Select value={selectedEmployeeId} onValueChange={setSelectedEmployeeId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Pilih karyawan..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableEmployees?.map((employee) => (
-                    <SelectItem key={employee.id} value={employee.id}>
-                      <div className="flex items-center justify-between w-full">
-                        <span>{employee.name}</span>
-                        <Badge variant="outline" className="ml-2">{employee.role}</Badge>
-                      </div>
-                    </SelectItem>
-                  ))}
-                  {availableEmployees?.length === 0 && (
-                    <SelectItem value="none" disabled>
-                      Semua karyawan sudah digaji bulan ini
-                    </SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
+              <Popover open={employeePickerOpen} onOpenChange={setEmployeePickerOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={employeePickerOpen}
+                    className="w-full justify-between font-normal"
+                  >
+                    {selectedEmployeeId
+                      ? availableEmployees?.find((employee) => employee.id === selectedEmployeeId)?.name || "Pilih karyawan..."
+                      : "Pilih karyawan..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
+                  <Command>
+                    <CommandInput placeholder="Ketik nama karyawan..." />
+                    <CommandList>
+                      <CommandEmpty>Tidak ada karyawan ditemukan.</CommandEmpty>
+                      <CommandGroup>
+                        {availableEmployees?.map((employee) => (
+                          <CommandItem
+                            key={employee.id}
+                            value={`${employee.name} ${employee.role}`}
+                            onSelect={() => {
+                              setSelectedEmployeeId(employee.id)
+                              setEmployeePickerOpen(false)
+                            }}
+                            className="flex items-center justify-between gap-2"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Check
+                                className={cn(
+                                  "h-4 w-4",
+                                  selectedEmployeeId === employee.id ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              <span className="truncate">{employee.name}</span>
+                            </div>
+                            <Badge variant="outline">{employee.role}</Badge>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              {availableEmployees?.length === 0 && (
+                <p className="text-sm text-muted-foreground">Semua karyawan sudah digaji bulan ini</p>
+              )}
             </div>
 
             <Button
