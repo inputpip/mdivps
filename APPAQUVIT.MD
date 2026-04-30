@@ -130,7 +130,21 @@ The system relies on **PostgreSQL RPCs** for data integrity. Frontend calls `sup
     *   `audit_stock_gap_v2.sql` is ready to run to find inventory mismatches.
     *   Validating `pay_receivable_complete_rpc` deployment.
 
-
+### 2026-04-30 - Source-Level Sync Fix for Sold Items vs Commission
+*   Applied source-level view fix to **both production databases**: `mkw_db` and `aquvit_new`.
+*   Added SQL patch file: `sql/fix_sync_realisasi_komisi_no_retasi_double.sql`.
+*   Updated `v_realisasi_penjualan` so `retasi` rows are now treated as fallback only, and **do not appear when the same transaction already has an active delivery**.
+*   This enforces the business rule that **retasi is metadata/filter classification, not additional sold-item revenue**.
+*   Rebuilt `v_kalkulasi_komisi` from the cleaned source view so commission stays synchronized with sold-items and delivery data.
+*   Added helper-name fallback from `profiles.full_name` inside the commission view when helper display-name fields are blank.
+*   Restarted both PostgREST services after deploy:
+    *   `postgrest-aquvit`
+    *   `postgrest-mkw`
+*   Live verification result:
+    *   `aquvit_new`: delivery/retasi overlap in `v_realisasi_penjualan` reduced to **0 overlapping rows** for transactions that have both lanes.
+    *   `mkw_db` / Es Kristal helper case: major systematic double-counting was eliminated.
+*   Remaining follow-up noted after fix:
+    *   one residual transaction anomaly identified in `mkw_db`: `TXN-1777515490756`, still appearing in commission output without matching delivery-row visibility during helper comparison and needing separate transaction-level audit.
 
 ---
 
