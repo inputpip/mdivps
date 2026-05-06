@@ -104,9 +104,11 @@ export function DriverDeliveryDialog({
     }
   }, [open, user, drivers, activeRetasi])
 
-  // Auto-fill all helpers from active retasi
+  // Auto-fill all helpers from active retasi, or mirror driver when delivery is done alone
   useEffect(() => {
-    if (open && activeRetasi && drivers && drivers.length > 0) {
+    if (!open || !drivers || drivers.length === 0) return
+
+    if (activeRetasi) {
       // Helper 1
       if (activeRetasi.helper_id) {
         setHelperId(activeRetasi.helper_id)
@@ -136,8 +138,14 @@ export function DriverDeliveryDialog({
         h2: activeRetasi.helper_name_2,
         h3: activeRetasi.helper_name_3
       })
+      return
     }
-  }, [open, activeRetasi, drivers])
+
+    if (driverId && !helperId && !helperId2 && !helperId3) {
+      setHelperId(driverId)
+      console.log(`[DriverDelivery] Auto-filled helper with driver for solo delivery: ${driverId}`)
+    }
+  }, [open, activeRetasi, drivers, driverId, helperId, helperId2, helperId3])
 
   // Initialize item quantities
   useEffect(() => {
@@ -426,7 +434,7 @@ export function DriverDeliveryDialog({
                   <SelectContent>
                     <SelectItem value="no-helper">Tidak ada helper</SelectItem>
                     {(drivers as Driver[])
-                      ?.filter((driver: Driver) => driver.id !== driverId && driver.id !== helperId2 && driver.id !== helperId3) // Exclude selected driver and other helpers
+                      ?.filter((driver: Driver) => driver.id !== helperId2 && driver.id !== helperId3)
                       ?.map((driver: Driver) => (
                         <SelectItem key={driver.id} value={driver.id}>
                           {driver.name}
@@ -450,7 +458,7 @@ export function DriverDeliveryDialog({
                   <SelectContent>
                     <SelectItem value="no-helper">Tidak ada helper</SelectItem>
                     {(drivers as Driver[])
-                      ?.filter((driver: Driver) => driver.id !== driverId && driver.id !== helperId && driver.id !== helperId3) // Exclude selected driver and other helpers
+                      ?.filter((driver: Driver) => driver.id !== helperId && driver.id !== helperId3)
                       ?.map((driver: Driver) => (
                         <SelectItem key={driver.id} value={driver.id}>
                           {driver.name}
@@ -474,7 +482,7 @@ export function DriverDeliveryDialog({
                   <SelectContent>
                     <SelectItem value="no-helper">Tidak ada helper</SelectItem>
                     {(drivers as Driver[])
-                      ?.filter((driver: Driver) => driver.id !== driverId && driver.id !== helperId && driver.id !== helperId2) // Exclude selected driver and other helpers
+                      ?.filter((driver: Driver) => driver.id !== helperId && driver.id !== helperId2)
                       ?.map((driver: Driver) => (
                         <SelectItem key={driver.id} value={driver.id}>
                           {driver.name}
