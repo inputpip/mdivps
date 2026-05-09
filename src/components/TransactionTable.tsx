@@ -379,9 +379,12 @@ export function TransactionTable() {
     setIsDeleteDialogOpen(true);
   };
 
-  const handleEditClick = (transaction: Transaction) => {
-    setTransactionToEdit(transaction);
-    setIsEditDialogOpen(true);
+  const handleEditClick = (_transaction: Transaction) => {
+    toast({
+      variant: "destructive",
+      title: "Fitur Edit Transaksi Dinonaktifkan",
+      description: "Sementara edit transaksi dimatikan untuk semua role sampai masalah sinkronisasi diperbaiki.",
+    });
   };
 
   const confirmDelete = () => {
@@ -1911,7 +1914,7 @@ export function TransactionTable() {
 
       {/* Production cancellation warning dialog removed - no longer needed */}
 
-      {transactionToEdit && (
+      {false && transactionToEdit && (
         <EditTransactionDialog
           open={isEditDialogOpen}
           onOpenChange={setIsEditDialogOpen}
