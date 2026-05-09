@@ -324,6 +324,23 @@ export const useTransactions = (filters?: {
 
       console.log('🔄 Updating Transaction via Atomic RPC...', updatedTransaction.id);
 
+      const { data: existingDeliveryRows, error: existingDeliveryError } = await supabase
+        .from('deliveries')
+        .select('id')
+        .eq('transaction_id', updatedTransaction.id)
+        .eq('branch_id', currentBranch.id)
+        .eq('is_cancelled', false)
+        .limit(1);
+
+      if (existingDeliveryError) {
+        throw new Error(`Gagal memeriksa data pengantaran: ${existingDeliveryError.message}`);
+      }
+
+      const hasActiveDelivery = Array.isArray(existingDeliveryRows) && existingDeliveryRows.length > 0;
+      if (hasActiveDelivery) {
+        throw new Error('Transaksi ini sudah memiliki pengantaran. Edit transaksi dinonaktifkan untuk mencegah data transaksi, pengantaran, dan jurnal tidak sinkron.');
+      }
+
       // Prepare items data (snake_case for RPC JSONB)
       const itemsData = updatedTransaction.items.map((item: any) => {
         const product = item.product;

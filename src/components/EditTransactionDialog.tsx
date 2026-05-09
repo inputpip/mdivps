@@ -139,8 +139,19 @@ export function EditTransactionDialog({ open, onOpenChange, transaction }: EditT
     setItems(items.filter((_, i) => i !== index))
   }
 
+  const hasDeliveredOrInProgress = transaction.deliveryStatus === 'Completed' || transaction.deliveryStatus === 'Partial' || transaction.deliveryStatus === 'In Progress' || transaction.deliveryStatus === 'delivered' || transaction.status === 'Selesai' || transaction.status === 'Diantar Sebagian'
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (hasDeliveredOrInProgress) {
+      toast({
+        variant: "destructive",
+        title: "Edit Transaksi Ditolak",
+        description: "Transaksi yang sudah diproses pengantaran tidak boleh diedit karena bisa membuat transaksi, pengantaran, pembayaran, dan jurnal tidak sinkron.",
+      })
+      return
+    }
 
     const validItems = items.filter(item => item.product && item.qty > 0)
 
