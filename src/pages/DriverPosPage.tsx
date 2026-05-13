@@ -508,16 +508,18 @@ export default function DriverPosPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-3 pb-44">
       {/* Header - Larger */}
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 rounded-xl mb-4 flex items-center justify-between shadow-lg">
-        <div className="flex items-center gap-3">
-          <Truck className="h-7 w-7" />
-          <span className="font-bold text-xl">POS Supir</span>
+      <div className="sticky top-0 z-30 -mx-3 mb-4 px-3 pt-3 pb-2 bg-gradient-to-b from-blue-50/95 to-indigo-100/90 dark:from-gray-900/95 dark:to-gray-800/90 backdrop-blur supports-[backdrop-filter]:bg-blue-50/80">
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 rounded-xl flex items-center justify-between shadow-lg">
+          <div className="flex items-center gap-3">
+            <Truck className="h-7 w-7" />
+            <span className="font-bold text-xl">POS Supir</span>
+          </div>
+          {activeRetasi && isDriver && (
+            <Badge variant="secondary" className="text-sm px-3 py-1">
+              {activeRetasi.retasi_number}
+            </Badge>
+          )}
         </div>
-        {activeRetasi && isDriver && (
-          <Badge variant="secondary" className="text-sm px-3 py-1">
-            {activeRetasi.retasi_number}
-          </Badge>
-        )}
       </div>
 
       {/* Customer Input - Larger & Easier */}
