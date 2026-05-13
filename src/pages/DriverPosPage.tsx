@@ -350,6 +350,17 @@ export default function DriverPosPage() {
     setItems(items.filter((i, idx) => idx !== index && i.parentProductId !== item.product.id))
   }
 
+  const resetDriverPosForm = useCallback(() => {
+    setSelectedCustomer("")
+    setCustomerSearch('')
+    setItems([])
+    setPaymentAccount("")
+    setPaidAmount(0)
+    const newDueDate = getOfficeTime(timezone)
+    newDueDate.setDate(newDueDate.getDate() + 7)
+    setDueDate(newDueDate.toISOString().split('T')[0])
+  }, [timezone])
+
   const handleSubmit = async () => {
     const customerName = selectedCustomerData?.name || customerSearch.trim();
 
@@ -448,16 +459,6 @@ export default function DriverPosPage() {
           : new Date(),
       }
       setCreatedTransaction(sanitizedTransaction)
-
-      // Reset form
-      setSelectedCustomer("")
-      setCustomerSearch('')
-      setItems([])
-      setPaymentAccount("")
-      setPaidAmount(0)
-      const newDueDate = getOfficeTime(timezone);
-      newDueDate.setDate(newDueDate.getDate() + 7);
-      setDueDate(newDueDate.toISOString().split('T')[0])
 
       toast({ title: "Berhasil", description: `Transaksi ${transactionId} disimpan` })
       setDeliveryDialogOpen(true)
@@ -953,7 +954,11 @@ export default function DriverPosPage() {
               open={printDialogOpen}
               onOpenChange={setPrintDialogOpen}
               transaction={safeTransaction}
-              onComplete={() => { setPrintDialogOpen(false); setCreatedTransaction(null); }}
+              onComplete={() => {
+                setPrintDialogOpen(false)
+                setCreatedTransaction(null)
+                resetDriverPosForm()
+              }}
             />
           </>
         )
