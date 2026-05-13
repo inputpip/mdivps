@@ -20,7 +20,7 @@ import { format, endOfDay, isAfter, isBefore, isSameDay, parseISO, startOfDay } 
 import { id } from "date-fns/locale/id"
 import { Badge } from "./ui/badge"
 import { useAccounts } from "@/hooks/useAccounts"
-import { Trash2, Search, History, ArrowUpDown, Columns } from "lucide-react"
+import { Trash2, Search, History, ArrowUpDown, Columns, Check, ChevronsUpDown } from "lucide-react"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { PanjarReceiptPDF } from "./PanjarReceiptPDF"
 import { EmployeeAdvancesReport } from "./EmployeeAdvancesReport"
@@ -39,6 +39,9 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
+import { cn } from "@/lib/utils"
 
 const advanceSchema = z.object({
   employeeId: z.string().min(1, "Karyawan harus dipilih."),
@@ -60,6 +63,8 @@ export function EmployeeAdvanceManagement() {
   const [isRepayDialogOpen, setIsRepayDialogOpen] = useState(false)
   const [selectedAdvance, setSelectedAdvance] = useState<EmployeeAdvance | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
+  const [employeeFilter, setEmployeeFilter] = useState("all")
+  const [employeeFilterOpen, setEmployeeFilterOpen] = useState(false)
   const [dateFromFilter, setDateFromFilter] = useState("")
   const [dateToFilter, setDateToFilter] = useState("")
 
@@ -150,7 +155,7 @@ export function EmployeeAdvanceManagement() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, sortConfig, dateFromFilter, dateToFilter]);
+  }, [searchQuery, employeeFilter, sortConfig, dateFromFilter, dateToFilter]);
 
   const filteredAndSortedAdvances = useMemo(() => {
     if (!advances) return [];
@@ -165,10 +170,11 @@ export function EmployeeAdvanceManagement() {
         (adv.notes?.toLowerCase() || "").includes(query) ||
         (adv.accountName?.toLowerCase() || "").includes(query)
       )
+      const matchesEmployee = employeeFilter === "all" || adv.employeeId === employeeFilter
       const matchesFrom = !fromDate || isSameDay(advanceDate, fromDate) || isAfter(advanceDate, fromDate)
       const matchesTo = !toDate || isSameDay(advanceDate, toDate) || isBefore(advanceDate, toDate)
 
-      return matchesSearch && matchesFrom && matchesTo
+      return matchesSearch && matchesEmployee && matchesFrom && matchesTo
     });
 
     if (sortConfig) {
@@ -190,7 +196,7 @@ export function EmployeeAdvanceManagement() {
       });
     }
     return result;
-  }, [advances, searchQuery, sortConfig, dateFromFilter, dateToFilter]);
+  }, [advances, searchQuery, employeeFilter, sortConfig, dateFromFilter, dateToFilter]);
 
   const totalPages = Math.ceil(filteredAndSortedAdvances.length / itemsPerPage);
   const paginatedAdvances = filteredAndSortedAdvances.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
@@ -306,6 +312,71 @@ export function EmployeeAdvanceManagement() {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                   />
+                </div>
+                <div className="w-full sm:w-72">
+                  <Popover open={employeeFilterOpen} onOpenChange={setEmployeeFilterOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={employeeFilterOpen}
+                        className="w-full justify-between font-normal"
+                      >
+                        {employeeFilter === "all"
+                          ? "Semua Karyawan"
+                          : employees?.find((employee) => employee.id === employeeFilter)?.name || "Pilih karyawan..."}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
+                      <Command>
+                        <CommandInput placeholder="Ketik nama karyawan..." />
+                        <CommandList>
+                          <CommandEmpty>Tidak ada karyawan ditemukan.</CommandEmpty>
+                          <CommandGroup>
+                            <CommandItem
+                              value="Semua Karyawan"
+                              onSelect={() => {
+                                setEmployeeFilter("all")
+                                setEmployeeFilterOpen(false)
+                              }}
+                              className="flex items-center gap-2"
+                            >
+                              <Check
+                                className={cn(
+                                  "h-4 w-4",
+                                  employeeFilter === "all" ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              <span>Semua Karyawan</span>
+                            </CommandItem>
+                            {employees?.map((employee) => (
+                              <CommandItem
+                                key={employee.id}
+                                value={`${employee.name} ${employee.role || ''}`}
+                                onSelect={() => {
+                                  setEmployeeFilter(employee.id)
+                                  setEmployeeFilterOpen(false)
+                                }}
+                                className="flex items-center justify-between gap-2"
+                              >
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <Check
+                                    className={cn(
+                                      "h-4 w-4",
+                                      employeeFilter === employee.id ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                  <span className="truncate">{employee.name}</span>
+                                </div>
+                                {employee.role && <Badge variant="outline">{employee.role}</Badge>}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 <div className="w-full sm:w-auto">
                   <Input
