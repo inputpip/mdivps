@@ -1,15 +1,17 @@
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { TransactionTable } from "@/components/TransactionTable";
+import { TransferAccountDialog } from "@/components/TransferAccountDialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useGranularPermission } from "@/hooks/useGranularPermission";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, ArrowLeft, Wallet, BookOpen, Receipt, PackageSearch, BarChart3, Truck } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { AlertTriangle, ArrowLeft, Wallet, BookOpen, Receipt, PackageSearch, BarChart3, Truck, ArrowRightLeft } from "lucide-react";
 
 export default function TransactionListPage() {
   const { hasGranularPermission, isLoading } = useGranularPermission();
   const navigate = useNavigate();
+  const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
 
-  // Check transactions_view permission
   if (!isLoading && !hasGranularPermission('transactions_view')) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] text-center p-6">
@@ -44,6 +46,10 @@ export default function TransactionListPage() {
             <Truck className="h-4 w-4 mr-2 text-sky-500" />
             Pengantaran
           </Button>
+          <Button variant="outline" size="sm" onClick={() => setIsTransferDialogOpen(true)}>
+            <ArrowRightLeft className="h-4 w-4 mr-2 text-violet-500" />
+            Transfer Antar Kas
+          </Button>
           <Button variant="outline" size="sm" onClick={() => navigate('/commission-report')}>
             <BarChart3 className="h-4 w-4 mr-2 text-indigo-500" />
             Komisi
@@ -73,6 +79,7 @@ export default function TransactionListPage() {
       <CardContent>
         <TransactionTable />
       </CardContent>
+      <TransferAccountDialog open={isTransferDialogOpen} onOpenChange={setIsTransferDialogOpen} />
     </Card>
   );
 }
