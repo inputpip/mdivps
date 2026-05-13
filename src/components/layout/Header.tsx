@@ -71,7 +71,7 @@ export function Header() {
   ].filter(item => hasPermission(item.permission));
 
   return (
-    <header className="border-b relative z-50 w-full shadow-md border-slate-800">
+    <header className="sticky top-0 border-b relative z-50 w-full shadow-md border-slate-800">
       {/* Warna Midnight Slate yang Sejuk */}
       <div className="absolute inset-0 bg-slate-950"></div>
       <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950/90"></div>
