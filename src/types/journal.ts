@@ -8,6 +8,8 @@ export interface JournalEntry {
   description: string;
   referenceType?: 'transaction' | 'expense' | 'payroll' | 'transfer' | 'manual' | 'adjustment' | 'closing' | 'opening';
   referenceId?: string;
+  referenceNumber?: string;
+  referenceCustomerName?: string;
   status: 'draft' | 'posted' | 'voided';
   totalDebit: number;
   totalCredit: number;
@@ -64,6 +66,8 @@ export interface DbJournalEntry {
   description: string;
   reference_type?: string;
   reference_id?: string;
+  reference_number?: string;
+  reference_customer_name?: string;
   status: string;
   total_debit: number;
   total_credit: number;
