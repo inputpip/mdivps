@@ -276,18 +276,11 @@ export const generateJournalReportPDF = (
   const tableData: (string | { content: string; styles?: any })[][] = [];
 
   entries.forEach((entry) => {
-    const transactionDescription = entry.referenceType === 'transaction'
-      ? (entry.referenceCustomerName || entry.description)
-      : entry.description;
-    const displayReferenceNumber = entry.referenceType === 'transaction'
-      ? (entry.referenceNumber || entry.referenceId || '-')
-      : entry.entryNumber;
-
     // Entry header row - dengan jam dari createdAt
     tableData.push([
       { content: `${format(entry.entryDate, 'dd/MM/yy', { locale: id })} ${format(entry.createdAt, 'HH:mm', { locale: id })}`, styles: { fontStyle: 'bold' } },
-      { content: displayReferenceNumber, styles: { fontStyle: 'bold' } },
-      { content: transactionDescription.substring(0, 50) + (transactionDescription.length > 50 ? '...' : ''), styles: { fontStyle: 'bold' } },
+      { content: entry.entryNumber, styles: { fontStyle: 'bold' } },
+      { content: entry.description.substring(0, 50) + (entry.description.length > 50 ? '...' : ''), styles: { fontStyle: 'bold' } },
       { content: '', styles: {} },
       { content: '', styles: {} },
       { content: '', styles: {} },

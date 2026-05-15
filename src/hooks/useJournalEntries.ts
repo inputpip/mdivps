@@ -19,8 +19,6 @@ const fromDbToApp = (db: DbJournalEntry, lines: DbJournalEntryLine[] = []): Jour
   description: db.description,
   referenceType: db.reference_type as JournalEntry['referenceType'],
   referenceId: db.reference_id,
-  referenceNumber: db.reference_number,
-  referenceCustomerName: db.reference_customer_name,
   status: db.status as JournalEntry['status'],
   totalDebit: Number(db.total_debit) || 0,
   totalCredit: Number(db.total_credit) || 0,
@@ -89,29 +87,6 @@ export const useJournalEntries = () => {
 
       if (error) throw error;
 
-      const transactionReferenceIds = Array.from(new Set(
-        (data || [])
-          .filter((entry: any) => entry.reference_type === 'transaction' && entry.reference_id)
-          .map((entry: any) => entry.reference_id)
-      ));
-
-      const transactionMap: Record<string, { id: string; customer_name: string }> = {};
-      if (transactionReferenceIds.length > 0) {
-        const { data: transactionData, error: transactionError } = await supabase
-          .from('transactions')
-          .select('id, customer_name')
-          .in('id', transactionReferenceIds);
-
-        if (!transactionError && transactionData) {
-          transactionData.forEach((tx: any) => {
-            transactionMap[tx.id] = {
-              id: tx.id,
-              customer_name: tx.customer_name || ''
-            };
-          });
-        }
-      }
-
       // Extract unique profile IDs needed 
       const profileIds = new Set<string>();
       (data || []).forEach((entry: any) => {
@@ -151,17 +126,11 @@ export const useJournalEntries = () => {
         const voidedByName = entry.voided_by_name || (entry.voided_by ? profileMap[entry.voided_by] : '');
         const approvedByName = entry.approved_by_name || (entry.approved_by ? profileMap[entry.approved_by] : '');
 
-        const relatedTransaction = entry.reference_type === 'transaction' && entry.reference_id
-          ? transactionMap[entry.reference_id]
-          : undefined;
-
         const dbEntryWithNames = {
           ...entry,
           created_by_name: createdByName,
           voided_by_name: voidedByName,
-          approved_by_name: approvedByName,
-          reference_number: relatedTransaction?.id || entry.reference_id,
-          reference_customer_name: relatedTransaction?.customer_name || ''
+          approved_by_name: approvedByName
         };
 
         return fromDbToApp(dbEntryWithNames as DbJournalEntry, lines as DbJournalEntryLine[]);
