@@ -52,6 +52,75 @@ export function useCashFlow() {
         return [];
       }
 
+      const transactionReferenceIds = Array.from(new Set(
+        (viewData || [])
+          .filter((row: any) => row.reference_type === 'transaction' && row.reference_id)
+          .map((row: any) => row.reference_id)
+      ));
+
+      const expenseReferenceIds = Array.from(new Set(
+        (viewData || [])
+          .filter((row: any) => row.reference_type === 'expense' && row.reference_id)
+          .map((row: any) => row.reference_id)
+      ));
+
+      const receivableReferenceIds = Array.from(new Set(
+        (viewData || [])
+          .filter((row: any) => ['receivable', 'receivable_payment'].includes(row.reference_type) && row.reference_id)
+          .map((row: any) => row.reference_id)
+      ));
+
+      const transactionMap: Record<string, { id: string; customer_name: string }> = {};
+      if (transactionReferenceIds.length > 0) {
+        const { data: transactionsData, error: transactionsError } = await supabase
+          .from('transactions')
+          .select('id, customer_name')
+          .in('id', transactionReferenceIds);
+
+        if (!transactionsError && transactionsData) {
+          transactionsData.forEach((tx: any) => {
+            transactionMap[tx.id] = {
+              id: tx.id,
+              customer_name: tx.customer_name || ''
+            };
+          });
+        }
+      }
+
+      const expenseMap: Record<string, { id: string; description: string }> = {};
+      if (expenseReferenceIds.length > 0) {
+        const { data: expensesData, error: expensesError } = await supabase
+          .from('expenses')
+          .select('id, description')
+          .in('id', expenseReferenceIds);
+
+        if (!expensesError && expensesData) {
+          expensesData.forEach((expense: any) => {
+            expenseMap[expense.id] = {
+              id: expense.id,
+              description: expense.description || ''
+            };
+          });
+        }
+      }
+
+      const receivableTransactionMap: Record<string, { id: string; customer_name: string }> = {};
+      if (receivableReferenceIds.length > 0) {
+        const { data: receivableTransactionsData, error: receivableTransactionsError } = await supabase
+          .from('transactions')
+          .select('id, customer_name')
+          .in('id', receivableReferenceIds);
+
+        if (!receivableTransactionsError && receivableTransactionsData) {
+          receivableTransactionsData.forEach((tx: any) => {
+            receivableTransactionMap[tx.id] = {
+              id: tx.id,
+              customer_name: tx.customer_name || ''
+            };
+          });
+        }
+      }
+
       // Transform result to match CashHistory interface
       const cashHistoryData: CashHistory[] = (viewData || []).map((row: any) => {
         const debitAmount = Number(row.debit_amount) || 0;
@@ -74,10 +143,31 @@ export function useCashFlow() {
 
         const type = typeMap[row.reference_type] || (isIncome ? 'kas_masuk_manual' : 'kas_keluar_manual');
 
-        // Rakit deskripsi akhir bersumber dari View
-        let finalDescription = row.reference_name || row.line_description || row.journal_description || 'Transaksi Umum';
+        const relatedTransaction = row.reference_type === 'transaction' && row.reference_id
+          ? transactionMap[row.reference_id]
+          : undefined;
+        const relatedExpense = row.reference_type === 'expense' && row.reference_id
+          ? expenseMap[row.reference_id]
+          : undefined;
+        const relatedReceivableTransaction = ['receivable', 'receivable_payment'].includes(row.reference_type) && row.reference_id
+          ? receivableTransactionMap[row.reference_id]
+          : undefined;
+
+        let finalDescription = row.line_description || row.journal_description || 'Transaksi Umum';
+        let referenceNumber = row.entry_number || row.reference_id;
+
         if (row.reference_type === 'transaction') {
-            finalDescription = `Penjualan: ${finalDescription}`;
+          finalDescription = relatedTransaction?.customer_name
+            ? `Penjualan: ${relatedTransaction.customer_name}`
+            : (row.line_description || row.journal_description || 'Penjualan');
+          referenceNumber = relatedTransaction?.id || referenceNumber;
+        } else if (row.reference_type === 'expense') {
+          finalDescription = relatedExpense?.description || row.line_description || row.journal_description || 'Pengeluaran';
+        } else if (['receivable', 'receivable_payment'].includes(row.reference_type)) {
+          finalDescription = relatedReceivableTransaction?.customer_name
+            ? `Pembayaran Piutang: ${relatedReceivableTransaction.customer_name}`
+            : (row.line_description || row.journal_description || 'Pembayaran Piutang');
+          referenceNumber = relatedReceivableTransaction?.id || referenceNumber;
         }
 
         return {
@@ -89,7 +179,7 @@ export function useCashFlow() {
           amount: amount,
           description: finalDescription,
           reference_id: row.reference_id,
-          reference_number: row.entry_number || row.reference_id,
+          reference_number: referenceNumber,
           created_at: row.created_at,
           created_by: null, 
           previous_balance: Number(row.previous_balance) || 0,
