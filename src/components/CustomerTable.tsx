@@ -331,6 +331,7 @@ export function CustomerTable({ onEditCustomer }: CustomerTableProps) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = React.useState('')
   const [activityFilter, setActivityFilter] = React.useState<InactivityFilter>('all')
+  const [pagination, setPagination] = React.useState({ pageIndex: 0, pageSize: 10 })
   const navigate = useNavigate()
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = React.useState(false)
@@ -397,14 +398,17 @@ export function CustomerTable({ onEditCustomer }: CustomerTableProps) {
     columns,
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
+    onPaginationChange: setPagination,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
     globalFilterFn: 'includesString',
+    autoResetPageIndex: false,
     state: {
       sorting,
       globalFilter,
+      pagination,
     },
   })
 
@@ -507,7 +511,28 @@ export function CustomerTable({ onEditCustomer }: CustomerTableProps) {
             {table.getPageCount()} ({table.getRowModel().rows.length} dari {customers?.length || 0} ditampilkan)
           </div>
         </div>
-        <div className="flex items-center justify-center space-x-2">
+        <div className="flex items-center justify-center gap-2 sm:gap-3 flex-wrap">
+          <div className="hidden sm:flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Tampilkan:</span>
+            <Select
+              value={String(pagination.pageSize)}
+              onValueChange={(value) => {
+                const newSize = value === 'all' ? (customers?.length || 1000) : Number(value);
+                setPagination({ pageIndex: 0, pageSize: newSize });
+              }}
+            >
+              <SelectTrigger className="h-8 w-[90px] text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="10">10</SelectItem>
+                <SelectItem value="25">25</SelectItem>
+                <SelectItem value="50">50</SelectItem>
+                <SelectItem value="100">100</SelectItem>
+                <SelectItem value="all">Semua</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <Button
             variant="outline"
             size="sm"
