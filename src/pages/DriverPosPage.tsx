@@ -219,7 +219,12 @@ export default function DriverPosPage() {
       const currentQty = items[existingIndex].quantity
       const newQty = currentQty + 1
       if (newQty <= (product.currentStock || 0)) {
-        await updateItemWithBonus(existingIndex, newQty)
+        // OPTIMISTIC: update qty immediately for instant UI
+        setItems(prev => prev.map((i, idx) =>
+          idx === existingIndex ? { ...i, quantity: newQty } : i
+        ))
+        // Async: recalc bonus in background (non-blocking)
+        updateItemWithBonus(existingIndex, newQty).catch(err => console.error('Bonus recalc error:', err))
       } else {
         toast({
           variant: "destructive",
@@ -300,7 +305,7 @@ export default function DriverPosPage() {
     setItems(newItems)
   }
 
-  const updateQuantity = async (index: number, delta: number) => {
+  const updateQuantity = (index: number, delta: number) => {
     const item = items[index]
     if (item.isBonus) return // Don't update bonus items directly
 
@@ -309,15 +314,25 @@ export default function DriverPosPage() {
     if (newQty <= 0) {
       // Remove item and its bonuses
       setItems(items.filter((i, idx) => idx !== index && i.parentProductId !== item.product.id))
-    } else if (newQty <= (item.product.currentStock || 0)) {
-      await updateItemWithBonus(index, newQty)
-    } else {
+      return
+    }
+
+    if (newQty > (item.product.currentStock || 0)) {
       toast({
         variant: "destructive",
         title: "Stock Tidak Cukup",
         description: `Stock tersedia: ${item.product.currentStock} ${item.product.unit || 'pcs'}`
       })
+      return
     }
+
+    // OPTIMISTIC: update qty immediately for instant UI response
+    setItems(prev => prev.map((i, idx) =>
+      idx === index ? { ...i, quantity: newQty } : i
+    ))
+
+    // Async: recalculate bonus in background (no await, no blocking UI)
+    updateItemWithBonus(index, newQty).catch(err => console.error('Bonus recalc error:', err))
   }
 
   // Debounced quantity update - immediate UI feedback, delayed API call
@@ -869,27 +884,22 @@ export default function DriverPosPage() {
                     {item.isBonus ? (
                       <span className="text-green-600 font-medium">{item.bonusDescription || 'Gratis'}</span>
                     ) : (
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{new Intl.NumberFormat("id-ID").format(item.price)} × {item.quantity}</span>
-                          {true && ( /* price editing allowed for all roles in mobile view */
-                            <div className="flex items-center gap-1">
-                              <Input
-                                type="number"
-                                inputMode="numeric"
-                                pattern="[0-9]*"
-                                value={item.price}
-                                onChange={(e) => {
-                                  const newPrice = parseInt(e.target.value) || 0
-                                  setItems(prev => prev.map((i, idx) =>
-                                    idx === index ? { ...i, price: newPrice, isManualPrice: true } : i
-                                  ))
-                                }}
-                                className="w-24 h-7 text-xs px-1 bg-white dark:bg-gray-800"
-                              />
-                            </div>
-                          )}
-                        </div>
+                      <div className="flex items-center gap-1">
+                        <Input
+                          type="number"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          value={item.price}
+                          onChange={(e) => {
+                            const newPrice = parseInt(e.target.value) || 0
+                            setItems(prev => prev.map((i, idx) =>
+                              idx === index ? { ...i, price: newPrice, isManualPrice: true } : i
+                            ))
+                          }}
+                          onFocus={(e) => e.target.select()}
+                          className="w-20 h-6 text-xs px-1 font-medium bg-white dark:bg-gray-800"
+                        />
+                        <span className="font-medium text-xs">× {item.quantity}</span>
                       </div>
                     )}
                   </div>
