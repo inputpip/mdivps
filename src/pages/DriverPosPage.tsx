@@ -120,6 +120,7 @@ export default function DriverPosPage() {
   const [gallonWithdrawn, setGallonWithdrawn] = useState<number>(0)
   const [gallonNotes, setGallonNotes] = useState<string>('')
   const [piutangWarningOpen, setPiutangWarningOpen] = useState<boolean>(false)
+  const [livePiutangData, setLivePiutangData] = useState<{ total: number; count: number; nearestDue: string | null } | null>(null)
 
   // Quantity editing state with debounce
   const [pendingQuantities, setPendingQuantities] = useState<Record<number, number>>({})
@@ -397,11 +398,39 @@ export default function DriverPosPage() {
     if (isSubmitting) return;
 
     // Check piutang warning sebelum submit kredit
-    // Kalau customer punya piutang outstanding DAN transaksi ini akan kredit (paidAmount < total)
+    // Kalau transaksi ini akan kredit (paidAmount < total) DAN customer dipilih,
+    // query LIVE ke transactions table untuk get latest piutang (lebih akurat dari hook cache)
     const isKreditTransaction = paidAmount < total
-    if (isKreditTransaction && customerOutstandingReceivable > 0 && selectedCustomerData) {
-      setPiutangWarningOpen(true)
-      return
+    if (isKreditTransaction && selectedCustomerData?.id) {
+      try {
+        const { data: unpaidTx, error: unpaidErr } = await supabase
+          .from('transactions')
+          .select('id, total, paid_amount, due_date')
+          .eq('customer_id', selectedCustomerData.id)
+          .eq('payment_status', 'Belum Lunas')
+          .eq('is_cancelled', false)
+          .eq('is_voided', false)
+
+        if (!unpaidErr && unpaidTx && unpaidTx.length > 0) {
+          const sisaTotal = unpaidTx.reduce((sum: number, t: any) => sum + (Number(t.total) - Number(t.paid_amount || 0)), 0)
+          if (sisaTotal > 0) {
+            // Store live piutang data ke state untuk display di dialog
+            setLivePiutangData({
+              total: sisaTotal,
+              count: unpaidTx.length,
+              nearestDue: unpaidTx
+                .map((t: any) => t.due_date)
+                .filter(Boolean)
+                .sort()[0] || null,
+            })
+            setPiutangWarningOpen(true)
+            return
+          }
+        }
+      } catch (err) {
+        console.error('Error checking piutang:', err)
+        // On error, just proceed (don't block submission)
+      }
     }
 
     await proceedSubmit()
@@ -1056,11 +1085,11 @@ export default function DriverPosPage() {
               </span>
               <span className="block bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700 rounded-md p-3 mt-2">
                 <span className="block text-2xl font-bold text-orange-600 dark:text-orange-300">
-                  {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(customerOutstandingReceivable)}
+                  {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(livePiutangData?.total || 0)}
                 </span>
                 <span className="block text-sm text-orange-700 dark:text-orange-300 mt-1">
-                  {customerReceivableCount} tagihan belum lunas
-                  {customerNearestDueDate ? ` • JT terdekat: ${customerNearestDueDate}` : ''}
+                  {livePiutangData?.count || 0} tagihan belum lunas
+                  {livePiutangData?.nearestDue ? ` • JT terdekat: ${format(new Date(livePiutangData.nearestDue), 'dd MMM yyyy', { locale: id })}` : ''}
                 </span>
               </span>
               <span className="block mt-3 text-sm">
