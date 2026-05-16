@@ -408,6 +408,7 @@ export default function DriverPosPage() {
   }
 
   const proceedSubmit = async () => {
+    const customerName = selectedCustomerData?.name || customerSearch.trim();
     setIsSubmitting(true)
 
     try {
