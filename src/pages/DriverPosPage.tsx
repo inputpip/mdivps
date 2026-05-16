@@ -846,26 +846,26 @@ export default function DriverPosPage() {
               {new Intl.NumberFormat("id-ID").format(total)}
             </span>
           </div>
-          <div className="space-y-3">
+          <div className="space-y-1.5">
             {items.map((item, index) => (
               <div
                 key={index}
-                className={`flex items-center justify-between rounded-xl p-3 ${item.isBonus ? 'bg-green-50 dark:bg-green-900/30 border-2 border-green-300 dark:border-green-700' : 'bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600'
+                className={`flex items-center justify-between rounded-md p-2 ${item.isBonus ? 'bg-green-50 dark:bg-green-900/30 border border-green-300 dark:border-green-700' : 'bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600'
                   }`}
               >
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    {item.isBonus && <Gift className="h-5 w-5 text-green-600 dark:text-green-400" />}
-                    <span className={`text-base font-semibold truncate ${item.isBonus ? 'text-green-700 dark:text-green-300' : 'text-gray-900 dark:text-white'}`}>
+                  <div className="flex items-center gap-1.5">
+                    {item.isBonus && <Gift className="h-4 w-4 text-green-600 dark:text-green-400" />}
+                    <span className={`text-sm font-semibold truncate ${item.isBonus ? 'text-green-700 dark:text-green-300' : 'text-gray-900 dark:text-white'}`}>
                       {item.product.name}
                     </span>
                     {item.isBonus && (
-                      <Badge variant="outline" className="text-sm bg-green-100 text-green-700 border-green-300">
+                      <Badge variant="outline" className="text-xs bg-green-100 text-green-700 border-green-300">
                         BONUS
                       </Badge>
                     )}
                   </div>
-                  <div className="text-sm text-gray-500 mt-1">
+                  <div className="text-xs text-gray-500 mt-0.5">
                     {item.isBonus ? (
                       <span className="text-green-600 font-medium">{item.bonusDescription || 'Gratis'}</span>
                     ) : (
@@ -895,11 +895,11 @@ export default function DriverPosPage() {
                   </div>
                 </div>
                 {item.isBonus ? (
-                  <div className="text-base font-bold text-green-600">{item.quantity} {item.unit}</div>
+                  <div className="text-sm font-bold text-green-600">{item.quantity} {item.unit}</div>
                 ) : (
-                  <div className="flex items-center gap-1">
-                    <Button variant="outline" size="sm" className="h-8 w-8 p-0 text-lg font-bold" onClick={() => updateQuantity(index, -1)}>
-                      <Minus className="h-4 w-4" />
+                  <div className="flex items-center gap-0.5">
+                    <Button variant="outline" size="sm" className="h-7 w-7 p-0 text-base font-bold" onClick={() => updateQuantity(index, -1)}>
+                      <Minus className="h-3.5 w-3.5" />
                     </Button>
                     <Input
                       type="number"
@@ -908,15 +908,15 @@ export default function DriverPosPage() {
                       value={pendingQuantities[index] ?? item.quantity}
                       onChange={(e) => setQuantityDirect(index, parseInt(e.target.value) || 0)}
                       onFocus={(e) => e.target.select()}
-                      className="w-12 h-8 text-center text-base font-bold p-0"
+                      className="w-10 h-7 text-center text-sm font-bold p-0"
                       min={1}
                       max={item.product.currentStock || 999}
                     />
-                    <Button variant="outline" size="sm" className="h-8 w-8 p-0 text-lg font-bold" onClick={() => updateQuantity(index, 1)}>
-                      <Plus className="h-4 w-4" />
+                    <Button variant="outline" size="sm" className="h-7 w-7 p-0 text-base font-bold" onClick={() => updateQuantity(index, 1)}>
+                      <Plus className="h-3.5 w-3.5" />
                     </Button>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-500" onClick={() => removeItem(index)}>
-                      <Trash2 className="h-4 w-4" />
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500" onClick={() => removeItem(index)}>
+                      <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
                 )}
@@ -926,34 +926,34 @@ export default function DriverPosPage() {
         </div>
       )}
 
-      {/* Payment - Input First Flow */}
+      {/* Payment - Compact */}
       {items.length > 0 && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-md mb-28">
-          <div className="flex items-center gap-2 mb-4">
-            <CreditCard className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-            <span className="text-lg font-semibold text-gray-900 dark:text-white">Pembayaran</span>
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-2 shadow-sm mb-20">
+          <div className="flex items-center gap-1.5 mb-2">
+            <CreditCard className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+            <span className="text-base font-semibold text-gray-900 dark:text-white">Pembayaran</span>
           </div>
 
-          {/* Total Display */}
-          <div className="bg-blue-50 dark:bg-blue-900/30 rounded-xl p-4 mb-4">
+          {/* Total Display - compact */}
+          <div className="bg-blue-50 dark:bg-blue-900/30 rounded-md p-2 mb-2">
             <div className="flex justify-between items-center">
-              <span className="text-lg font-medium text-gray-700 dark:text-gray-300">Total Belanja:</span>
-              <span className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Total Belanja:</span>
+              <span className="text-lg font-bold text-blue-600 dark:text-blue-400">
                 {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(total)}
               </span>
             </div>
           </div>
 
-          {/* Payment Amount Input - Primary */}
-          <div className="mb-4">
-            <div className="flex items-center justify-between mb-2">
-              <Label className="text-base font-semibold text-gray-700 dark:text-gray-200">Jumlah Bayar</Label>
-              <div className="flex gap-2">
+          {/* Payment Amount Input - compact */}
+          <div className="mb-2">
+            <div className="flex items-center justify-between mb-1.5">
+              <Label className="text-sm font-semibold text-gray-700 dark:text-gray-200">Jumlah Bayar</Label>
+              <div className="flex gap-1.5">
                 <Button
                   type="button"
                   variant={paidAmount === total ? "default" : "outline"}
                   size="sm"
-                  className="h-8 px-3 text-sm font-semibold"
+                  className="h-7 px-2.5 text-xs font-semibold"
                   onClick={() => setPaidAmount(total)}
                 >
                   Lunas
@@ -962,7 +962,7 @@ export default function DriverPosPage() {
                   type="button"
                   variant={paidAmount === 0 ? "default" : "outline"}
                   size="sm"
-                  className="h-8 px-3 text-sm font-semibold"
+                  className="h-7 px-2.5 text-xs font-semibold"
                   onClick={() => setPaidAmount(0)}
                 >
                   Kredit
@@ -977,7 +977,6 @@ export default function DriverPosPage() {
               onChange={(e) => {
                 const val = parseInt(e.target.value) || 0
                 setPaidAmount(Math.min(val, total))
-                // Auto-select payment account when entering amount
                 if (val > 0 && !paymentAccount) {
                   const firstAccount = accounts?.find(a => a.isPaymentAccount)
                   if (firstAccount) setPaymentAccount(firstAccount.id)
@@ -985,38 +984,34 @@ export default function DriverPosPage() {
                 if (val === 0) setPaymentAccount('')
               }}
               onFocus={(e) => e.target.select()}
-              placeholder="Masukkan jumlah pembayaran..."
-              className="h-16 text-2xl font-bold text-center"
+              placeholder="Jumlah bayar..."
+              className="h-11 text-lg font-bold text-center"
             />
             {paidAmount > 0 && paidAmount < total && (
-              <div className="text-sm text-orange-600 dark:text-orange-400 mt-1 text-center">
+              <div className="text-xs text-orange-600 dark:text-orange-400 mt-1 text-center">
                 Sisa piutang: {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(total - paidAmount)}
               </div>
             )}
           </div>
 
-          {/* Payment Account - Highlighted */}
+          {/* Payment Account - compact (no double border) */}
           {paidAmount > 0 && (
-            <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/30 rounded-xl border-2 border-blue-400 dark:border-blue-600 ring-2 ring-blue-300 dark:ring-blue-700 ring-offset-2 dark:ring-offset-gray-800">
-              <Label className="text-base font-semibold text-blue-800 dark:text-blue-300 mb-2 block">Metode Pembayaran</Label>
+            <div className="mb-2 p-2 bg-blue-50 dark:bg-blue-900/30 rounded-md border border-blue-400 dark:border-blue-600">
+              <Label className="text-xs font-semibold text-blue-800 dark:text-blue-300 mb-1 block">Metode Pembayaran</Label>
               <Select value={paymentAccount} onValueChange={setPaymentAccount}>
-                <SelectTrigger className="h-14 text-lg bg-white dark:bg-gray-700 border-2 border-blue-400 dark:border-blue-500 dark:text-white">
+                <SelectTrigger className="h-10 text-sm bg-white dark:bg-gray-700 border border-blue-400 dark:border-blue-500 dark:text-white">
                   <SelectValue placeholder="Pilih Kas/Bank" />
                 </SelectTrigger>
                 <SelectContent>
                   {accounts?.filter(a => {
-                    // Must be payment account
                     if (!a.isPaymentAccount) return false;
-                    // If account has no employee assigned, show to everyone
                     if (!a.employeeId) return true;
-                    // If account is assigned to current user, show it
                     if (a.employeeId === user?.id) return true;
-                    // Account is assigned to someone else, hide it
                     return false;
                   }).map((acc) => {
                     const isMyAccount = acc.employeeId === user?.id;
                     return (
-                      <SelectItem key={acc.id} value={acc.id} className="text-base py-3">
+                      <SelectItem key={acc.id} value={acc.id} className="text-sm py-2">
                         {acc.name} {isMyAccount && <span className="text-green-600 font-medium">(Kas Saya)</span>}
                       </SelectItem>
                     );
@@ -1028,14 +1023,13 @@ export default function DriverPosPage() {
 
           {/* Due Date - Show when there's credit (paidAmount < total) */}
           {paidAmount < total && (
-            <Card className="bg-orange-50 dark:bg-orange-900/30 border-2 border-orange-300 dark:border-orange-700">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <Calendar className="h-5 w-5 text-orange-600 dark:text-orange-400" />
-                  <span className="text-base font-semibold text-orange-800 dark:text-orange-300">Jatuh Tempo Piutang</span>
+            <Card className="bg-orange-50 dark:bg-orange-900/30 border border-orange-300 dark:border-orange-700">
+              <CardContent className="p-2">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <Calendar className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                  <span className="text-sm font-semibold text-orange-800 dark:text-orange-300">Jatuh Tempo Piutang</span>
                 </div>
-                {/* Quick select buttons */}
-                <div className="grid grid-cols-4 gap-2 mb-3">
+                <div className="grid grid-cols-4 gap-1.5 mb-1.5">
                   {[7, 14, 21, 30].map((days) => {
                     const targetDate = getOfficeTime(timezone)
                     targetDate.setDate(targetDate.getDate() + days)
@@ -1046,7 +1040,7 @@ export default function DriverPosPage() {
                         key={days}
                         type="button"
                         variant={isActive ? "default" : "outline"}
-                        className={`h-12 text-base font-bold ${isActive ? 'bg-orange-600 hover:bg-orange-700' : ''}`}
+                        className={`h-9 text-sm font-bold ${isActive ? 'bg-orange-600 hover:bg-orange-700' : ''}`}
                         onClick={() => setDueDate(targetDateStr)}
                       >
                         {days}hr
@@ -1058,7 +1052,7 @@ export default function DriverPosPage() {
                   type="date"
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
-                  className="h-12 text-base bg-white dark:bg-gray-700 dark:text-white dark:border-gray-600"
+                  className="h-9 text-sm bg-white dark:bg-gray-700 dark:text-white dark:border-gray-600"
                 />
               </CardContent>
             </Card>
