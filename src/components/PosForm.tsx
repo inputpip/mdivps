@@ -36,6 +36,7 @@ import { User } from '@/types/user'
 import { useCustomers } from '@/hooks/useCustomers'
 import { useRetasi } from '@/hooks/useRetasi'
 import { supabase } from '@/integrations/supabase/client'
+import { useBranch } from '@/contexts/BranchContext'
 import { useSalesEmployees } from '@/hooks/useSalesCommission'
 import { useProductPricing, usePriceCalculation } from '@/hooks/usePricing'
 import { PricingService } from '@/services/pricingService'
@@ -66,6 +67,7 @@ export const PosForm = () => {
   const { hasGranularPermission } = useGranularPermission()
   const { timezone } = useTimezone()
   const queryClient = useQueryClient()
+  const { currentBranch } = useBranch()
   const { products, isLoading: isLoadingProducts } = useProducts()
   const { materials } = useMaterials()
 
@@ -110,6 +112,9 @@ export const PosForm = () => {
   const [transactionNotes, setTransactionNotes] = useState('');
   const [loadingPrices, setLoadingPrices] = useState<{ [key: number]: boolean }>({});
   const [sourceQuotation, setSourceQuotation] = useState<Quotation | null>(null);
+  const [gallonAdded, setGallonAdded] = useState<number>(0);
+  const [gallonWithdrawn, setGallonWithdrawn] = useState<number>(0);
+  const [gallonNotes, setGallonNotes] = useState<string>('');
   const productSearchInputRef = useRef<HTMLInputElement>(null);
 
   // Force autofocus on Product Search when Tambah Item is opened
@@ -649,6 +654,50 @@ export const PosForm = () => {
           }
         }
 
+        // Insert gallon movements (Phase 2B feature - 2026-05-16)
+        // Trigger DB akan auto-update customers.jumlah_galon_titip
+        if (selectedCustomer?.id && (gallonAdded > 0 || gallonWithdrawn > 0)) {
+          try {
+            const movements = [];
+            if (gallonAdded > 0) {
+              movements.push({
+                customer_id: selectedCustomer.id,
+                transaction_id: savedData.id,
+                branch_id: currentBranch?.id || null,
+                delta: gallonAdded,
+                type: 'addition',
+                notes: gallonNotes || null,
+                created_by: currentUser?.id || null,
+                created_by_name: currentUser?.name || null,
+              });
+            }
+            if (gallonWithdrawn > 0) {
+              movements.push({
+                customer_id: selectedCustomer.id,
+                transaction_id: savedData.id,
+                branch_id: currentBranch?.id || null,
+                delta: -gallonWithdrawn,
+                type: 'withdrawal',
+                notes: gallonNotes || null,
+                created_by: currentUser?.id || null,
+                created_by_name: currentUser?.name || null,
+              });
+            }
+            if (movements.length > 0) {
+              const { error: gmError } = await supabase.from('gallon_movements').insert(movements);
+              if (gmError) {
+                console.error('Failed to insert gallon movement:', gmError);
+                toast({ variant: "destructive", title: "Peringatan", description: "Transaksi tersimpan tapi update galon gagal: " + gmError.message });
+              } else {
+                // Invalidate customers cache to refresh galon balance
+                queryClient.invalidateQueries({ queryKey: ['customers'] });
+              }
+            }
+          } catch (err) {
+            console.error('Error saving gallon movement:', err);
+          }
+        }
+
         setSavedTransaction(savedData);
         toast({ title: "Sukses", description: "Transaksi dan pembayaran berhasil disimpan." });
 
@@ -1006,6 +1055,51 @@ export const PosForm = () => {
                             </div>
                           </div>
                         )}
+                        {/* Galon Update Section */}
+                        <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-md p-2 mt-2">
+                          <div className="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-2">
+                            🥤 Update Galon Titipan
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <Label className="text-xs text-green-700 dark:text-green-400">Galon Ditambah (+)</Label>
+                              <Input
+                                type="number"
+                                min="0"
+                                value={gallonAdded || ''}
+                                onChange={(e) => setGallonAdded(Math.max(0, parseInt(e.target.value) || 0))}
+                                placeholder="0"
+                                className="h-8 text-xs"
+                              />
+                            </div>
+                            <div>
+                              <Label className="text-xs text-red-700 dark:text-red-400">Galon Ditarik (-)</Label>
+                              <Input
+                                type="number"
+                                min="0"
+                                max={selectedCustomer.jumlah_galon_titip || 0}
+                                value={gallonWithdrawn || ''}
+                                onChange={(e) => setGallonWithdrawn(Math.max(0, parseInt(e.target.value) || 0))}
+                                placeholder="0"
+                                className="h-8 text-xs"
+                              />
+                            </div>
+                          </div>
+                          {(gallonAdded > 0 || gallonWithdrawn > 0) && (
+                            <>
+                              <Input
+                                type="text"
+                                value={gallonNotes}
+                                onChange={(e) => setGallonNotes(e.target.value)}
+                                placeholder="Catatan (opsional)..."
+                                className="h-8 text-xs mt-2"
+                              />
+                              <div className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                                Saldo setelah transaksi: <strong>{(selectedCustomer.jumlah_galon_titip || 0) + gallonAdded - gallonWithdrawn} galon</strong>
+                              </div>
+                            </>
+                          )}
+                        </div>
                         <div className="flex gap-2 mt-2">
                           {selectedCustomer.phone && (
                             <Button
