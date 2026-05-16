@@ -23,10 +23,10 @@ export const useCustomers = () => {
       const { data, error } = await query;
       if (error) throw new Error(error.message);
 
-      // Fetch order count, last order date, and receivable summary for each customer
+      // Fetch order count, last order date, receivable summary, and last gallon movement for each customer
       const customerIds = (data || []).map(c => c.id);
       if (customerIds.length > 0) {
-        const [ordersResult, receivablesResult] = await Promise.all([
+        const [ordersResult, receivablesResult, gallonMovementsResult] = await Promise.all([
           supabase
             .from('transactions')
             .select('customer_id, order_date')
@@ -36,20 +36,40 @@ export const useCustomers = () => {
             .from('receivables')
             .select('customer_id, amount, paid_amount, due_date, status')
             .in('customer_id', customerIds)
-            .in('status', ['pending', 'partial'])
+            .in('status', ['pending', 'partial']),
+          supabase
+            .from('gallon_movements')
+            .select('customer_id, delta, type, created_at')
+            .in('customer_id', customerIds)
+            .order('created_at', { ascending: false })
         ]);
 
         const { data: orders, error: ordersError } = ordersResult;
         const { data: receivables, error: receivablesError } = receivablesResult;
+        const { data: gallonMovements, error: gallonMovementsError } = gallonMovementsResult;
 
         const orderCountMap = new Map<string, number>();
         const lastOrderMap = new Map<string, string>();
+        const lastGallonMovementMap = new Map<string, { delta: number; type: string; created_at: string }>();
         const receivableSummaryMap = new Map<string, {
           totalPiutang: number;
           sisaPiutang: number;
           jumlahPiutang: number;
           jatuhTempoTerdekat: string | null;
         }>();
+
+        if (!gallonMovementsError && gallonMovements) {
+          for (const m of gallonMovements) {
+            // Take only the latest per customer (results sorted desc by created_at)
+            if (!lastGallonMovementMap.has(m.customer_id)) {
+              lastGallonMovementMap.set(m.customer_id, {
+                delta: m.delta,
+                type: m.type,
+                created_at: m.created_at,
+              });
+            }
+          }
+        }
 
         if (!ordersError && orders) {
           for (const order of orders) {
@@ -93,6 +113,7 @@ export const useCustomers = () => {
 
         return (data || []).map(customer => {
           const receivableSummary = receivableSummaryMap.get(customer.id);
+          const lastGallon = lastGallonMovementMap.get(customer.id);
           return {
             ...customer,
             totalPiutang: receivableSummary?.totalPiutang || 0,
@@ -102,7 +123,10 @@ export const useCustomers = () => {
             orderCount: orderCountMap.get(customer.id) || 0,
             lastOrderDate: lastOrderMap.has(customer.id)
               ? new Date(lastOrderMap.get(customer.id)!)
-              : null
+              : null,
+            lastGallonDelta: lastGallon?.delta ?? null,
+            lastGallonType: lastGallon?.type ?? null,
+            lastGallonChangeAt: lastGallon ? new Date(lastGallon.created_at) : null,
           };
         });
       }
@@ -114,7 +138,10 @@ export const useCustomers = () => {
         jumlahPiutang: 0,
         jatuhTempoTerdekat: null,
         orderCount: 0,
-        lastOrderDate: null
+        lastOrderDate: null,
+        lastGallonDelta: null,
+        lastGallonType: null,
+        lastGallonChangeAt: null,
       }));
     },
     enabled: !!currentBranch,

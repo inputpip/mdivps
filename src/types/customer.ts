@@ -19,4 +19,8 @@ export interface Customer {
   lastOrderDate?: Date | null; // Tanggal order terakhir
   branchId?: string; // Branch ID untuk multi-branch support
   createdAt: Date;
+  // Last gallon movement (from gallon_movements table)
+  lastGallonDelta?: number | null; // Delta perubahan terakhir (+: penambahan, -: penarikan)
+  lastGallonType?: string | null; // 'addition' | 'withdrawal' | 'adjustment'
+  lastGallonChangeAt?: Date | null; // Tanggal perubahan terakhir
 }
