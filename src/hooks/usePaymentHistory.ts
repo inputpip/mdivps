@@ -52,20 +52,30 @@ export const usePaymentHistory = (filters?: {
       }
 
       // Transform to PaymentHistory interface
-      return (data || []).map((item: any) => ({
-        id: item.id,
-        account_id: '', // Not returned by RPC directly but valid for display
-        account_name: item.account_name || 'Kas Besar',
-        type: 'pembayaran_piutang',
-        amount: item.amount,
-        description: item.notes || `Pembayaran Piutang: ${item.transaction_id}`,
-        reference_id: item.transaction_id,
-        reference_name: item.transaction_id,
-        user_id: '',
-        user_name: item.user_name || 'System',
-        customer_name: item.customer_name,
-        created_at: new Date(item.payment_date || item.created_at)
-      }));
+      return (data || []).map((item: any) => {
+        const paymentDate = item.payment_date ? new Date(item.payment_date) : null;
+        const createdAt = item.created_at ? new Date(item.created_at) : null;
+        const hasMeaningfulPaymentTime = paymentDate && (
+          paymentDate.getHours() !== 0 ||
+          paymentDate.getMinutes() !== 0 ||
+          paymentDate.getSeconds() !== 0
+        );
+
+        return {
+          id: item.id,
+          account_id: '', // Not returned by RPC directly but valid for display
+          account_name: item.account_name || 'Kas Besar',
+          type: 'pembayaran_piutang',
+          amount: item.amount,
+          description: item.notes || `Pembayaran Piutang: ${item.transaction_id}`,
+          reference_id: item.transaction_id,
+          reference_name: item.transaction_id,
+          user_id: '',
+          user_name: item.user_name || 'System',
+          customer_name: item.customer_name,
+          created_at: hasMeaningfulPaymentTime && paymentDate ? paymentDate : (createdAt || paymentDate || new Date())
+        };
+      });
     },
     enabled: !!currentBranch,
     staleTime: 1 * 60 * 1000, // 1 minute stale time
