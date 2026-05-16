@@ -25,6 +25,16 @@ import { TransactionItem, Transaction } from "@/types/transaction"
 import { DriverDeliveryDialog } from "@/components/DriverDeliveryDialog"
 import { DriverPrintDialog } from "@/components/DriverPrintDialog"
 import { AddCustomerDialog } from "@/components/AddCustomerDialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { PricingService } from "@/services/pricingService"
 import { Product } from "@/types/product"
 import { useTimezone } from "@/contexts/TimezoneContext"
@@ -109,6 +119,7 @@ export default function DriverPosPage() {
   const [gallonAdded, setGallonAdded] = useState<number>(0)
   const [gallonWithdrawn, setGallonWithdrawn] = useState<number>(0)
   const [gallonNotes, setGallonNotes] = useState<string>('')
+  const [piutangWarningOpen, setPiutangWarningOpen] = useState<boolean>(false)
 
   // Quantity editing state with debounce
   const [pendingQuantities, setPendingQuantities] = useState<Record<number, number>>({})
@@ -385,6 +396,18 @@ export default function DriverPosPage() {
     }
     if (isSubmitting) return;
 
+    // Check piutang warning sebelum submit kredit
+    // Kalau customer punya piutang outstanding DAN transaksi ini akan kredit (paidAmount < total)
+    const isKreditTransaction = paidAmount < total
+    if (isKreditTransaction && customerOutstandingReceivable > 0 && selectedCustomerData) {
+      setPiutangWarningOpen(true)
+      return
+    }
+
+    await proceedSubmit()
+  }
+
+  const proceedSubmit = async () => {
     setIsSubmitting(true)
 
     try {
@@ -1017,6 +1040,47 @@ export default function DriverPosPage() {
           </Button>
         </div>
       )}
+
+      {/* Piutang Warning Dialog - shows before submitting Kredit transaction
+          when customer already has outstanding piutang */}
+      <AlertDialog open={piutangWarningOpen} onOpenChange={setPiutangWarningOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-orange-600 dark:text-orange-400">
+              ⚠️ Pelanggan Punya Piutang
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <span className="block">
+                Pelanggan <strong>{selectedCustomerData?.name}</strong> masih memiliki piutang yang belum lunas:
+              </span>
+              <span className="block bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700 rounded-md p-3 mt-2">
+                <span className="block text-2xl font-bold text-orange-600 dark:text-orange-300">
+                  {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(customerOutstandingReceivable)}
+                </span>
+                <span className="block text-sm text-orange-700 dark:text-orange-300 mt-1">
+                  {customerReceivableCount} tagihan belum lunas
+                  {customerNearestDueDate ? ` • JT terdekat: ${customerNearestDueDate}` : ''}
+                </span>
+              </span>
+              <span className="block mt-3 text-sm">
+                Apakah supir tetap mau lanjut buat transaksi <strong>kredit</strong> baru?
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="text-base h-11">Batal</AlertDialogCancel>
+            <AlertDialogAction
+              className="text-base h-11 bg-orange-600 hover:bg-orange-700"
+              onClick={() => {
+                setPiutangWarningOpen(false)
+                proceedSubmit()
+              }}
+            >
+              Ya, Lanjut Kredit
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Dialogs */}
       <AddCustomerDialog
