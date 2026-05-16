@@ -898,8 +898,8 @@ export default function DriverPosPage() {
                   <div className="text-sm font-bold text-green-600">{item.quantity} {item.unit}</div>
                 ) : (
                   <div className="flex items-center gap-0.5">
-                    <Button variant="outline" size="sm" className="h-7 w-7 p-0 text-base font-bold" onClick={() => updateQuantity(index, -1)}>
-                      <Minus className="h-3.5 w-3.5" />
+                    <Button variant="outline" size="sm" className="h-6 w-6 p-0 text-xs font-bold" onClick={() => updateQuantity(index, -1)}>
+                      <Minus className="h-3 w-3" />
                     </Button>
                     <Input
                       type="number"
@@ -908,15 +908,15 @@ export default function DriverPosPage() {
                       value={pendingQuantities[index] ?? item.quantity}
                       onChange={(e) => setQuantityDirect(index, parseInt(e.target.value) || 0)}
                       onFocus={(e) => e.target.select()}
-                      className="w-10 h-7 text-center text-sm font-bold p-0"
+                      className="w-9 h-6 text-center text-xs font-bold p-0"
                       min={1}
                       max={item.product.currentStock || 999}
                     />
-                    <Button variant="outline" size="sm" className="h-7 w-7 p-0 text-base font-bold" onClick={() => updateQuantity(index, 1)}>
-                      <Plus className="h-3.5 w-3.5" />
+                    <Button variant="outline" size="sm" className="h-6 w-6 p-0 text-xs font-bold" onClick={() => updateQuantity(index, 1)}>
+                      <Plus className="h-3 w-3" />
                     </Button>
-                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500" onClick={() => removeItem(index)}>
-                      <Trash2 className="h-3.5 w-3.5" />
+                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500" onClick={() => removeItem(index)}>
+                      <Trash2 className="h-3 w-3" />
                     </Button>
                   </div>
                 )}
