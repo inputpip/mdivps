@@ -185,14 +185,38 @@ export const getColumns = (
         )
       },
       cell: ({ row }) => {
-        const galon = row.getValue("jumlah_galon_titip") as number | undefined;
-        if (!galon || galon === 0) {
+        const customer = row.original;
+        const galon = customer.jumlah_galon_titip;
+        const delta = customer.lastGallonDelta;
+        const changedAt = customer.lastGallonChangeAt;
+
+        const hasBalance = galon && galon !== 0;
+        const hasChange = delta !== null && delta !== undefined && delta !== 0;
+
+        if (!hasBalance && !hasChange) {
           return <span className="text-muted-foreground text-xs">-</span>;
         }
+
         return (
-          <span className="px-2 py-1 rounded-full text-xs font-medium bg-orange-500/10 text-orange-500">
-            {galon} galon
-          </span>
+          <div className="flex flex-col gap-1">
+            {hasBalance && (
+              <span className="px-2 py-1 rounded-full text-xs font-medium bg-orange-500/10 text-orange-500 w-fit">
+                {galon} galon
+              </span>
+            )}
+            {hasChange && (
+              <span
+                className={`px-2 py-0.5 rounded text-[10px] font-semibold w-fit ${
+                  delta! > 0
+                    ? 'bg-green-500/10 text-green-600'
+                    : 'bg-red-500/10 text-red-600'
+                }`}
+                title={changedAt ? changedAt.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}
+              >
+                {delta! > 0 ? '+' : ''}{delta} galon
+              </span>
+            )}
+          </div>
         );
       },
       sortingFn: (rowA, rowB, columnId) => {
