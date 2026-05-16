@@ -987,6 +987,25 @@ export const PosForm = () => {
                             <strong>🥤 Galon Titip:</strong> {selectedCustomer.jumlah_galon_titip} galon
                           </div>
                         )}
+                        {selectedCustomer.sisaPiutang !== undefined && selectedCustomer.sisaPiutang > 0 && (
+                          <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-md p-2 mt-2">
+                            <div className="text-red-700 dark:text-red-400 font-semibold flex items-center gap-1">
+                              <span>⚠️</span>
+                              <span>Piutang Outstanding:</span>
+                              <span className="ml-auto">
+                                Rp {selectedCustomer.sisaPiutang.toLocaleString('id-ID')}
+                              </span>
+                            </div>
+                            <div className="text-xs text-red-600 dark:text-red-300 mt-1">
+                              {selectedCustomer.jumlahPiutang || 0} transaksi belum lunas
+                              {selectedCustomer.jatuhTempoTerdekat && (
+                                <span className="ml-2">
+                                  • Jatuh tempo terdekat: {new Date(selectedCustomer.jatuhTempoTerdekat).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )}
                         <div className="flex gap-2 mt-2">
                           {selectedCustomer.phone && (
                             <Button
