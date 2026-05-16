@@ -169,6 +169,39 @@ export const getColumns = (
       }
     },
     {
+      accessorKey: "jumlah_galon_titip",
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={(e) => {
+              e.stopPropagation();
+              column.toggleSorting(column.getIsSorted() === "asc");
+            }}
+          >
+            Galon Titip
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        )
+      },
+      cell: ({ row }) => {
+        const galon = row.getValue("jumlah_galon_titip") as number | undefined;
+        if (!galon || galon === 0) {
+          return <span className="text-muted-foreground text-xs">-</span>;
+        }
+        return (
+          <span className="px-2 py-1 rounded-full text-xs font-medium bg-orange-500/10 text-orange-500">
+            {galon} galon
+          </span>
+        );
+      },
+      sortingFn: (rowA, rowB, columnId) => {
+        const a = (rowA.getValue(columnId) as number) || 0;
+        const b = (rowB.getValue(columnId) as number) || 0;
+        return a - b;
+      }
+    },
+    {
       id: "location",
       header: "Lokasi GPS",
       cell: ({ row }) => {
