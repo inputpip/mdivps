@@ -18,6 +18,8 @@ import { useAccounts } from "@/hooks/useAccounts"
 import { useBranch } from "@/contexts/BranchContext"
 import { useTransactions } from "@/hooks/useTransactions"
 import { useAuth } from "@/hooks/useAuth"
+import { useQueryClient } from "@tanstack/react-query"
+import { supabase } from "@/integrations/supabase/client"
 import { useActiveRetasi } from "@/hooks/useRetasi"
 import { TransactionItem, Transaction } from "@/types/transaction"
 import { DriverDeliveryDialog } from "@/components/DriverDeliveryDialog"
@@ -43,6 +45,8 @@ export default function DriverPosPage() {
   const { products } = useProducts()
   const { accounts, getEmployeeCashAccount } = useAccounts()
   const { addTransaction } = useTransactions()
+  const { currentBranch } = useBranch()
+  const queryClient = useQueryClient()
   const [searchParams] = useSearchParams()
 
   // Check if driver has active retasi (is_returned = false)
@@ -102,6 +106,9 @@ export default function DriverPosPage() {
   const [createdTransaction, setCreatedTransaction] = useState<Transaction | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isCustomerAddOpen, setIsCustomerAddOpen] = useState(false)
+  const [gallonAdded, setGallonAdded] = useState<number>(0)
+  const [gallonWithdrawn, setGallonWithdrawn] = useState<number>(0)
+  const [gallonNotes, setGallonNotes] = useState<string>('')
 
   // Quantity editing state with debounce
   const [pendingQuantities, setPendingQuantities] = useState<Record<number, number>>({})
@@ -423,6 +430,53 @@ export default function DriverPosPage() {
       }
 
       const savedTransaction = await addTransaction.mutateAsync({ newTransaction })
+
+      // Insert gallon movements (Phase 2B - 2026-05-16)
+      // Trigger DB akan auto-update customers.jumlah_galon_titip
+      if (selectedCustomerData?.id && (gallonAdded > 0 || gallonWithdrawn > 0)) {
+        try {
+          const movements: any[] = []
+          if (gallonAdded > 0) {
+            movements.push({
+              customer_id: selectedCustomerData.id,
+              transaction_id: savedTransaction?.id || newTransaction.id,
+              branch_id: currentBranch?.id || null,
+              delta: gallonAdded,
+              type: 'addition',
+              notes: gallonNotes || null,
+              created_by: user?.id || null,
+              created_by_name: user?.name || null,
+            })
+          }
+          if (gallonWithdrawn > 0) {
+            movements.push({
+              customer_id: selectedCustomerData.id,
+              transaction_id: savedTransaction?.id || newTransaction.id,
+              branch_id: currentBranch?.id || null,
+              delta: -gallonWithdrawn,
+              type: 'withdrawal',
+              notes: gallonNotes || null,
+              created_by: user?.id || null,
+              created_by_name: user?.name || null,
+            })
+          }
+          if (movements.length > 0) {
+            const { error: gmError } = await supabase.from('gallon_movements').insert(movements)
+            if (gmError) {
+              console.error('Failed to insert gallon movement:', gmError)
+              toast({ variant: "destructive", title: "Peringatan", description: "Transaksi tersimpan tapi update galon gagal: " + gmError.message })
+            } else {
+              queryClient.invalidateQueries({ queryKey: ['customers'] })
+              setGallonAdded(0)
+              setGallonWithdrawn(0)
+              setGallonNotes('')
+            }
+          }
+        } catch (err) {
+          console.error('Error saving gallon movement:', err)
+        }
+      }
+
       const sanitizedTransaction: Transaction = {
         ...newTransaction,
         ...savedTransaction,
@@ -606,8 +660,56 @@ export default function DriverPosPage() {
                   <MapPin className="h-5 w-5 mr-2" /> Navigasi
                 </Button>
               )}
-              {selectedCustomerData.jumlah_galon_titip > 0 && (
+              {(selectedCustomerData.jumlah_galon_titip || 0) > 0 && (
                 <Badge variant="secondary" className="text-base px-3 py-2">🥤 {selectedCustomerData.jumlah_galon_titip} galon titip</Badge>
+              )}
+            </div>
+
+            {/* Galon Update Section - Phase 2B feature */}
+            <div className="mt-3 rounded-xl border-2 border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20 p-3">
+              <div className="text-base font-semibold text-blue-800 dark:text-blue-200 mb-2">
+                🥤 Update Galon Titipan
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-sm text-green-700 dark:text-green-400">Ditambah (+)</Label>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min="0"
+                    value={gallonAdded || ''}
+                    onChange={(e) => setGallonAdded(Math.max(0, parseInt(e.target.value) || 0))}
+                    placeholder="0"
+                    className="h-11 text-base"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm text-red-700 dark:text-red-400">Ditarik (-)</Label>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min="0"
+                    max={selectedCustomerData.jumlah_galon_titip || 0}
+                    value={gallonWithdrawn || ''}
+                    onChange={(e) => setGallonWithdrawn(Math.max(0, parseInt(e.target.value) || 0))}
+                    placeholder="0"
+                    className="h-11 text-base"
+                  />
+                </div>
+              </div>
+              {(gallonAdded > 0 || gallonWithdrawn > 0) && (
+                <>
+                  <Input
+                    type="text"
+                    value={gallonNotes}
+                    onChange={(e) => setGallonNotes(e.target.value)}
+                    placeholder="Catatan (opsional)..."
+                    className="h-10 text-sm mt-2"
+                  />
+                  <div className="text-sm text-blue-700 dark:text-blue-300 mt-2 font-medium">
+                    Saldo setelah transaksi: <strong>{(selectedCustomerData.jumlah_galon_titip || 0) + gallonAdded - gallonWithdrawn} galon</strong>
+                  </div>
+                </>
               )}
             </div>
           </>
