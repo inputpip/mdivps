@@ -153,21 +153,29 @@ export function useCashFlow() {
           ? receivableTransactionMap[row.reference_id]
           : undefined;
 
-        let finalDescription = row.line_description || row.journal_description || 'Transaksi Umum';
+        let finalDescription = row.journal_description || row.line_description || 'Transaksi Umum';
         let referenceNumber = row.entry_number || row.reference_id;
 
         if (row.reference_type === 'transaction') {
-          finalDescription = relatedTransaction?.customer_name
-            ? `Penjualan: ${relatedTransaction.customer_name}`
-            : (row.line_description || row.journal_description || 'Penjualan');
-          referenceNumber = relatedTransaction?.id || referenceNumber;
+          finalDescription = row.journal_description
+            || (relatedTransaction?.customer_name ? `Penjualan ke ${relatedTransaction.customer_name}` : null)
+            || row.line_description
+            || 'Penjualan';
+          referenceNumber = relatedTransaction?.id || row.reference_id || referenceNumber;
         } else if (row.reference_type === 'expense') {
-          finalDescription = relatedExpense?.description || row.line_description || row.journal_description || 'Pengeluaran';
+          finalDescription = relatedExpense?.description
+            || row.journal_description
+            || row.line_description
+            || 'Pengeluaran';
         } else if (['receivable', 'receivable_payment'].includes(row.reference_type)) {
-          finalDescription = relatedReceivableTransaction?.customer_name
-            ? `Pembayaran Piutang: ${relatedReceivableTransaction.customer_name}`
-            : (row.line_description || row.journal_description || 'Pembayaran Piutang');
-          referenceNumber = relatedReceivableTransaction?.id || referenceNumber;
+          finalDescription = row.journal_description
+            || (relatedReceivableTransaction?.customer_name ? `Pembayaran Piutang - ${relatedReceivableTransaction.customer_name}` : null)
+            || row.line_description
+            || 'Pembayaran Piutang';
+          referenceNumber = row.journal_description?.match(/AQV[^\s-]*-[0-9]{4}-[0-9]{3}|AQV-[0-9]{4}-[0-9]{3}|AQVPOSSUP-[0-9]{4}-[0-9]{3}/)?.[0]
+            || relatedReceivableTransaction?.id
+            || row.reference_id
+            || referenceNumber;
         }
 
         return {
