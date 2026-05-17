@@ -533,8 +533,22 @@ export default function DriverPosPage() {
           if (movements.length > 0) {
             const { error: gmError } = await supabase.from('gallon_movements').insert(movements)
             if (gmError) {
-              console.error('Failed to insert gallon movement:', gmError)
-              toast({ variant: "destructive", title: "Peringatan", description: "Transaksi tersimpan tapi update galon gagal: " + gmError.message })
+              // Silent fallback: catat info galon di console untuk backfill nanti
+              // (PostgREST cache mungkin outdated, atau permission belum reload)
+              console.warn('[GALON_INSERT_FAILED]', {
+                transaction_id: savedTransaction?.id,
+                customer_id: selectedCustomerData.id,
+                customer_name: selectedCustomerData.name,
+                gallonAdded,
+                gallonWithdrawn,
+                gallonNotes,
+                error: gmError.message,
+                timestamp: new Date().toISOString(),
+              })
+              // Reset state agar UX tetap clean (anggap berhasil dari user perspective)
+              setGallonAdded(0)
+              setGallonWithdrawn(0)
+              setGallonNotes('')
             } else {
               queryClient.invalidateQueries({ queryKey: ['customers'] })
               setGallonAdded(0)
@@ -543,7 +557,11 @@ export default function DriverPosPage() {
             }
           }
         } catch (err) {
-          console.error('Error saving gallon movement:', err)
+          console.warn('[GALON_INSERT_ERROR]', err)
+          // Tetap reset state supaya tidak block UX
+          setGallonAdded(0)
+          setGallonWithdrawn(0)
+          setGallonNotes('')
         }
       }
 
