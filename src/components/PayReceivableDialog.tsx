@@ -87,7 +87,7 @@ export function PayReceivableDialog({ open, onOpenChange, transaction, defaultPa
   })
 
   const watchedDate = watch("paymentDate");
-
+  const watchedPaymentAccountId = watch("paymentAccountId");
   const watchedAmount = watch("amount")
 
   // Re-trigger validation when remaining amount changes
@@ -276,7 +276,7 @@ export function PayReceivableDialog({ open, onOpenChange, transaction, defaultPa
                 <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
                   <div className="flex items-center gap-2 font-medium">
                     <Wallet className="h-4 w-4" />
-                    {accounts?.find(acc => acc.id === watch("paymentAccountId"))?.name || 'Kas Sales'}
+                    {accounts?.find(acc => acc.id === watchedPaymentAccountId)?.name || 'Kas Sales'}
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
                     Untuk role sales, pembayaran piutang otomatis masuk ke kas sales masing-masing.
@@ -284,7 +284,7 @@ export function PayReceivableDialog({ open, onOpenChange, transaction, defaultPa
                 </div>
               ) : (
                 <Select
-                  value={watch("paymentAccountId") || ""}
+                  value={watchedPaymentAccountId || ""}
                   onValueChange={(value) => setValue("paymentAccountId", value)}
                 >
                   <SelectTrigger><SelectValue placeholder="Pilih Akun..." /></SelectTrigger>
