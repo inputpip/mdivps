@@ -25,7 +25,6 @@ import { TransactionItem, Transaction } from "@/types/transaction"
 import { DriverDeliveryDialog } from "@/components/DriverDeliveryDialog"
 import { DriverPrintDialog } from "@/components/DriverPrintDialog"
 import { AddCustomerDialog } from "@/components/AddCustomerDialog"
-import { DriverPayReceivableDialog } from "@/components/DriverPayReceivableDialog"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -122,7 +121,6 @@ export default function DriverPosPage() {
   const [gallonNotes, setGallonNotes] = useState<string>('')
   const [piutangWarningOpen, setPiutangWarningOpen] = useState<boolean>(false)
   const [livePiutangData, setLivePiutangData] = useState<{ total: number; count: number; nearestDue: string | null } | null>(null)
-  const [payReceivableOpen, setPayReceivableOpen] = useState<boolean>(false)
 
   // Quantity editing state with debounce
   const [pendingQuantities, setPendingQuantities] = useState<Record<number, number>>({})
@@ -734,13 +732,6 @@ export default function DriverPosPage() {
                     Piutang
                   </Badge>
                 </div>
-                <Button
-                  size="sm"
-                  onClick={() => setPayReceivableOpen(true)}
-                  className="w-full mt-2 bg-orange-600 hover:bg-orange-700 text-white font-semibold h-9 text-sm"
-                >
-                  💰 Bayar Piutang
-                </Button>
               </div>
             )}
 
@@ -1130,16 +1121,6 @@ export default function DriverPosPage() {
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col gap-2 sm:flex-row">
             <AlertDialogCancel className="text-base h-11">Batal</AlertDialogCancel>
-            <Button
-              variant="outline"
-              className="text-base h-11 border-green-500 text-green-700 hover:bg-green-50 dark:hover:bg-green-950"
-              onClick={() => {
-                setPiutangWarningOpen(false)
-                setPayReceivableOpen(true)
-              }}
-            >
-              💰 Bayar Piutang Dulu
-            </Button>
             <AlertDialogAction
               className="text-base h-11 bg-orange-600 hover:bg-orange-700"
               onClick={() => {
@@ -1152,17 +1133,6 @@ export default function DriverPosPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      {/* Dialog Bayar Piutang via POS Supir */}
-      <DriverPayReceivableDialog
-        open={payReceivableOpen}
-        onOpenChange={setPayReceivableOpen}
-        customer={selectedCustomerData || null}
-        onSuccess={() => {
-          // Refresh customer data setelah pelunasan
-          queryClient.invalidateQueries({ queryKey: ['customers'] })
-        }}
-      />
 
       {/* Dialogs */}
       <AddCustomerDialog
