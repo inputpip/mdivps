@@ -77,6 +77,7 @@ export function PayReceivableDialog({ open, onOpenChange, transaction, defaultPa
   const remainingAmount = transaction ? transaction.total - (transaction.paidAmount || 0) : 0
 
   const canBackdate = hasPermission('receivable_backdate');
+  const isSales = user?.role === 'sales';
 
   const { register, handleSubmit, reset, setValue, formState: { errors }, watch, trigger } = useForm<PaymentFormData>({
     resolver: zodResolver(getPaymentSchema(remainingAmount)),
@@ -271,24 +272,36 @@ export function PayReceivableDialog({ open, onOpenChange, transaction, defaultPa
 
             <div>
               <Label htmlFor="paymentAccountId">Setor Ke Akun</Label>
-              <Select
-                value={watch("paymentAccountId") || ""}
-                onValueChange={(value) => setValue("paymentAccountId", value)}
-              >
-                <SelectTrigger><SelectValue placeholder="Pilih Akun..." /></SelectTrigger>
-                <SelectContent>
-                  {accounts?.filter(a => a.isPaymentAccount).map(acc => {
-                    const isMyAccount = acc.employeeId === user?.id;
-                    return (
-                      <SelectItem key={acc.id} value={acc.id}>
-                        <Wallet className="inline-block mr-2 h-4 w-4" />
-                        {acc.name}
-                        {isMyAccount && <span className="text-green-600 font-medium ml-2">(Kas Saya)</span>}
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
+              {isSales ? (
+                <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+                  <div className="flex items-center gap-2 font-medium">
+                    <Wallet className="h-4 w-4" />
+                    {accounts?.find(acc => acc.id === watch("paymentAccountId"))?.name || 'Kas Sales'}
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Untuk role sales, pembayaran piutang otomatis masuk ke kas sales masing-masing.
+                  </p>
+                </div>
+              ) : (
+                <Select
+                  value={watch("paymentAccountId") || ""}
+                  onValueChange={(value) => setValue("paymentAccountId", value)}
+                >
+                  <SelectTrigger><SelectValue placeholder="Pilih Akun..." /></SelectTrigger>
+                  <SelectContent>
+                    {accounts?.filter(a => a.isPaymentAccount).map(acc => {
+                      const isMyAccount = acc.employeeId === user?.id;
+                      return (
+                        <SelectItem key={acc.id} value={acc.id}>
+                          <Wallet className="inline-block mr-2 h-4 w-4" />
+                          {acc.name}
+                          {isMyAccount && <span className="text-green-600 font-medium ml-2">(Kas Saya)</span>}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              )}
               {errors.paymentAccountId && <p className="text-sm text-destructive mt-1">{errors.paymentAccountId.message}</p>}
             </div>
 
