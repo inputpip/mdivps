@@ -751,53 +751,54 @@ export default function DriverPosPage() {
               )}
             </div>
 
-            {/* Galon Update Section - compact */}
-            <div className="mt-2 rounded-md border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20 p-2">
-              <div className="text-xs font-semibold text-blue-800 dark:text-blue-200 mb-1.5">
-                🥤 Update Galon Titipan
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <Label className="text-xs text-green-700 dark:text-green-400">Ditambah (+)</Label>
-                  <Input
-                    type="number"
-                    inputMode="numeric"
-                    min="0"
-                    value={gallonAdded || ''}
-                    onChange={(e) => setGallonAdded(Math.max(0, parseInt(e.target.value) || 0))}
-                    placeholder="0"
-                    className="h-9 text-sm"
-                  />
+            {user?.role === 'owner' && (
+              <div className="mt-2 rounded-md border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20 p-2">
+                <div className="text-xs font-semibold text-blue-800 dark:text-blue-200 mb-1.5">
+                  🥤 Update Galon Titipan
                 </div>
-                <div>
-                  <Label className="text-xs text-red-700 dark:text-red-400">Ditarik (-)</Label>
-                  <Input
-                    type="number"
-                    inputMode="numeric"
-                    min="0"
-                    max={selectedCustomerData.jumlah_galon_titip || 0}
-                    value={gallonWithdrawn || ''}
-                    onChange={(e) => setGallonWithdrawn(Math.max(0, parseInt(e.target.value) || 0))}
-                    placeholder="0"
-                    className="h-9 text-sm"
-                  />
-                </div>
-              </div>
-              {(gallonAdded > 0 || gallonWithdrawn > 0) && (
-                <>
-                  <Input
-                    type="text"
-                    value={gallonNotes}
-                    onChange={(e) => setGallonNotes(e.target.value)}
-                    placeholder="Catatan (opsional)..."
-                    className="h-8 text-xs mt-1.5"
-                  />
-                  <div className="text-xs text-blue-700 dark:text-blue-300 mt-1.5 font-medium">
-                    Saldo akhir: <strong>{(selectedCustomerData.jumlah_galon_titip || 0) + gallonAdded - gallonWithdrawn} galon</strong>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs text-green-700 dark:text-green-400">Ditambah (+)</Label>
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      min="0"
+                      value={gallonAdded || ''}
+                      onChange={(e) => setGallonAdded(Math.max(0, parseInt(e.target.value) || 0))}
+                      placeholder="0"
+                      className="h-9 text-sm"
+                    />
                   </div>
-                </>
-              )}
-            </div>
+                  <div>
+                    <Label className="text-xs text-red-700 dark:text-red-400">Ditarik (-)</Label>
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      min="0"
+                      max={selectedCustomerData.jumlah_galon_titip || 0}
+                      value={gallonWithdrawn || ''}
+                      onChange={(e) => setGallonWithdrawn(Math.max(0, parseInt(e.target.value) || 0))}
+                      placeholder="0"
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                </div>
+                {(gallonAdded > 0 || gallonWithdrawn > 0) && (
+                  <>
+                    <Input
+                      type="text"
+                      value={gallonNotes}
+                      onChange={(e) => setGallonNotes(e.target.value)}
+                      placeholder="Catatan (opsional)..."
+                      className="h-8 text-xs mt-1.5"
+                    />
+                    <div className="text-xs text-blue-700 dark:text-blue-300 mt-1.5 font-medium">
+                      Saldo akhir: <strong>{(selectedCustomerData.jumlah_galon_titip || 0) + gallonAdded - gallonWithdrawn} galon</strong>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </>
         )}
       </div>
