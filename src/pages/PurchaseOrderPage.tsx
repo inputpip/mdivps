@@ -5,18 +5,22 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PurchaseOrderTable } from "@/components/PurchaseOrderTable";
 import { CreatePurchaseOrderDialog } from "@/components/CreatePurchaseOrderDialog";
 import { ReceiveGoodsTab } from "@/components/ReceiveGoodsTab";
+import { QuickAddSupplierDialog } from "@/components/QuickAddSupplierDialog";
 
 export default function PurchaseOrderPage() {
   return (
     <div className="space-y-6">
-      <div className="flex flex-row items-center justify-between">
+      <div className="flex flex-row items-center justify-between gap-3">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Purchase Orders</h1>
           <p className="text-muted-foreground">
             Kelola permintaan pembelian dan penerimaan barang
           </p>
         </div>
-        <CreatePurchaseOrderDialog />
+        <div className="flex items-center gap-2">
+          <QuickAddSupplierDialog />
+          <CreatePurchaseOrderDialog />
+        </div>
       </div>
 
       <Tabs defaultValue="orders" className="space-y-4">
