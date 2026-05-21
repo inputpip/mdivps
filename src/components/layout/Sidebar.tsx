@@ -119,8 +119,13 @@ const getMenuItems = (hasPermission: (permission: Permission) => boolean, hasGra
       { href: "/customer-map", label: "Pelanggan Terdekat", icon: MapPin, permission: PERMISSIONS.CUSTOMERS },
       { href: "/employees", label: "Karyawan", icon: IdCard, permission: PERMISSIONS.EMPLOYEES },
       { href: "/suppliers", label: "Supplier", icon: Building, permission: PERMISSIONS.MATERIALS },
-      { href: "/purchase-orders", label: "Purchase Orders", icon: ClipboardList, permission: PERMISSIONS.MATERIALS },
-    ].filter(item => hasPermission(item.permission)),
+      { href: "/purchase-orders", label: "Purchase Orders", icon: ClipboardList, granularPermission: 'purchase_orders_view' },
+    ].filter(item => {
+      if ('granularPermission' in item && item.granularPermission) {
+        return hasGranularPermission(item.granularPermission) || hasGranularPermission('purchase_orders_create');
+      }
+      return hasPermission(item.permission);
+    }),
   },
   {
     title: "Keuangan",
