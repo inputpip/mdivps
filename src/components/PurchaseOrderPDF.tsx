@@ -306,11 +306,11 @@ export function PurchaseOrderPDF({ purchaseOrder }: PurchaseOrderPDFProps) {
             </div>
           )}
 
-          {/* Notes */}
+          {/* Keterangan */}
           {purchaseOrder.notes && (
             <div className="mb-6">
-              <h3 className="font-semibold text-gray-900 mb-2">Catatan:</h3>
-              <p className="text-sm bg-gray-50 p-4 rounded">{purchaseOrder.notes}</p>
+              <h3 className="font-semibold text-gray-900 mb-2">Keterangan:</h3>
+              <p className="text-sm bg-gray-50 p-4 rounded whitespace-pre-line">{purchaseOrder.notes}</p>
             </div>
           )}
 
