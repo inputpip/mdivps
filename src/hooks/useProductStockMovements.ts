@@ -59,6 +59,87 @@ const fromDb = (row: any): ProductStockMovement => ({
   createdAt: new Date(row.created_at),
 });
 
+async function ensureProductStockMovement(params: {
+  productId: string;
+  branchId?: string;
+  type: 'IN' | 'OUT';
+  reason: string;
+  quantity: number;
+  previousStock: number;
+  newStock: number;
+  referenceId: string;
+  referenceType: string;
+  notes?: string;
+  userId?: string;
+  userName?: string;
+}) {
+  const {
+    productId,
+    branchId,
+    type,
+    reason,
+    quantity,
+    previousStock,
+    newStock,
+    referenceId,
+    referenceType,
+    notes,
+    userId,
+    userName,
+  } = params;
+
+  if (!branchId) {
+    throw new Error('Branch tidak valid');
+  }
+
+  const candidateReferenceIds = [referenceId, `${referenceType}:${referenceId}`];
+
+  const { data: existingMovement, error: existingMovementError } = await supabase
+    .from('product_stock_movements')
+    .select('id, reference_id, reference_type')
+    .eq('product_id', productId)
+    .eq('branch_id', branchId)
+    .eq('type', type)
+    .eq('reference_type', referenceType)
+    .in('reference_id', candidateReferenceIds)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (existingMovementError) {
+    throw new Error(existingMovementError.message);
+  }
+
+  if (existingMovement) {
+    return existingMovement;
+  }
+
+  const { data: movement, error } = await supabase
+    .from('product_stock_movements')
+    .insert({
+      product_id: productId,
+      branch_id: branchId,
+      type,
+      reason,
+      quantity,
+      previous_stock: previousStock,
+      new_stock: newStock,
+      reference_id: referenceId,
+      reference_type: referenceType,
+      notes,
+      user_id: userId,
+      user_name: userName,
+    })
+    .select('id, reference_id, reference_type')
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return movement;
+}
+
 export const useProductStockMovements = () => {
   const queryClient = useQueryClient();
   const { currentBranch } = useBranch();
@@ -129,6 +210,21 @@ export const useProductStockMovements = () => {
       }
 
       const newStock = previousStock - quantity;
+
+      await ensureProductStockMovement({
+        productId,
+        branchId: currentBranch?.id,
+        type: 'OUT',
+        reason,
+        quantity,
+        previousStock,
+        newStock,
+        referenceId,
+        referenceType: 'stock_out',
+        notes,
+        userId: user?.id,
+        userName: user?.email,
+      });
 
       console.log(`✅ Stock OUT: ${quantity} units, HPP: ${fifoResult.total_hpp}`);
 
@@ -208,6 +304,21 @@ export const useProductStockMovements = () => {
       }
 
       const newStock = previousStock + quantity;
+
+      await ensureProductStockMovement({
+        productId,
+        branchId: currentBranch?.id,
+        type: 'IN',
+        reason,
+        quantity,
+        previousStock,
+        newStock,
+        referenceId,
+        referenceType: 'stock_in',
+        notes,
+        userId: user?.id,
+        userName: user?.email,
+      });
 
       console.log(`✅ Stock IN: ${quantity} units via RPC`);
 
