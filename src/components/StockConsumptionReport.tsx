@@ -38,6 +38,7 @@ interface StockMovementDetail {
   productName: string
   productType: string
   unit: string
+  customerName?: string
   movementDate: Date
   type: 'IN' | 'OUT'
   source: string
@@ -58,19 +59,32 @@ const formatMovementSource = (referenceType?: string | null, movementType?: 'IN'
       return movementType === 'IN' ? 'Edit / Batal Penjualan Kantor' : 'Penjualan Kantor'
     case 'delivery':
       return movementType === 'IN' ? 'Cancel / Retur Pengantaran' : 'Pengantaran'
+    case 'production':
+      return movementType === 'IN' ? 'Produksi' : 'Pembatalan Produksi'
     case 'adjustment':
-      return 'Koreksi Manual'
+      return movementType === 'IN' ? 'Penambahan Stok Manual' : 'Pengurangan Stok Manual'
+    case 'stock_in':
+      return 'Penambahan Stok'
+    case 'stock_out':
+      return 'Pengurangan Stok'
     default:
       return referenceType || 'Movement'
   }
 }
 
 const formatMovementReason = (reason?: string | null, referenceType?: string | null, movementType?: 'IN' | 'OUT') => {
-  if (reason === 'MANUAL_ADJUSTMENT') return 'Koreksi Manual'
+  if (reason === 'MANUAL_ADJUSTMENT') {
+    return movementType === 'IN' ? 'Koreksi Manual (Tambah)' : 'Koreksi Manual (Kurang)'
+  }
+  if (reason === 'PRODUCTION_ACQUISITION' || reason === 'PRODUCTION') return 'Produksi'
+  if (reason === 'PRODUCTION_CONSUMPTION') return 'Pemakaian / Pengurangan Stok'
   if (reason === 'OFFICE_SALE') return 'Laku Kantor'
   if (reason === 'DELIVERY') return 'Pengantaran'
   if (reason === 'CANCEL_OR_EDIT_SALE') return 'Edit / Cancel Penjualan Kantor'
   if (reason === 'CANCEL_OR_RETURN_DELIVERY') return 'Cancel / Retur Pengantaran'
+  if (referenceType === 'production' && movementType === 'IN') return 'Produksi'
+  if (referenceType === 'stock_in') return 'Penambahan Stok'
+  if (referenceType === 'stock_out') return 'Pengurangan Stok'
   if (referenceType === 'sale' && movementType === 'IN') return 'Edit / Cancel Penjualan Kantor'
   if (referenceType === 'delivery' && movementType === 'IN') return 'Cancel / Retur Pengantaran'
   return reason || 'Movement'
@@ -134,7 +148,8 @@ export const StockConsumptionReport = () => {
 
     let productionsQuery = supabase
       .from('production_records')
-      .select('id, ref, product_id, quantity, created_at, note, created_by_name, user_input_name, created_by')
+      .select('id, ref, product_id, quantity, created_at, note, user_input_name, created_by, is_cancelled')
+      .or('is_cancelled.is.false,is_cancelled.is.null')
       .gte('created_at', fromDate.toISOString())
       .lte('created_at', toDate.toISOString())
       .gt('quantity', 0)
@@ -165,7 +180,7 @@ export const StockConsumptionReport = () => {
         reference: record.ref || record.id,
         reason: 'Produksi',
         quantity,
-        userName: record.created_by_name || record.user_input_name || record.created_by || 'System',
+        userName: record.user_input_name || record.created_by || 'System',
         notes: record.note || '',
       })
     })
@@ -198,6 +213,33 @@ export const StockConsumptionReport = () => {
     const { data: deliveries, error: deliveriesError } = await deliveriesQuery
     if (deliveriesError) console.warn('Deliveries query error:', deliveriesError)
 
+    const deliveryTransactionIds = Array.from(new Set(
+      (deliveries || [])
+        .map((delivery: any) => delivery.transaction_id)
+        .filter(Boolean)
+    ))
+
+    const deliveryCustomerMap = new Map<string, string>()
+    if (deliveryTransactionIds.length > 0) {
+      const { data: deliveryTransactions, error: deliveryTransactionsError } = await supabase
+        .from('transactions')
+        .select('id, customer_name')
+        .in('id', deliveryTransactionIds)
+
+      if (deliveryTransactionsError) {
+        console.warn('Delivery transactions query error:', deliveryTransactionsError)
+      }
+
+      ;(deliveryTransactions || []).forEach((transaction: any) => {
+        deliveryCustomerMap.set(transaction.id, transaction.customer_name || 'Umum')
+      })
+    }
+
+    const deliveryCustomerById = new Map<string, string>()
+    ;(deliveries || []).forEach((delivery: any) => {
+      deliveryCustomerById.set(delivery.id, deliveryCustomerMap.get(delivery.transaction_id) || 'Umum')
+    })
+
     deliveries?.forEach((delivery: any) => {
       delivery.delivery_items?.forEach((item: any) => {
         const product = productMap.get(item.product_id)
@@ -212,10 +254,11 @@ export const StockConsumptionReport = () => {
           productName: product.name,
           productType: product.type || 'Stock',
           unit: product.unit || 'pcs',
+          customerName: deliveryCustomerMap.get(delivery.transaction_id) || 'Umum',
           movementDate: new Date(delivery.delivery_date),
           type: 'OUT',
           source: 'Pengantaran',
-          reference: delivery.delivery_number ? `DLV-${delivery.delivery_number}` : (delivery.transaction_id || delivery.id),
+          reference: delivery.id,
           reason: 'Pengantaran',
           quantity,
           userName: delivery.driver_name || 'System',
@@ -226,7 +269,7 @@ export const StockConsumptionReport = () => {
 
     let officeSalesQuery = supabase
       .from('transactions')
-      .select('id, items, order_date, cashier_name, notes')
+      .select('id, items, order_date, cashier_name, customer_name, notes')
       .eq('is_office_sale', true)
       .gte('order_date', fromDate.toISOString())
       .lte('order_date', toDate.toISOString())
@@ -266,6 +309,7 @@ export const StockConsumptionReport = () => {
           productName: product.name,
           productType: product.type || 'Stock',
           unit: product.unit || 'pcs',
+          customerName: transaction.customer_name || 'Umum',
           movementDate: new Date(transaction.order_date),
           type: 'OUT',
           source: 'Penjualan Kantor',
@@ -364,6 +408,9 @@ export const StockConsumptionReport = () => {
         productName: product.name,
         productType: product.type || 'Stock',
         unit: product.unit || 'pcs',
+        customerName: movement.reference_type === 'delivery'
+          ? (deliveryCustomerById.get(movement.reference_id) || undefined)
+          : undefined,
         movementDate,
         type: movement.type,
         source: formatMovementSource(movement.reference_type, movement.type),
@@ -561,6 +608,7 @@ export const StockConsumptionReport = () => {
       'Tanggal & Jam': format(item.movementDate, 'dd MMM yyyy HH:mm', { locale: id }),
       'Nama Produk': item.productName,
       'Jenis Produk': item.productType,
+      'Pelanggan': item.customerName || '',
       'Arah': item.type,
       'Sumber': item.source,
       'Referensi': item.reference,
@@ -603,6 +651,7 @@ export const StockConsumptionReport = () => {
       { wch: 22 },
       { wch: 35 },
       { wch: 14 },
+      { wch: 24 },
       { wch: 8 },
       { wch: 18 },
       { wch: 18 },
@@ -863,7 +912,7 @@ export const StockConsumptionReport = () => {
           <CardHeader>
             <CardTitle>Detail Pergerakan Produk</CardTitle>
             <CardDescription>
-              Setiap pergerakan stock dicatat per tanggal, jam, user, referensi, jumlah, stock awal, dan stock akhir.
+              Setiap pergerakan stock dicatat per tanggal, jam, pelanggan, user, referensi, jumlah, stock awal, dan stock akhir.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -873,6 +922,7 @@ export const StockConsumptionReport = () => {
                   <TableRow>
                     <TableHead>Tanggal & Jam</TableHead>
                     <TableHead>Produk</TableHead>
+                    <TableHead>Pelanggan</TableHead>
                     <TableHead>Arah</TableHead>
                     <TableHead>Sumber</TableHead>
                     <TableHead>Referensi</TableHead>
@@ -895,6 +945,7 @@ export const StockConsumptionReport = () => {
                           <div className="text-xs text-muted-foreground">{movement.unit}</div>
                         </div>
                       </TableCell>
+                      <TableCell>{movement.customerName || ''}</TableCell>
                       <TableCell>
                         <Badge variant="secondary" className={getMovementTypeColor(movement.type)}>
                           {movement.type}
