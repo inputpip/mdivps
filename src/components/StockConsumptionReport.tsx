@@ -178,8 +178,8 @@ export const StockConsumptionReport = () => {
         delivery_number,
         delivery_date,
         driver_name,
-        cashier_name,
         notes,
+        is_cancelled,
         delivery_items(
           id,
           product_id,
@@ -187,6 +187,7 @@ export const StockConsumptionReport = () => {
           notes
         )
       `)
+      .or('is_cancelled.is.false,is_cancelled.is.null')
       .gte('delivery_date', fromDate.toISOString())
       .lte('delivery_date', toDate.toISOString())
 
@@ -217,7 +218,7 @@ export const StockConsumptionReport = () => {
           reference: delivery.delivery_number ? `DLV-${delivery.delivery_number}` : (delivery.transaction_id || delivery.id),
           reason: 'Pengantaran',
           quantity,
-          userName: delivery.driver_name || delivery.cashier_name || 'System',
+          userName: delivery.driver_name || 'System',
           notes: item.notes || delivery.notes || '',
         })
       })
