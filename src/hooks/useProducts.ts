@@ -4,6 +4,7 @@ import { Product } from '@/types/product'
 import { supabase } from '@/integrations/supabase/client'
 import { logError, logDebug } from '@/utils/debugUtils'
 import { useBranch } from '@/contexts/BranchContext'
+import { useAuth } from './useAuth'
 import { restoreStockFIFO } from '@/services/stockService'
 // journalService removed - now using RPC for all journal operations
 
@@ -78,9 +79,91 @@ const toDb = (appProduct: Partial<Product>) => {
   return dbData;
 };
 
+async function ensureProductStockMovement(params: {
+  productId: string;
+  branchId?: string;
+  type: 'IN' | 'OUT';
+  reason: string;
+  quantity: number;
+  previousStock: number;
+  newStock: number;
+  referenceId: string;
+  referenceType: string;
+  notes?: string;
+  userId?: string;
+  userName?: string;
+}) {
+  const {
+    productId,
+    branchId,
+    type,
+    reason,
+    quantity,
+    previousStock,
+    newStock,
+    referenceId,
+    referenceType,
+    notes,
+    userId,
+    userName,
+  } = params;
+
+  if (!branchId || quantity <= 0) {
+    return null;
+  }
+
+  const candidateReferenceIds = [referenceId, `${referenceType}:${referenceId}`];
+
+  const { data: existingMovement, error: existingMovementError } = await supabase
+    .from('product_stock_movements')
+    .select('id')
+    .eq('product_id', productId)
+    .eq('branch_id', branchId)
+    .eq('type', type)
+    .eq('reference_type', referenceType)
+    .in('reference_id', candidateReferenceIds)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (existingMovementError) {
+    throw existingMovementError;
+  }
+
+  if (existingMovement) {
+    return existingMovement;
+  }
+
+  const { data: movement, error } = await supabase
+    .from('product_stock_movements')
+    .insert({
+      product_id: productId,
+      branch_id: branchId,
+      type,
+      reason,
+      quantity,
+      previous_stock: previousStock,
+      new_stock: newStock,
+      reference_id: referenceId,
+      reference_type: referenceType,
+      notes,
+      user_id: userId,
+      user_name: userName,
+    })
+    .select('id')
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return movement;
+}
+
 export const useProducts = () => {
   const queryClient = useQueryClient();
   const { currentBranch, canAccessAllBranches } = useBranch();
+  const { user } = useAuth();
 
   const { data: products, isLoading } = useQuery<Product[]>({
     queryKey: ['products', currentBranch?.id],
@@ -147,7 +230,20 @@ export const useProducts = () => {
           .select('current_stock, initial_stock, cost_price, name')
           .eq('id', product.id)
           .single();
-        existing = currentProduct;
+
+        const { data: currentStockView } = currentBranch?.id
+          ? await supabase
+              .from('v_product_current_stock')
+              .select('current_stock')
+              .eq('product_id', product.id)
+              .eq('branch_id', currentBranch.id)
+              .maybeSingle()
+          : { data: null };
+
+        existing = {
+          ...currentProduct,
+          actual_current_stock: Number(currentStockView?.current_stock) || 0,
+        };
 
         // products.current_stock is DEPRECATED
         delete dbData.current_stock;
@@ -217,6 +313,9 @@ export const useProducts = () => {
       if (initialStock > 0 || (existing && initialStock !== Number(existing.initial_stock))) {
         if (!currentBranch?.id) throw new Error('Branch required for stock sync');
 
+        const previousActualStock = Number(existing?.actual_current_stock) || 0;
+        const previousInitialStock = Number(existing?.initial_stock) || 0;
+
         const { data: rpcResultRaw, error: rpcError } = await supabase.rpc('sync_product_initial_stock_atomic', {
           p_product_id: product.id!,
           p_branch_id: currentBranch.id,
@@ -227,6 +326,35 @@ export const useProducts = () => {
         if (rpcError) throw rpcError;
         const rpcResult = Array.isArray(rpcResultRaw) ? rpcResultRaw[0] : rpcResultRaw;
         if (!rpcResult?.success) throw new Error(rpcResult?.error_message || 'Failed to sync initial stock');
+
+        const { data: updatedStockView, error: updatedStockError } = await supabase
+          .from('v_product_current_stock')
+          .select('current_stock')
+          .eq('product_id', product.id!)
+          .eq('branch_id', currentBranch.id)
+          .maybeSingle();
+
+        if (updatedStockError) throw updatedStockError;
+
+        const newActualStock = Number(updatedStockView?.current_stock) || 0;
+        const quantityChanged = Math.abs(newActualStock - previousActualStock);
+
+        if (quantityChanged > 0) {
+          await ensureProductStockMovement({
+            productId: product.id!,
+            branchId: currentBranch.id,
+            type: newActualStock >= previousActualStock ? 'IN' : 'OUT',
+            reason: 'MANUAL_ADJUSTMENT',
+            quantity: quantityChanged,
+            previousStock: previousActualStock,
+            newStock: newActualStock,
+            referenceId: `initial-stock-sync:${rpcResult.batch_id}:${initialStock}`,
+            referenceType: 'adjustment',
+            notes: `Penyesuaian stok via edit produk (stok awal ${previousInitialStock} → ${initialStock})`,
+            userId: user?.id,
+            userName: user?.email,
+          });
+        }
         // Note: Journal entry is handled by the RPC function sync_product_initial_stock_atomic
       }
 
@@ -234,6 +362,7 @@ export const useProducts = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['product_stock_movements'] });
       queryClient.invalidateQueries({ queryKey: ['journalEntries'] });
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
     },
