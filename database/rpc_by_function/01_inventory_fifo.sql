@@ -320,6 +320,9 @@ DECLARE
   v_consumed JSONB := '[]'::JSONB;
   v_deduct_qty NUMERIC;
   v_available_stock NUMERIC;
+  v_product_name TEXT;
+  v_previous_stock NUMERIC := 0;
+  v_reason TEXT;
 BEGIN
   IF p_product_id IS NULL THEN
     RETURN QUERY SELECT FALSE, 0::NUMERIC, '[]'::JSONB, p_quantity, 'Product ID is required'::TEXT;
@@ -335,6 +338,19 @@ BEGIN
   WHERE product_id = p_product_id
     AND remaining_quantity > 0
     AND (p_branch_id IS NULL OR branch_id = p_branch_id);
+
+  SELECT name, COALESCE(current_stock, 0)
+  INTO v_product_name, v_previous_stock
+  FROM products
+  WHERE id = p_product_id;
+
+  v_reason := CASE COALESCE(p_reference_type, '')
+    WHEN 'sale' THEN 'OFFICE_SALE'
+    WHEN 'delivery' THEN 'DELIVERY'
+    WHEN 'adjustment' THEN 'MANUAL_ADJUSTMENT'
+    ELSE UPPER(LEFT(COALESCE(p_reference_type, 'MOVEMENT_OUT'), 50))
+  END;
+
   IF v_available_stock < p_quantity THEN
     RETURN QUERY SELECT
       FALSE,
@@ -405,6 +421,32 @@ BEGIN
     current_stock = current_stock - (p_quantity - v_remaining),
     updated_at = NOW()
   WHERE id = p_product_id;
+
+  INSERT INTO product_stock_movements (
+    product_id,
+    branch_id,
+    type,
+    reason,
+    quantity,
+    previous_stock,
+    new_stock,
+    reference_id,
+    reference_type,
+    notes,
+    user_name
+  ) VALUES (
+    p_product_id,
+    p_branch_id,
+    'OUT',
+    v_reason,
+    p_quantity - v_remaining,
+    v_previous_stock,
+    GREATEST(v_previous_stock - (p_quantity - v_remaining), 0),
+    p_reference_id,
+    p_reference_type,
+    format('FIFO v2 consume via %s (%s)', COALESCE(p_reference_type, 'movement'), COALESCE(p_reference_id, '-')),
+    'System'
+  );
 
   RETURN QUERY SELECT
     TRUE,
@@ -574,6 +616,9 @@ DECLARE
   v_restore_qty NUMERIC;
   v_space_in_batch NUMERIC;
   v_consumption RECORD;
+  v_product_name TEXT;
+  v_previous_stock NUMERIC := 0;
+  v_reason TEXT;
 BEGIN
   IF p_product_id IS NULL THEN
     RETURN QUERY SELECT FALSE, 0::NUMERIC, '[]'::JSONB, 'Product ID is required'::TEXT;
@@ -583,6 +628,19 @@ BEGIN
     RETURN QUERY SELECT FALSE, 0::NUMERIC, '[]'::JSONB, 'Quantity must be positive'::TEXT;
     RETURN;
   END IF;
+
+  SELECT name, COALESCE(current_stock, 0)
+  INTO v_product_name, v_previous_stock
+  FROM products
+  WHERE id = p_product_id;
+
+  v_reason := CASE COALESCE(p_reference_type, '')
+    WHEN 'sale' THEN 'CANCEL_OR_EDIT_SALE'
+    WHEN 'delivery' THEN 'CANCEL_OR_RETURN_DELIVERY'
+    WHEN 'adjustment' THEN 'MANUAL_ADJUSTMENT'
+    ELSE UPPER(LEFT('RESTORE_' || COALESCE(p_reference_type, 'MOVEMENT'), 50))
+  END;
+
   -- Strategy 1: Try to restore to original batches if we have consumption log
   SELECT * INTO v_consumption
   FROM inventory_batch_consumptions
@@ -643,6 +701,33 @@ BEGIN
   UPDATE products
   SET current_stock = current_stock + (p_quantity - v_remaining), updated_at = NOW()
   WHERE id = p_product_id;
+
+  INSERT INTO product_stock_movements (
+    product_id,
+    branch_id,
+    type,
+    reason,
+    quantity,
+    previous_stock,
+    new_stock,
+    reference_id,
+    reference_type,
+    notes,
+    user_name
+  ) VALUES (
+    p_product_id,
+    p_branch_id,
+    'IN',
+    v_reason,
+    p_quantity - v_remaining,
+    v_previous_stock,
+    v_previous_stock + (p_quantity - v_remaining),
+    p_reference_id,
+    p_reference_type,
+    format('FIFO v2 restore via %s (%s)', COALESCE(p_reference_type, 'movement'), COALESCE(p_reference_id, '-')),
+    'System'
+  );
+
   RETURN QUERY SELECT TRUE, p_quantity - v_remaining, v_restored, NULL::TEXT;
 END;
 $function$;

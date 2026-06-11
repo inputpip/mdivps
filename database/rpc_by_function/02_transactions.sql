@@ -1354,6 +1354,15 @@ DECLARE
   v_new_items JSONB;
   v_has_deliveries BOOLEAN := FALSE;
   v_has_payment_history BOOLEAN := FALSE;
+  v_old_item RECORD;
+  v_new_item JSONB;
+  v_new_items_in JSONB;
+  v_rebuilt_items JSONB := '[]'::JSONB;
+  v_product_id UUID;
+  v_material_id UUID;
+  v_quantity NUMERIC;
+  v_item_type TEXT;
+  v_item_hpp NUMERIC;
 BEGIN
   -- ==================== VALIDASI ====================
 
@@ -1399,6 +1408,7 @@ BEGIN
   v_customer_name := COALESCE(p_transaction->>'customer_name', v_old_transaction.customer_name);
   v_date := COALESCE(v_old_transaction.order_date, CURRENT_DATE);
   v_new_items := COALESCE(p_transaction->'items', v_old_transaction.items, '[]'::JSONB);
+  v_new_items_in := v_new_items;
 
   v_new_subtotal := COALESCE((p_transaction->>'subtotal')::NUMERIC, COALESCE(v_old_transaction.subtotal, v_new_total));
   v_new_ppn_enabled := COALESCE((p_transaction->>'ppn_enabled')::BOOLEAN, COALESCE(v_old_transaction.ppn_enabled, FALSE));
@@ -1459,6 +1469,105 @@ BEGIN
     RETURN;
   END IF;
 
+  -- ==================== FIFO HPP RECALCULATION & STOCK UPDATE ====================
+
+  IF v_new_items_in IS NOT NULL AND v_new_items_in IS DISTINCT FROM COALESCE(v_old_transaction.items, '[]'::JSONB) THEN
+    v_rebuilt_items := '[]'::JSONB;
+    v_total_hpp := 0;
+
+    IF COALESCE(v_old_transaction.is_office_sale, FALSE) = TRUE THEN
+      FOR v_old_item IN
+        SELECT
+          (elem->>'productId')::TEXT as product_id_str,
+          COALESCE((elem->>'quantity')::NUMERIC, 0) as quantity,
+          (elem->>'productType')::TEXT as product_type
+        FROM jsonb_array_elements(COALESCE(v_old_transaction.items, '[]'::JSONB)) as elem
+        WHERE (elem->>'productId') IS NOT NULL
+      LOOP
+        IF v_old_item.quantity <= 0 THEN
+          CONTINUE;
+        END IF;
+
+        IF v_old_item.product_type IS NULL OR v_old_item.product_type = 'product' THEN
+          PERFORM public.restore_stock_fifo_v2(
+            v_old_item.product_id_str::UUID,
+            v_old_item.quantity,
+            p_transaction_id,
+            'sale',
+            p_branch_id
+          );
+        ELSIF v_old_item.product_type = 'material' THEN
+          PERFORM public.restore_material_fifo_v2(
+            v_old_item.product_id_str::UUID,
+            v_old_item.quantity,
+            0,
+            p_transaction_id,
+            'sale',
+            p_branch_id,
+            p_user_id,
+            p_user_name
+          );
+        END IF;
+      END LOOP;
+    END IF;
+
+    FOR v_new_item IN SELECT * FROM jsonb_array_elements(v_new_items_in) LOOP
+      v_product_id := NULL;
+      v_material_id := NULL;
+      v_item_hpp := 0;
+      v_quantity := COALESCE((v_new_item->>'quantity')::NUMERIC, 0);
+
+      IF v_quantity <= 0 THEN
+        v_rebuilt_items := v_rebuilt_items || jsonb_set(v_new_item, '{hppAmount}', to_jsonb(0));
+        CONTINUE;
+      END IF;
+
+      IF (v_new_item->>'productId') LIKE 'material-%' OR (v_new_item->>'productType') = 'material' THEN
+        IF (v_new_item->>'productId') LIKE 'material-%' THEN
+          v_material_id := SUBSTRING(v_new_item->>'productId' FROM 10)::UUID;
+        ELSE
+          v_material_id := (v_new_item->>'productId')::UUID;
+        END IF;
+        v_item_type := 'material';
+      ELSE
+        v_product_id := (v_new_item->>'productId')::UUID;
+        v_item_type := 'product';
+      END IF;
+
+      IF COALESCE(v_old_transaction.is_office_sale, FALSE) = TRUE THEN
+        IF v_item_type = 'material' THEN
+          SELECT * INTO v_fifo_result
+          FROM consume_material_fifo_v2(v_material_id, v_quantity, p_transaction_id, 'sale', p_branch_id);
+          v_item_hpp := COALESCE(v_fifo_result.total_cost, 0);
+        ELSE
+          SELECT * INTO v_fifo_result
+          FROM consume_stock_fifo_v2(v_product_id, v_quantity, p_transaction_id, 'sale', p_branch_id);
+          v_item_hpp := COALESCE(v_fifo_result.total_hpp, 0);
+        END IF;
+      ELSE
+        IF v_item_type = 'product' THEN
+          SELECT f.total_hpp INTO v_item_hpp
+          FROM calculate_fifo_cost(v_product_id, p_branch_id, v_quantity) f;
+          v_item_hpp := COALESCE(v_item_hpp, COALESCE((v_new_item->>'cost_price')::NUMERIC, (v_new_item->>'costPrice')::NUMERIC, 0) * v_quantity);
+        ELSE
+          v_item_hpp := COALESCE((v_new_item->>'hppAmount')::NUMERIC, 0);
+        END IF;
+      END IF;
+
+      v_rebuilt_items := v_rebuilt_items || jsonb_set(v_new_item, '{hppAmount}', to_jsonb(v_item_hpp));
+      v_total_hpp := v_total_hpp + v_item_hpp;
+    END LOOP;
+  ELSE
+    v_rebuilt_items := COALESCE(v_old_transaction.items, '[]'::JSONB);
+    SELECT COALESCE(SUM(
+      COALESCE((elem->>'hppAmount')::NUMERIC,
+               COALESCE((elem->>'cost_price')::NUMERIC, (elem->>'costPrice')::NUMERIC, 0) * COALESCE((elem->>'quantity')::NUMERIC, 0)
+      )
+    ), 0)
+    INTO v_total_hpp
+    FROM jsonb_array_elements(v_rebuilt_items) AS elem;
+  END IF;
+
   -- ==================== UPDATE TRANSACTION ====================
 
   UPDATE transactions SET
@@ -1468,7 +1577,7 @@ BEGIN
     payment_status = CASE WHEN v_new_paid_amount >= v_new_total THEN 'Lunas' ELSE 'Belum Lunas' END,
     customer_name = v_customer_name,
     notes = COALESCE(p_transaction->>'notes', notes),
-    items = v_new_items,
+    items = v_rebuilt_items,
     subtotal = v_new_subtotal,
     ppn_enabled = v_new_ppn_enabled,
     ppn_mode = v_new_ppn_mode,
@@ -1491,14 +1600,6 @@ BEGIN
       AND reference_id = p_transaction_id
       AND branch_id = p_branch_id
       AND is_voided = FALSE;
-
-    -- Calculate HPP from latest items payload, fallback ke cost_price * quantity bila hppAmount tidak ada
-    SELECT COALESCE(SUM(
-      COALESCE((item->>'hppAmount')::NUMERIC,
-               COALESCE((item->>'cost_price')::NUMERIC, (item->>'costPrice')::NUMERIC, 0) * COALESCE((item->>'quantity')::NUMERIC, 0)
-      )
-    ), 0) INTO v_total_hpp
-    FROM jsonb_array_elements(v_new_items) AS item;
 
     -- Build new journal lines
     v_journal_lines := '[]'::JSONB;
@@ -1820,12 +1921,9 @@ BEGIN
 
   GET DIAGNOSTICS v_deliveries_deleted = ROW_COUNT;
 
-  -- ==================== DELETE STOCK MOVEMENTS ====================
-  -- Clean up movement logs to keep data clean, although stock is already corrected above
-  
-  DELETE FROM product_stock_movements
-  WHERE (reference_id = p_transaction_id OR reference_id IN (SELECT id::TEXT FROM deliveries WHERE transaction_id = p_transaction_id))
-    AND reference_type IN ('transaction', 'delivery', 'fifo_consume', 'sale');
+  -- ==================== KEEP STOCK MOVEMENT HISTORY ====================
+  -- Jangan hapus histori movement. Restore FIFO di atas sekarang menjadi jejak cancel/void
+  -- supaya laporan detail pergerakan tetap menampilkan edit/cancel/retur dengan benar.
 
   -- ==================== CANCEL RECEIVABLES ====================
   

@@ -63,10 +63,10 @@ export async function consumeStockFIFO(
       p_branch_id: branchId,
       p_quantity: quantity,
       p_reference_id: `${referenceType}:${referenceId}`,
-      p_reason: 'usage', // Default, caller should ideally provide this
-      p_notes: null,
-      p_user_id: null,
-      p_user_name: null
+      p_reason: reason,
+      p_notes: notes || null,
+      p_user_id: userId || null,
+      p_user_name: userName || null
     });
 
     if (error) {
@@ -423,9 +423,13 @@ export class StockService {
         productId,
         quantity,
         `ADJ-${Date.now()}`,
-        'transaction', // Using 'transaction' as generic type for adjustment
+        'adjustment',
         branchId,
-        0 // Zero cost for adjustment? Or should we estimate? Default to 0 for now.
+        0,
+        'MANUAL_ADJUSTMENT',
+        reason,
+        userId,
+        userName
       );
 
       if (!result.success) {
@@ -437,30 +441,18 @@ export class StockService {
         productId,
         quantity,
         `ADJ-${Date.now()}`,
-        'transaction',
-        branchId
+        'adjustment',
+        branchId,
+        'MANUAL_ADJUSTMENT',
+        reason,
+        userId,
+        userName
       );
 
       if (!result.success) {
         throw new Error(`Failed to decrease stock: ${result.error_message}`);
       }
     }
-
-    // Create stock movement for audit trail
-    const movement: CreateStockMovementData = {
-      productId,
-      productName,
-      type: movementType,
-      reason: 'ADJUSTMENT',
-      quantity,
-      previousStock: currentStock,
-      newStock,
-      notes: reason,
-      userId,
-      userName,
-    };
-
-    await StockService.createStockMovements([movement]);
   }
 
   // ============================================================================

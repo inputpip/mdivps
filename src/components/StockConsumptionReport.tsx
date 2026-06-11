@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { supabase } from '@/integrations/supabase/client'
 import { FileText, Download, Calendar, TrendingDown, TrendingUp, Package, CalendarDays, FileSpreadsheet } from 'lucide-react'
-import { format, startOfMonth, endOfMonth, subDays } from 'date-fns'
+import { format, startOfMonth, endOfMonth } from 'date-fns'
 import { id } from 'date-fns/locale/id'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -32,6 +32,50 @@ interface StockReportItem {
   sales: number
 }
 
+interface StockMovementDetail {
+  id: string
+  productId: string
+  productName: string
+  productType: string
+  unit: string
+  movementDate: Date
+  type: 'IN' | 'OUT'
+  source: string
+  reference: string
+  reason: string
+  quantity: number
+  userName: string
+  notes: string
+  stockBefore: number
+  stockAfter: number
+}
+
+type StockMovementDraft = Omit<StockMovementDetail, 'stockBefore' | 'stockAfter'>
+
+const formatMovementSource = (referenceType?: string | null, movementType?: 'IN' | 'OUT') => {
+  switch (referenceType) {
+    case 'sale':
+      return movementType === 'IN' ? 'Edit / Batal Penjualan Kantor' : 'Penjualan Kantor'
+    case 'delivery':
+      return movementType === 'IN' ? 'Cancel / Retur Pengantaran' : 'Pengantaran'
+    case 'adjustment':
+      return 'Koreksi Manual'
+    default:
+      return referenceType || 'Movement'
+  }
+}
+
+const formatMovementReason = (reason?: string | null, referenceType?: string | null, movementType?: 'IN' | 'OUT') => {
+  if (reason === 'MANUAL_ADJUSTMENT') return 'Koreksi Manual'
+  if (reason === 'OFFICE_SALE') return 'Laku Kantor'
+  if (reason === 'DELIVERY') return 'Pengantaran'
+  if (reason === 'CANCEL_OR_EDIT_SALE') return 'Edit / Cancel Penjualan Kantor'
+  if (reason === 'CANCEL_OR_RETURN_DELIVERY') return 'Cancel / Retur Pengantaran'
+  if (referenceType === 'sale' && movementType === 'IN') return 'Edit / Cancel Penjualan Kantor'
+  if (referenceType === 'delivery' && movementType === 'IN') return 'Cancel / Retur Pengantaran'
+  return reason || 'Movement'
+}
+
 export const StockConsumptionReport = () => {
   const [filterType, setFilterType] = useState<'monthly' | 'dateRange'>('monthly')
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1)
@@ -39,6 +83,7 @@ export const StockConsumptionReport = () => {
   const [startDate, setStartDate] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'))
   const [endDate, setEndDate] = useState(format(endOfMonth(new Date()), 'yyyy-MM-dd'))
   const [reportData, setReportData] = useState<StockReportItem[]>([])
+  const [movementDetails, setMovementDetails] = useState<StockMovementDetail[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const { currentBranch } = useBranch()
 
@@ -59,8 +104,10 @@ export const StockConsumptionReport = () => {
 
   const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i)
 
-  const generateReport = async (fromDate: Date, toDate: Date): Promise<StockReportItem[]> => {
-    // Get all products (without current_stock - will get from VIEW)
+  const generateReport = async (fromDate: Date, toDate: Date): Promise<{
+    reports: StockReportItem[]
+    movementDetails: StockMovementDetail[]
+  }> => {
     let productsQuery = supabase
       .from('products')
       .select('id, name, type, unit')
@@ -73,22 +120,24 @@ export const StockConsumptionReport = () => {
     const { data: products, error: productsError } = await productsQuery
     if (productsError) throw productsError
 
-    // Get actual stock from VIEW (source of truth)
-    let stockQuery = supabase.from('v_product_current_stock').select('product_id, current_stock');
-    if (currentBranch?.id) {
-      stockQuery = stockQuery.eq('branch_id', currentBranch.id);
-    }
-    const { data: stockData } = await stockQuery;
-    const stockMap = new Map<string, number>();
-    (stockData || []).forEach((s: any) => stockMap.set(s.product_id, Number(s.current_stock) || 0));
+    const productMap = new Map((products || []).map(product => [product.id, product]))
 
-    // Get production records in date range (MASUK dari produksi)
+    let stockQuery = supabase.from('v_product_current_stock').select('product_id, current_stock')
+    if (currentBranch?.id) {
+      stockQuery = stockQuery.eq('branch_id', currentBranch.id)
+    }
+    const { data: stockData } = await stockQuery
+    const stockMap = new Map<string, number>()
+    ;(stockData || []).forEach((stockRow: any) => stockMap.set(stockRow.product_id, Number(stockRow.current_stock) || 0))
+
+    const movementCandidates: StockMovementDraft[] = []
+
     let productionsQuery = supabase
       .from('production_records')
-      .select('product_id, quantity, created_at')
+      .select('id, ref, product_id, quantity, created_at, note, created_by_name, user_input_name, created_by')
       .gte('created_at', fromDate.toISOString())
       .lte('created_at', toDate.toISOString())
-      .gt('quantity', 0) // Only positive quantities (actual production, not error)
+      .gt('quantity', 0)
 
     if (currentBranch?.id) {
       productionsQuery = productionsQuery.eq('branch_id', currentBranch.id)
@@ -97,31 +146,86 @@ export const StockConsumptionReport = () => {
     const { data: productionRecords, error: productionError } = await productionsQuery
     if (productionError) console.warn('Production query error:', productionError)
 
-    // Get DELIVERY items in date range (KELUAR dari pengantaran) - More reliable than parsing transaction items
-    let deliveryItemsQuery = supabase
+    productionRecords?.forEach((record: any) => {
+      const product = productMap.get(record.product_id)
+      if (!product || product.type === 'Jasa') return
+
+      const quantity = Number(record.quantity) || 0
+      if (quantity <= 0) return
+
+      movementCandidates.push({
+        id: `production-${record.id}`,
+        productId: record.product_id,
+        productName: product.name,
+        productType: product.type || 'Stock',
+        unit: product.unit || 'pcs',
+        movementDate: new Date(record.created_at),
+        type: 'IN',
+        source: 'Produksi',
+        reference: record.ref || record.id,
+        reason: 'Produksi',
+        quantity,
+        userName: record.created_by_name || record.user_input_name || record.created_by || 'System',
+        notes: record.note || '',
+      })
+    })
+
+    let deliveriesQuery = supabase
       .from('deliveries')
       .select(`
         id,
+        transaction_id,
+        delivery_number,
         delivery_date,
+        driver_name,
+        cashier_name,
+        notes,
         delivery_items(
+          id,
           product_id,
-          quantity_delivered
+          quantity_delivered,
+          notes
         )
       `)
       .gte('delivery_date', fromDate.toISOString())
       .lte('delivery_date', toDate.toISOString())
 
     if (currentBranch?.id) {
-      deliveryItemsQuery = deliveryItemsQuery.eq('branch_id', currentBranch.id)
+      deliveriesQuery = deliveriesQuery.eq('branch_id', currentBranch.id)
     }
 
-    const { data: deliveries, error: deliveriesError } = await deliveryItemsQuery
+    const { data: deliveries, error: deliveriesError } = await deliveriesQuery
     if (deliveriesError) console.warn('Deliveries query error:', deliveriesError)
 
-    // Get OFFICE SALE transactions (laku kantor - langsung keluar tanpa pengantaran)
+    deliveries?.forEach((delivery: any) => {
+      delivery.delivery_items?.forEach((item: any) => {
+        const product = productMap.get(item.product_id)
+        if (!product || product.type === 'Jasa') return
+
+        const quantity = Number(item.quantity_delivered) || 0
+        if (quantity <= 0) return
+
+        movementCandidates.push({
+          id: `delivery-${delivery.id}-${item.id || item.product_id}`,
+          productId: item.product_id,
+          productName: product.name,
+          productType: product.type || 'Stock',
+          unit: product.unit || 'pcs',
+          movementDate: new Date(delivery.delivery_date),
+          type: 'OUT',
+          source: 'Pengantaran',
+          reference: delivery.delivery_number ? `DLV-${delivery.delivery_number}` : (delivery.transaction_id || delivery.id),
+          reason: 'Pengantaran',
+          quantity,
+          userName: delivery.driver_name || delivery.cashier_name || 'System',
+          notes: item.notes || delivery.notes || '',
+        })
+      })
+    })
+
     let officeSalesQuery = supabase
       .from('transactions')
-      .select('id, items, order_date')
+      .select('id, items, order_date, cashier_name, notes')
       .eq('is_office_sale', true)
       .gte('order_date', fromDate.toISOString())
       .lte('order_date', toDate.toISOString())
@@ -133,97 +237,212 @@ export const StockConsumptionReport = () => {
     const { data: officeSales, error: officeSalesError } = await officeSalesQuery
     if (officeSalesError) console.warn('Office sales query error:', officeSalesError)
 
-    // Calculate production totals per product (in period)
-    const productionByProduct: Record<string, number> = {}
-    productionRecords?.forEach(record => {
-      if (record.product_id) {
-        productionByProduct[record.product_id] = (productionByProduct[record.product_id] || 0) + Number(record.quantity)
-      }
-    })
-
-    // Calculate sales totals per product from DELIVERY ITEMS (in period)
-    const salesByProduct: Record<string, number> = {}
-
-    // 1. From deliveries
-    deliveries?.forEach((delivery: any) => {
-      delivery.delivery_items?.forEach((item: any) => {
-        if (item.product_id && item.quantity_delivered > 0) {
-          salesByProduct[item.product_id] = (salesByProduct[item.product_id] || 0) + Number(item.quantity_delivered)
-        }
-      })
-    })
-
-    // 2. From office sales (parse transaction items)
     officeSales?.forEach((transaction: any) => {
       let items = transaction.items
 
-      // Parse JSON if string
       if (typeof items === 'string') {
         try {
           items = JSON.parse(items)
-        } catch (e) {
-          console.warn('Failed to parse office sale items:', e)
+        } catch (error) {
+          console.warn('Failed to parse office sale items for movement details:', error)
           return
         }
       }
 
-      if (Array.isArray(items)) {
-        items.forEach((item: any) => {
-          // Try multiple ways to get product ID
-          const productId = item.product?.id || item.productId || item.product_id || item.id
-          const quantity = Number(item.quantity || item.qty || 0)
+      if (!Array.isArray(items)) return
 
-          if (productId && quantity > 0) {
-            salesByProduct[productId] = (salesByProduct[productId] || 0) + quantity
-          }
+      items.forEach((item: any, index: number) => {
+        const productId = item.product?.id || item.productId || item.product_id || item.id
+        const product = productMap.get(productId)
+        if (!product || product.type === 'Jasa') return
+
+        const quantity = Number(item.quantity || item.qty || 0)
+        if (quantity <= 0) return
+
+        movementCandidates.push({
+          id: `office-sale-${transaction.id}-${productId}-${index}`,
+          productId,
+          productName: product.name,
+          productType: product.type || 'Stock',
+          unit: product.unit || 'pcs',
+          movementDate: new Date(transaction.order_date),
+          type: 'OUT',
+          source: 'Penjualan Kantor',
+          reference: transaction.id,
+          reason: 'Laku Kantor',
+          quantity,
+          userName: transaction.cashier_name || 'System',
+          notes: item.notes || transaction.notes || '',
         })
-      }
+      })
     })
 
-    // Build report data
+    let inventoryBatchQuery = supabase
+      .from('inventory_batches')
+      .select('id, product_id, batch_date, initial_quantity, purchase_order_id, production_id, notes, created_at')
+      .not('product_id', 'is', null)
+      .gte('batch_date', fromDate.toISOString())
+      .lte('batch_date', toDate.toISOString())
+
+    if (currentBranch?.id) {
+      inventoryBatchQuery = inventoryBatchQuery.eq('branch_id', currentBranch.id)
+    }
+
+    const { data: inventoryBatches, error: inventoryBatchesError } = await inventoryBatchQuery
+    if (inventoryBatchesError) console.warn('Inventory batches query error:', inventoryBatchesError)
+
+    inventoryBatches?.forEach((batch: any) => {
+      const product = productMap.get(batch.product_id)
+      if (!product || product.type === 'Jasa' || batch.production_id) return
+
+      const quantity = Number(batch.initial_quantity) || 0
+      if (quantity <= 0) return
+
+      const isPurchase = Boolean(batch.purchase_order_id)
+      movementCandidates.push({
+        id: `batch-${batch.id}`,
+        productId: batch.product_id,
+        productName: product.name,
+        productType: product.type || 'Stock',
+        unit: product.unit || 'pcs',
+        movementDate: new Date(batch.batch_date || batch.created_at),
+        type: 'IN',
+        source: isPurchase ? 'Pembelian' : 'Penambahan Stok',
+        reference: batch.purchase_order_id || batch.id,
+        reason: isPurchase ? 'Pembelian' : 'Adjustment / Restock',
+        quantity,
+        userName: 'System',
+        notes: batch.notes || '',
+      })
+    })
+
+    let productMovementsQuery = supabase
+      .from('product_stock_movements')
+      .select('id, product_id, type, reason, quantity, reference_id, reference_type, notes, user_name, created_at')
+      .gte('created_at', fromDate.toISOString())
+      .lte('created_at', toDate.toISOString())
+
+    if (currentBranch?.id) {
+      productMovementsQuery = productMovementsQuery.eq('branch_id', currentBranch.id)
+    }
+
+    const { data: productMovements, error: productMovementsError } = await productMovementsQuery
+    if (productMovementsError) console.warn('Product stock movements query error:', productMovementsError)
+
+    const existingKeys = new Set(
+      movementCandidates.map((movement) => [
+        movement.productId,
+        movement.type,
+        movement.reference,
+        movement.reason,
+        movement.quantity,
+        movement.movementDate.toISOString(),
+      ].join('|'))
+    )
+
+    productMovements?.forEach((movement: any) => {
+      const product = productMap.get(movement.product_id)
+      if (!product || product.type === 'Jasa') return
+
+      const movementDate = new Date(movement.created_at)
+      const quantity = Number(movement.quantity) || 0
+      const normalizedKey = [
+        movement.product_id,
+        movement.type,
+        movement.reference_id || movement.id,
+        movement.reason || movement.reference_type || 'Movement',
+        quantity,
+        movementDate.toISOString(),
+      ].join('|')
+
+      if (existingKeys.has(normalizedKey)) return
+
+      movementCandidates.push({
+        id: `movement-${movement.id}`,
+        productId: movement.product_id,
+        productName: product.name,
+        productType: product.type || 'Stock',
+        unit: product.unit || 'pcs',
+        movementDate,
+        type: movement.type,
+        source: formatMovementSource(movement.reference_type, movement.type),
+        reference: movement.reference_id || movement.id,
+        reason: formatMovementReason(movement.reason, movement.reference_type, movement.type),
+        quantity,
+        userName: movement.user_name || 'System',
+        notes: movement.notes || '',
+      })
+    })
+
+    const movementsByProduct = movementCandidates.reduce((acc, movement) => {
+      if (!acc[movement.productId]) acc[movement.productId] = []
+      acc[movement.productId].push(movement)
+      return acc
+    }, {} as Record<string, StockMovementDraft[]>)
+
     const reports: StockReportItem[] = []
+    const calculatedMovementDetails: StockMovementDetail[] = []
 
     for (const product of products || []) {
-      // Skip service products
       if (product.type === 'Jasa') continue
 
-      // Get stock from VIEW map (source of truth)
-      const currentStock = stockMap.get(product.id) || 0
-      const periodProduction = productionByProduct[product.id] || 0
-      const periodSales = salesByProduct[product.id] || 0
+      const productMovementsForItem = (movementsByProduct[product.id] || [])
+        .sort((a, b) => a.movementDate.getTime() - b.movementDate.getTime())
 
-      // Calculate starting stock
-      // Ending stock = Current stock (at report generation time)
-      // Total IN = Production in period
-      // Total OUT = Sales in period (from deliveries + office sales)
-      // Starting stock = Ending - IN + OUT = Current - periodProduction + periodSales
-
-      const totalIn = periodProduction
-      const totalOut = periodSales
-      const endingStock = currentStock
-      const startingStock = endingStock - totalIn + totalOut
-
+      const endingStock = stockMap.get(product.id) || 0
+      const totalIn = productMovementsForItem
+        .filter(movement => movement.type === 'IN')
+        .reduce((sum, movement) => sum + movement.quantity, 0)
+      const totalOut = productMovementsForItem
+        .filter(movement => movement.type === 'OUT')
+        .reduce((sum, movement) => sum + movement.quantity, 0)
+      const startingStock = Math.max(0, endingStock - totalIn + totalOut)
       const netMovement = totalIn - totalOut
+
+      let runningStock = startingStock
+      productMovementsForItem.forEach((movement) => {
+        const stockBefore = runningStock
+        const stockAfter = movement.type === 'IN'
+          ? stockBefore + movement.quantity
+          : stockBefore - movement.quantity
+
+        calculatedMovementDetails.push({
+          ...movement,
+          stockBefore,
+          stockAfter,
+        })
+
+        runningStock = stockAfter
+      })
 
       reports.push({
         productId: product.id,
         productName: product.name,
         productType: product.type || 'Stock',
         unit: product.unit || 'pcs',
-        startingStock: Math.max(0, startingStock),
+        startingStock,
         totalIn,
         totalOut,
         endingStock,
         netMovement,
-        productions: periodProduction,
-        purchases: 0, // Can be enhanced to track PO receipts
-        sales: periodSales,
+        productions: productMovementsForItem
+          .filter(movement => movement.type === 'IN' && movement.source === 'Produksi')
+          .reduce((sum, movement) => sum + movement.quantity, 0),
+        purchases: productMovementsForItem
+          .filter(movement => movement.type === 'IN' && movement.source === 'Pembelian')
+          .reduce((sum, movement) => sum + movement.quantity, 0),
+        sales: productMovementsForItem
+          .filter(movement => movement.type === 'OUT' && ['Pengantaran', 'Penjualan Kantor'].includes(movement.source))
+          .reduce((sum, movement) => sum + movement.quantity, 0),
       })
     }
 
-    return reports
-      .filter(r => r.totalIn > 0 || r.totalOut > 0 || r.endingStock > 0)
-      .sort((a, b) => a.productName.localeCompare(b.productName))
+    return {
+      reports: reports
+        .filter(report => report.totalIn > 0 || report.totalOut > 0 || report.endingStock > 0)
+        .sort((a, b) => a.productName.localeCompare(b.productName)),
+      movementDetails: calculatedMovementDetails.sort((a, b) => b.movementDate.getTime() - a.movementDate.getTime()),
+    }
   }
 
   const handleGenerateReport = async () => {
@@ -241,8 +460,9 @@ export const StockConsumptionReport = () => {
         toDate.setHours(23, 59, 59, 999)
       }
 
-      const data = await generateReport(fromDate, toDate)
-      setReportData(data)
+      const { reports, movementDetails } = await generateReport(fromDate, toDate)
+      setReportData(reports)
+      setMovementDetails(movementDetails)
     } catch (error) {
       console.error('Error generating report:', error)
     } finally {
@@ -254,27 +474,23 @@ export const StockConsumptionReport = () => {
     if (filterType === 'monthly') {
       const monthName = months.find(m => m.value === selectedMonth)?.label
       return `Laporan Stock Produk - ${monthName} ${selectedYear}`
-    } else {
-      return `Laporan Stock Produk - ${format(new Date(startDate), 'dd MMM yyyy', { locale: id })} s/d ${format(new Date(endDate), 'dd MMM yyyy', { locale: id })}`
     }
+    return `Laporan Stock Produk - ${format(new Date(startDate), 'dd MMM yyyy', { locale: id })} s/d ${format(new Date(endDate), 'dd MMM yyyy', { locale: id })}`
   }
 
   const handlePrintPDF = () => {
     const doc = new jsPDF('landscape')
     const title = getReportTitle()
 
-    // Add title
     doc.setFontSize(16)
     doc.setFont('helvetica', 'bold')
     doc.text(title, 14, 22)
 
-    // Add generation info
     doc.setFontSize(10)
     doc.setFont('helvetica', 'normal')
     doc.text(`Digenerate pada: ${format(new Date(), 'dd MMMM yyyy HH:mm', { locale: id })}`, 14, 30)
     doc.text(`Cabang: ${currentBranch?.name || 'Semua Cabang'}`, 14, 36)
 
-    // Prepare table data
     const tableData = reportData.map(item => [
       item.productName,
       item.productType,
@@ -283,7 +499,7 @@ export const StockConsumptionReport = () => {
       item.totalIn > 0 ? `+${item.totalIn}` : '-',
       item.totalOut > 0 ? `-${item.totalOut}` : '-',
       item.endingStock.toString(),
-      item.netMovement > 0 ? `+${item.netMovement}` : item.netMovement.toString()
+      item.netMovement > 0 ? `+${item.netMovement}` : item.netMovement.toString(),
     ])
 
     autoTable(doc, {
@@ -300,11 +516,10 @@ export const StockConsumptionReport = () => {
         4: { cellWidth: 25, halign: 'right' },
         5: { cellWidth: 25, halign: 'right' },
         6: { cellWidth: 25, halign: 'right' },
-        7: { cellWidth: 25, halign: 'right' }
-      }
+        7: { cellWidth: 25, halign: 'right' },
+      },
     })
 
-    // Add summary
     const finalY = (doc as any).lastAutoTable.finalY + 10
     doc.setFontSize(10)
     doc.setFont('helvetica', 'bold')
@@ -321,7 +536,6 @@ export const StockConsumptionReport = () => {
     doc.text(`Total Keluar: ${totalStockOut}`, 14, finalY + 24)
     doc.text(`Produk Stock Rendah (≤5): ${lowStockCount}`, 14, finalY + 32)
 
-    // Save PDF
     const filename = filterType === 'monthly'
       ? `Laporan-Stock-${months.find(m => m.value === selectedMonth)?.label}-${selectedYear}.pdf`
       : `Laporan-Stock-${format(new Date(startDate), 'dd-MM-yyyy')}-to-${format(new Date(endDate), 'dd-MM-yyyy')}.pdf`
@@ -336,50 +550,79 @@ export const StockConsumptionReport = () => {
       'Jenis': item.productType,
       'Satuan': item.unit,
       'Stock Awal': item.startingStock,
-      'Masuk (Produksi)': item.totalIn,
-      'Keluar (Penjualan)': item.totalOut,
+      'Masuk': item.totalIn,
+      'Keluar': item.totalOut,
       'Stock Akhir': item.endingStock,
       'Net Movement': item.netMovement,
     }))
 
-    const ws = XLSX.utils.json_to_sheet([])
-    XLSX.utils.sheet_add_aoa(ws, [[title]], { origin: 'A1' })
-    XLSX.utils.sheet_add_aoa(ws, [[`Digenerate pada: ${format(new Date(), 'dd MMMM yyyy HH:mm', { locale: id })}`]], { origin: 'A2' })
-    XLSX.utils.sheet_add_aoa(ws, [[`Cabang: ${currentBranch?.name || 'Semua Cabang'}`]], { origin: 'A3' })
-    XLSX.utils.sheet_add_aoa(ws, [['']], { origin: 'A4' })
+    const detailData = movementDetails.map(item => ({
+      'Tanggal & Jam': format(item.movementDate, 'dd MMM yyyy HH:mm', { locale: id }),
+      'Nama Produk': item.productName,
+      'Jenis Produk': item.productType,
+      'Arah': item.type,
+      'Sumber': item.source,
+      'Referensi': item.reference,
+      'User': item.userName,
+      'Jumlah': item.quantity,
+      'Stock Awal': item.stockBefore,
+      'Stock Akhir': item.stockAfter,
+      'Catatan': item.notes || '-',
+    }))
 
-    const headers = ['Nama Produk', 'Jenis', 'Satuan', 'Stock Awal', 'Masuk (Produksi)', 'Keluar (Penjualan)', 'Stock Akhir', 'Net Movement']
-    XLSX.utils.sheet_add_aoa(ws, [headers], { origin: 'A5' })
+    const summarySheet = XLSX.utils.json_to_sheet([])
+    XLSX.utils.sheet_add_aoa(summarySheet, [[title]], { origin: 'A1' })
+    XLSX.utils.sheet_add_aoa(summarySheet, [[`Digenerate pada: ${format(new Date(), 'dd MMMM yyyy HH:mm', { locale: id })}`]], { origin: 'A2' })
+    XLSX.utils.sheet_add_aoa(summarySheet, [[`Cabang: ${currentBranch?.name || 'Semua Cabang'}`]], { origin: 'A3' })
+    XLSX.utils.sheet_add_aoa(summarySheet, [['']], { origin: 'A4' })
 
-    const dataRows = excelData.map(item => Object.values(item))
-    XLSX.utils.sheet_add_aoa(ws, dataRows, { origin: 'A6' })
+    const summaryHeaders = ['Nama Produk', 'Jenis', 'Satuan', 'Stock Awal', 'Masuk', 'Keluar', 'Stock Akhir', 'Net Movement']
+    XLSX.utils.sheet_add_aoa(summarySheet, [summaryHeaders], { origin: 'A5' })
+    XLSX.utils.sheet_add_aoa(summarySheet, excelData.map(item => Object.values(item)), { origin: 'A6' })
 
-    // Add summary
-    const summaryRow = dataRows.length + 7
-    XLSX.utils.sheet_add_aoa(ws, [['Ringkasan:']], { origin: `A${summaryRow}` })
-    XLSX.utils.sheet_add_aoa(ws, [[`Total Produk: ${reportData.length}`]], { origin: `A${summaryRow + 1}` })
-    XLSX.utils.sheet_add_aoa(ws, [[`Total Masuk: ${reportData.reduce((sum, item) => sum + item.totalIn, 0)}`]], { origin: `A${summaryRow + 2}` })
-    XLSX.utils.sheet_add_aoa(ws, [[`Total Keluar: ${reportData.reduce((sum, item) => sum + item.totalOut, 0)}`]], { origin: `A${summaryRow + 3}` })
+    const summaryRow = excelData.length + 7
+    XLSX.utils.sheet_add_aoa(summarySheet, [['Ringkasan:']], { origin: `A${summaryRow}` })
+    XLSX.utils.sheet_add_aoa(summarySheet, [[`Total Produk: ${reportData.length}`]], { origin: `A${summaryRow + 1}` })
+    XLSX.utils.sheet_add_aoa(summarySheet, [[`Total Masuk: ${reportData.reduce((sum, item) => sum + item.totalIn, 0)}`]], { origin: `A${summaryRow + 2}` })
+    XLSX.utils.sheet_add_aoa(summarySheet, [[`Total Keluar: ${reportData.reduce((sum, item) => sum + item.totalOut, 0)}`]], { origin: `A${summaryRow + 3}` })
 
-    ws['!cols'] = [
+    summarySheet['!cols'] = [
       { wch: 40 },
       { wch: 12 },
       { wch: 10 },
       { wch: 12 },
-      { wch: 18 },
-      { wch: 18 },
+      { wch: 12 },
+      { wch: 12 },
       { wch: 12 },
       { wch: 15 },
     ]
 
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Laporan Stock')
+    const detailSheet = XLSX.utils.json_to_sheet(detailData)
+    detailSheet['!cols'] = [
+      { wch: 22 },
+      { wch: 35 },
+      { wch: 14 },
+      { wch: 8 },
+      { wch: 18 },
+      { wch: 18 },
+      { wch: 20 },
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 40 },
+    ]
+
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, summarySheet, 'Ringkasan Stock')
+    if (detailData.length > 0) {
+      XLSX.utils.book_append_sheet(workbook, detailSheet, 'Detail Pergerakan')
+    }
 
     const filename = filterType === 'monthly'
       ? `Laporan-Stock-${months.find(m => m.value === selectedMonth)?.label}-${selectedYear}.xlsx`
       : `Laporan-Stock-${format(new Date(startDate), 'dd-MM-yyyy')}-to-${format(new Date(endDate), 'dd-MM-yyyy')}.xlsx`
 
-    XLSX.writeFile(wb, filename)
+    XLSX.writeFile(workbook, filename)
   }
 
   const getStockStatusColor = (stock: number) => {
@@ -396,6 +639,12 @@ export const StockConsumptionReport = () => {
     }
   }
 
+  const getMovementTypeColor = (type: 'IN' | 'OUT') => {
+    return type === 'IN'
+      ? 'bg-green-100 text-green-800'
+      : 'bg-red-100 text-red-800'
+  }
+
   return (
     <div className="space-y-6">
       <Card>
@@ -407,12 +656,11 @@ export const StockConsumptionReport = () => {
           <CardDescription>
             Laporan pergerakan stock produk berdasarkan periode waktu.
             <br />
-            <strong>Stock Awal</strong> = Stock di awal periode | <strong>Masuk</strong> = Dari produksi | <strong>Keluar</strong> = Penjualan | <strong>Stock Akhir</strong> = Stock di akhir periode
+            <strong>Stock Awal</strong> = Stock di awal periode | <strong>Masuk</strong> = Semua penambahan stock | <strong>Keluar</strong> = Semua pengurangan stock | <strong>Stock Akhir</strong> = Stock di akhir periode
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-4">
-            {/* Filter Type Selection */}
             <div className="space-y-2">
               <Label className="text-sm font-medium">Jenis Filter</Label>
               <Select value={filterType} onValueChange={(value: 'monthly' | 'dateRange') => setFilterType(value)}>
@@ -426,7 +674,6 @@ export const StockConsumptionReport = () => {
               </Select>
             </div>
 
-            {/* Monthly Filter */}
             {filterType === 'monthly' && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
@@ -463,7 +710,6 @@ export const StockConsumptionReport = () => {
               </div>
             )}
 
-            {/* Date Range Filter */}
             {filterType === 'dateRange' && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -491,7 +737,6 @@ export const StockConsumptionReport = () => {
               </div>
             )}
 
-            {/* Action Buttons */}
             <div className="flex gap-2">
               <Button onClick={handleGenerateReport} disabled={isLoading}>
                 <Calendar className="mr-2 h-4 w-4" />
@@ -554,8 +799,8 @@ export const StockConsumptionReport = () => {
                     <TableHead>Nama Produk</TableHead>
                     <TableHead>Jenis</TableHead>
                     <TableHead className="text-right">Stock Awal</TableHead>
-                    <TableHead className="text-right">Masuk (Produksi)</TableHead>
-                    <TableHead className="text-right">Keluar (Penjualan)</TableHead>
+                    <TableHead className="text-right">Masuk</TableHead>
+                    <TableHead className="text-right">Keluar</TableHead>
                     <TableHead className="text-right">Stock Akhir</TableHead>
                     <TableHead className="text-right">Net Movement</TableHead>
                     <TableHead className="text-center">Status</TableHead>
@@ -575,42 +820,100 @@ export const StockConsumptionReport = () => {
                           {item.productType}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right font-mono">
-                        {item.startingStock}
-                      </TableCell>
+                      <TableCell className="text-right font-mono">{item.startingStock}</TableCell>
                       <TableCell className="text-right">
-                        {item.totalIn > 0 && (
+                        {item.totalIn > 0 ? (
                           <div className="flex items-center justify-end gap-1 text-green-600">
                             <TrendingUp className="h-3 w-3" />
                             <span className="font-mono">+{item.totalIn}</span>
                           </div>
-                        )}
-                        {item.totalIn === 0 && <span className="text-muted-foreground">-</span>}
+                        ) : <span className="text-muted-foreground">-</span>}
                       </TableCell>
                       <TableCell className="text-right">
-                        {item.totalOut > 0 && (
+                        {item.totalOut > 0 ? (
                           <div className="flex items-center justify-end gap-1 text-red-600">
                             <TrendingDown className="h-3 w-3" />
                             <span className="font-mono">-{item.totalOut}</span>
                           </div>
-                        )}
-                        {item.totalOut === 0 && <span className="text-muted-foreground">-</span>}
+                        ) : <span className="text-muted-foreground">-</span>}
                       </TableCell>
-                      <TableCell className="text-right font-mono font-medium">
-                        {item.endingStock}
-                      </TableCell>
+                      <TableCell className="text-right font-mono font-medium">{item.endingStock}</TableCell>
                       <TableCell className="text-right">
-                        <span className={`font-mono font-medium ${item.netMovement > 0 ? 'text-green-600' :
-                            item.netMovement < 0 ? 'text-red-600' : 'text-muted-foreground'
-                          }`}>
+                        <span className={`font-mono font-medium ${item.netMovement > 0 ? 'text-green-600' : item.netMovement < 0 ? 'text-red-600' : 'text-muted-foreground'}`}>
                           {item.netMovement > 0 ? `+${item.netMovement}` : item.netMovement}
                         </span>
                       </TableCell>
                       <TableCell className="text-center">
                         <Badge variant="secondary" className={getStockStatusColor(item.endingStock)}>
-                          {item.endingStock <= 5 ? 'Rendah' :
-                            item.endingStock <= 10 ? 'Sedang' : 'Baik'}
+                          {item.endingStock <= 5 ? 'Rendah' : item.endingStock <= 10 ? 'Sedang' : 'Baik'}
                         </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {movementDetails.length > 0 && !isLoading && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Detail Pergerakan Produk</CardTitle>
+            <CardDescription>
+              Setiap pergerakan stock dicatat per tanggal, jam, user, referensi, jumlah, stock awal, dan stock akhir.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="border rounded-lg overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Tanggal & Jam</TableHead>
+                    <TableHead>Produk</TableHead>
+                    <TableHead>Arah</TableHead>
+                    <TableHead>Sumber</TableHead>
+                    <TableHead>Referensi</TableHead>
+                    <TableHead>User</TableHead>
+                    <TableHead className="text-right">Jumlah</TableHead>
+                    <TableHead className="text-right">Stock Awal</TableHead>
+                    <TableHead className="text-right">Stock Akhir</TableHead>
+                    <TableHead>Catatan</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {movementDetails.map((movement) => (
+                    <TableRow key={movement.id}>
+                      <TableCell className="whitespace-nowrap text-sm">
+                        {format(movement.movementDate, 'dd MMM yyyy HH:mm', { locale: id })}
+                      </TableCell>
+                      <TableCell>
+                        <div>
+                          <div className="font-medium">{movement.productName}</div>
+                          <div className="text-xs text-muted-foreground">{movement.unit}</div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className={getMovementTypeColor(movement.type)}>
+                          {movement.type}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm font-medium">{movement.source}</div>
+                        <div className="text-xs text-muted-foreground">{movement.reason}</div>
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">{movement.reference}</TableCell>
+                      <TableCell>{movement.userName || 'System'}</TableCell>
+                      <TableCell className="text-right">
+                        <span className={`font-mono font-medium ${movement.type === 'IN' ? 'text-green-600' : 'text-red-600'}`}>
+                          {movement.type === 'IN' ? '+' : '-'}{movement.quantity}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right font-mono">{movement.stockBefore}</TableCell>
+                      <TableCell className="text-right font-mono font-medium">{movement.stockAfter}</TableCell>
+                      <TableCell className="max-w-[260px] whitespace-normal text-sm text-muted-foreground">
+                        {movement.notes || '-'}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -632,8 +935,8 @@ export const StockConsumptionReport = () => {
             <div className="text-sm text-muted-foreground space-y-1">
               <p><strong>Keterangan:</strong></p>
               <p>Stock Awal = Stock produk di awal periode filter</p>
-              <p>Masuk = Jumlah produk dari produksi</p>
-              <p>Keluar = Jumlah produk yang terjual</p>
+              <p>Masuk = Semua penambahan stock produk</p>
+              <p>Keluar = Semua pengurangan stock produk</p>
               <p>Stock Akhir = Stock produk di akhir periode</p>
             </div>
           </CardContent>
