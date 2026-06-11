@@ -66,7 +66,10 @@ const formatMovementSource = (referenceType?: string | null, movementType?: 'IN'
     case 'stock_in':
       return 'Penambahan Stok'
     case 'stock_out':
+    case 'fifo_consume':
       return 'Pengurangan Stok'
+    case 'fifo_restore':
+      return 'Penambahan Stok'
     default:
       return referenceType || 'Movement'
   }
@@ -83,8 +86,8 @@ const formatMovementReason = (reason?: string | null, referenceType?: string | n
   if (reason === 'CANCEL_OR_EDIT_SALE') return 'Edit / Cancel Penjualan Kantor'
   if (reason === 'CANCEL_OR_RETURN_DELIVERY') return 'Cancel / Retur Pengantaran'
   if (referenceType === 'production' && movementType === 'IN') return 'Produksi'
-  if (referenceType === 'stock_in') return 'Penambahan Stok'
-  if (referenceType === 'stock_out') return 'Pengurangan Stok'
+  if (referenceType === 'stock_in' || referenceType === 'fifo_restore') return 'Penambahan Stok'
+  if (referenceType === 'stock_out' || referenceType === 'fifo_consume') return 'Pengurangan Stok'
   if (referenceType === 'sale' && movementType === 'IN') return 'Edit / Cancel Penjualan Kantor'
   if (referenceType === 'delivery' && movementType === 'IN') return 'Cancel / Retur Pengantaran'
   return reason || 'Movement'
