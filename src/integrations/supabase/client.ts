@@ -28,8 +28,9 @@ const APK_SERVER = import.meta.env.VITE_APK_SERVER as string | undefined;
 // This mirrors postgrestAuth.ts to avoid circular dependency
 let cachedSession: { access_token: string; exp: number } | null = null;
 
-// Helper to get JWT token from memory/sessionStorage
-// Uses same storage as postgrestAuth.ts but avoids circular import
+// Helper to get JWT token from memory/storage
+// Reads sessionStorage first, then falls back to localStorage because
+// postgrestAuth persists shared sessions there across tabs.
 function getPostgRESTToken(): string | null {
   try {
     // 1. Check cached session in memory
@@ -41,8 +42,9 @@ function getPostgRESTToken(): string | null {
       cachedSession = null;
     }
 
-    // 2. Try to recover from sessionStorage
-    const stored = sessionStorage.getItem(SESSION_STORAGE_KEY);
+    // 2. Try to recover from sessionStorage first, then localStorage
+    const stored = sessionStorage.getItem(SESSION_STORAGE_KEY)
+      || localStorage.getItem(SESSION_STORAGE_KEY);
     if (!stored) {
       return null;
     }
@@ -62,6 +64,7 @@ function getPostgRESTToken(): string | null {
     const isExpired = payload.exp * 1000 <= Date.now();
     if (isExpired) {
       sessionStorage.removeItem(SESSION_STORAGE_KEY);
+      localStorage.removeItem(SESSION_STORAGE_KEY);
       return null;
     }
 

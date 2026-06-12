@@ -88,15 +88,18 @@ function getStoredSession(): AuthSession | null {
 }
 
 // Helper to store session
-// Stores in both memory (primary) and localStorage (shared across all tabs)
+// Stores in memory plus both web storage locations so existing client code,
+// multi-tab recovery, and direct page refreshes all see the same token.
 function storeSession(session: AuthSession | null) {
   // Always update memory first
   currentSession = session;
 
   if (session) {
     localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+    sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
   } else {
     localStorage.removeItem(SESSION_STORAGE_KEY);
+    sessionStorage.removeItem(SESSION_STORAGE_KEY);
   }
 }
 
