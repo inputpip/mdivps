@@ -447,8 +447,8 @@ export const StockConsumptionReport = () => {
       const totalOut = productMovementsForItem
         .filter(movement => movement.type === 'OUT')
         .reduce((sum, movement) => sum + movement.quantity, 0)
-      const startingStock = Math.max(0, endingStock - totalIn + totalOut)
       const netMovement = totalIn - totalOut
+      const startingStock = endingStock - netMovement
 
       let runningStock = startingStock
       productMovementsForItem.forEach((movement) => {

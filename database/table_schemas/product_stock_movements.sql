@@ -106,6 +106,12 @@ ALTER TABLE ONLY public.product_stock_movements
 ALTER TABLE public.product_stock_movements ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: product_stock_movements product_stock_movements_allow_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY product_stock_movements_allow_all ON public.product_stock_movements TO authenticated USING (true) WITH CHECK (true);
+
+--
 -- PostgreSQL database dump complete
 --
 

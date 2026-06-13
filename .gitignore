@@ -26,7 +26,11 @@ dist-ssr
 *.sw?
 nul
 *.pem
+*.pub
 Aquvit.pem
+Aquvit key 2
+Aquvit key 2.pub
+mdivps/
 
 # Local test files
 scripts/auth-server/.env
