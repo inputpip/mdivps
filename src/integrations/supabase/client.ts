@@ -265,9 +265,11 @@ function createSupabaseClient(): SupabaseClient {
             // URL parsing failed, continue with original URL
           }
 
-          // Merge headers with Authorization if we have a token
+          // Merge headers and ALWAYS override Authorization with the user token
+          // when available. Supabase JS may prefill Authorization with the anon key,
+          // which would make write requests run as anon and fail on protected tables.
           const headers = new Headers(options?.headers);
-          if (token && !headers.has('Authorization')) {
+          if (token) {
             headers.set('Authorization', `Bearer ${token}`);
           }
 
