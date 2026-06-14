@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/integrations/supabase/client'
+import { AppFeatureSettingsMap, mergeFeatureSettings } from '@/config/featureSettings'
 
 export interface CompanyInfo {
   name: string;
@@ -27,6 +28,7 @@ export interface CompanyInfo {
   telegramBotToken?: string;
   telegramChatId?: string;
   telegramEnabled?: boolean;
+  appFeatureSettings?: AppFeatureSettingsMap;
 }
 
 export const useCompanySettings = () => {
@@ -42,6 +44,16 @@ export const useCompanySettings = () => {
         acc[key] = value;
         return acc;
       }, {} as any);
+
+      let appFeatureSettings: AppFeatureSettingsMap | undefined;
+      if (settingsObj.app_feature_settings_json) {
+        try {
+          appFeatureSettings = mergeFeatureSettings(JSON.parse(settingsObj.app_feature_settings_json));
+        } catch (parseError) {
+          console.warn('Failed to parse app_feature_settings_json:', parseError);
+          appFeatureSettings = mergeFeatureSettings(null);
+        }
+      }
 
       const settings = {
         name: settingsObj.company_name || '',
@@ -64,6 +76,7 @@ export const useCompanySettings = () => {
         telegramBotToken: settingsObj.telegram_bot_token || '',
         telegramChatId: settingsObj.telegram_chat_id || '',
         telegramEnabled: settingsObj.telegram_enabled === 'true',
+        appFeatureSettings,
       };
 
       // Cache logo for early loading screens (like APK server selector)
@@ -102,6 +115,7 @@ export const useCompanySettings = () => {
         { key: 'telegram_bot_token', value: newInfo.telegramBotToken || '' },
         { key: 'telegram_chat_id', value: newInfo.telegramChatId || '' },
         { key: 'telegram_enabled', value: newInfo.telegramEnabled ? 'true' : 'false' },
+        { key: 'app_feature_settings_json', value: JSON.stringify(newInfo.appFeatureSettings || {}) },
       ];
       const { error } = await supabase.from('company_settings').upsert(settingsData);
       if (error) throw new Error(error.message);

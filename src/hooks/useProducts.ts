@@ -42,6 +42,7 @@ export const updateProductCostFromBOM = async (productId: string): Promise<numbe
 const fromDb = (dbProduct: any): Product => ({
   id: dbProduct.id,
   name: dbProduct.name,
+  barcode: dbProduct.barcode || '',
   type: dbProduct.type || 'Produksi',
   basePrice: Number(dbProduct.base_price) || 0,
   costPrice: dbProduct.cost_price ? Number(dbProduct.cost_price) : undefined,
@@ -63,6 +64,7 @@ const toDb = (appProduct: Partial<Product>) => {
   const dbData: any = {};
 
   if (appProduct.name !== undefined) dbData.name = appProduct.name;
+  if (appProduct.barcode !== undefined) dbData.barcode = appProduct.barcode || null;
   if (appProduct.type !== undefined) dbData.type = appProduct.type;
   if (appProduct.basePrice !== undefined) dbData.base_price = appProduct.basePrice;
   if (appProduct.costPrice !== undefined) dbData.cost_price = appProduct.costPrice;

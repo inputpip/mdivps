@@ -29,6 +29,7 @@ SET default_table_access_method = heap;
 CREATE TABLE public.materials (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     name text NOT NULL,
+    barcode text,
     unit text NOT NULL,
     price_per_unit numeric NOT NULL,
     stock numeric NOT NULL,

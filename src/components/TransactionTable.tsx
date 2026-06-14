@@ -9,7 +9,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table"
-import { PlusCircle, FileDown, Trash2, Search, X, Edit, Eye, FileText, Calendar, Truck, Filter, ChevronDown, ChevronUp, Printer, Check } from "lucide-react"
+import { PlusCircle, FileDown, Trash2, Search, X, Eye, FileText, Calendar, Truck, Filter, ChevronDown, ChevronUp, Printer, Check } from "lucide-react"
 import * as XLSX from "xlsx"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
@@ -58,7 +58,6 @@ import { cn } from "@/lib/utils"
 import { useTransactions } from "@/hooks/useTransactions"
 import { Skeleton } from "./ui/skeleton"
 import { useAuth } from "@/hooks/useAuth"
-import { EditTransactionDialog } from "./EditTransactionDialog"
 import { MigrationTransactionDialog } from "./MigrationTransactionDialog"
 import { isOwner } from '@/utils/roleUtils'
 import { useDeliveryEmployees, useDeliveryHistory } from "@/hooks/useDeliveries"
@@ -180,8 +179,6 @@ export function TransactionTable() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = React.useState(false);
   const [cancelReason, setCancelReason] = React.useState('');
   const [selectedTransaction, setSelectedTransaction] = React.useState<Transaction | null>(null);
-  const [isEditDialogOpen, setIsEditDialogOpen] = React.useState(false);
-  const [transactionToEdit, setTransactionToEdit] = React.useState<Transaction | null>(null);
   const [isMigrationDialogOpen, setIsMigrationDialogOpen] = React.useState(false);
 
   // Helper function to check if payment is overdue
@@ -377,14 +374,6 @@ export function TransactionTable() {
   const handleDeleteClick = (transaction: Transaction) => {
     setSelectedTransaction(transaction);
     setIsDeleteDialogOpen(true);
-  };
-
-  const handleEditClick = (_transaction: Transaction) => {
-    toast({
-      variant: "destructive",
-      title: "Fitur Edit Transaksi Dinonaktifkan",
-      description: "Sementara edit transaksi dimatikan untuk semua role sampai masalah sinkronisasi diperbaiki.",
-    });
   };
 
   const confirmDelete = () => {
@@ -880,16 +869,6 @@ export function TransactionTable() {
             >
               <Eye className="h-4 w-4" />
             </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => handleEditClick(transaction)}
-              title="Edit Transaksi"
-              className="hover-glow"
-            >
-              <Edit className="h-4 w-4" />
-            </Button>
-
             <Button
               size="sm"
               onClick={(e) => {
@@ -1913,15 +1892,6 @@ export function TransactionTable() {
       </AlertDialog>
 
       {/* Production cancellation warning dialog removed - no longer needed */}
-
-      {false && transactionToEdit && (
-        <EditTransactionDialog
-          open={isEditDialogOpen}
-          onOpenChange={setIsEditDialogOpen}
-          transaction={transactionToEdit}
-        />
-      )}
-
       {/* Migration Dialog - Owner Only */}
       <MigrationTransactionDialog
         open={isMigrationDialogOpen}

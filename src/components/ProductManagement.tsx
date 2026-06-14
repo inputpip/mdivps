@@ -31,6 +31,7 @@ export function ProductManagement() {
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState({
     name: "",
+    barcode: "",
     type: "Produksi" as ProductType,
     basePrice: 0,
     costPrice: 0,
@@ -75,6 +76,11 @@ export function ProductManagement() {
           {row.type}
         </span>
       ),
+    },
+    {
+      key: "barcode",
+      header: "Barcode",
+      render: (row: any) => row.barcode || '-',
     },
     { key: "unit", header: "Satuan" },
     {
@@ -271,6 +277,7 @@ export function ProductManagement() {
       setOpen(false)
       setForm({
         name: "",
+        barcode: "",
         type: "Produksi" as ProductType,
         basePrice: 0,
         costPrice: 0,
@@ -297,6 +304,7 @@ export function ProductManagement() {
   const exportXlsx = () => {
     const exportData = products?.map(product => ({
       'Nama Produk': product.name,
+      'Barcode': product.barcode || '',
       'Jenis': product.type,
       'Satuan': product.unit,
       'Harga Jual': product.basePrice,
@@ -349,6 +357,19 @@ export function ProductManagement() {
                       placeholder="Nama Produk"
                       value={form.name}
                       onChange={(e) => setForm({ ...form, name: e.target.value })}
+                      className="text-sm mt-1"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="barcode" className="text-sm">
+                      Barcode
+                    </Label>
+                    <Input
+                      id="barcode"
+                      placeholder="Barcode produk"
+                      value={form.barcode}
+                      onChange={(e) => setForm({ ...form, barcode: e.target.value })}
                       className="text-sm mt-1"
                     />
                   </div>
@@ -577,6 +598,7 @@ function EditProductButton({ product, onSaved }: { product: any; onSaved: () => 
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState({
     name: product.name,
+    barcode: product.barcode || "",
     type: product.type,
     basePrice: product.basePrice,
     costPrice: product.costPrice || 0,
@@ -646,6 +668,19 @@ function EditProductButton({ product, onSaved }: { product: any; onSaved: () => 
               placeholder="Nama Produk"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
+              className="text-sm mt-1"
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="edit-barcode" className="text-sm">
+              Barcode
+            </Label>
+            <Input
+              id="edit-barcode"
+              placeholder="Barcode produk"
+              value={form.barcode}
+              onChange={(e) => setForm({ ...form, barcode: e.target.value })}
               className="text-sm mt-1"
             />
           </div>

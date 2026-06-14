@@ -5,18 +5,11 @@ import { Browser } from '@capacitor/browser';
 
 const SERVERS = [
   {
-    id: 'nabire',
-    name: 'Aquvit Nabire',
-    url: 'https://nbx.aquvit.id',
-    description: 'Server utama Nabire',
+    id: 'matahari',
+    name: 'Matahari Percetakan',
+    url: 'https://matahari.aquvit.id',
+    description: 'Server utama Matahari',
     icon: '🏭',
-  },
-  {
-    id: 'manokwari',
-    name: 'Aquvit Manokwari',
-    url: 'https://mkw.aquvit.id',
-    description: 'Server Manokwari',
-    icon: '🏢',
   },
 ];
 
@@ -51,8 +44,8 @@ export function ServerSelector() {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-full mb-4">
             <Building2 className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Pilih Server</h1>
-          <p className="text-gray-600 mt-2">Pilih lokasi usaha yang ingin diakses</p>
+          <h1 className="text-2xl font-bold text-gray-900">Pilih Server Matahari</h1>
+          <p className="text-gray-600 mt-2">Buka aplikasi percetakan Matahari</p>
         </div>
 
         <div className="space-y-4">
@@ -90,7 +83,7 @@ export function ServerSelector() {
         </div>
 
         <p className="text-center text-xs text-gray-400 mt-8">
-          Pilih lokasi untuk membuka aplikasi
+          Buka server Matahari untuk melanjutkan
         </p>
       </div>
     </div>

@@ -29,6 +29,7 @@ SET default_table_access_method = heap;
 CREATE TABLE public.products (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     name text NOT NULL,
+    barcode text,
     base_price numeric NOT NULL,
     unit text NOT NULL,
     min_order integer NOT NULL,

@@ -3,7 +3,7 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { ShoppingCart, Clock, User, LogOut, Menu, X, List, Truck, Package, Users, ArrowLeft, Home, Sun, Moon, Building2, Check, ChevronsUpDown, Factory, Warehouse, Navigation, Coins, MapPin, FileText, RefreshCw, Receipt, Wrench, Search } from 'lucide-react'
+import { ShoppingCart, Clock, User, LogOut, Menu, X, List, Truck, Package, Users, ArrowLeft, Home, Sun, Moon, Building2, Check, ChevronsUpDown, Factory, Warehouse, Navigation, Coins, MapPin, FileText, RefreshCw, Receipt, Wrench, Search, BriefcaseBusiness } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useCompanySettings } from '@/hooks/useCompanySettings'
 import { cn } from '@/lib/utils'
@@ -15,7 +15,9 @@ import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { usePermissions } from '@/hooks/usePermissions'
+import { PERMISSIONS } from '@/hooks/usePermissions'
 import { useGranularPermission } from '@/hooks/useGranularPermission'
+import { AppFeatureKey, isFeatureEnabled } from '@/config/featureSettings'
 
 
 
@@ -119,6 +121,29 @@ const MobileLayout = () => {
     hasGranularPermission('pos_driver_access')
   )
 
+  const featureSettings = settings?.appFeatureSettings
+  const featurePathMap: Partial<Record<string, AppFeatureKey>> = {
+    '/driver-pos': 'delivery',
+    '/delivery': 'delivery',
+    '/delivery-report': 'delivery_reports',
+    '/mobile-sales-report': 'sales_reports',
+    '/quotations': 'quotations',
+    '/production': 'production_bom',
+    '/retasi': 'retasi',
+    '/attendance': 'attendance',
+    '/assets': 'assets_maintenance',
+    '/maintenance': 'assets_maintenance',
+    '/zakat': 'zakat',
+    '/tax': 'tax',
+    '/purchase-orders': 'purchase_orders',
+    '/projects': 'projects',
+  }
+
+  const isPathEnabled = (path: string) => {
+    const featureKey = featurePathMap[path]
+    return featureKey ? isFeatureEnabled(featureSettings, featureKey) : true
+  }
+
   // Permission checks for mobile features (Specific mobile dashboard toggles)
   const canAccessPOS = hasGranularPermission('mobile_pos')
   const canAccessDriverPOS = hasGranularPermission('mobile_driver_pos')
@@ -137,6 +162,7 @@ const MobileLayout = () => {
   const canViewMaintenance = hasGranularPermission('mobile_maintenance')
   const canViewSalesReport = hasGranularPermission('mobile_sales_report')
   const canViewDeliveryReport = hasGranularPermission('mobile_delivery_report') || hasGranularPermission('delivery_report_view')
+  const canAccessProjects = hasPermission(PERMISSIONS.TRANSACTIONS)
 
   // Helper gets limited menu: POS Supir, Pelanggan Terdekat, Komisi Saya
   const helperMenuItems = [
@@ -144,24 +170,24 @@ const MobileLayout = () => {
       title: 'POS Supir',
       icon: Truck,
       path: '/driver-pos',
-      description: 'POS khusus Supir & Helper',
+      description: 'Input penjualan dari driver',
       color: 'bg-orange-500 hover:bg-orange-600',
       textColor: 'text-white'
     },
     {
       title: 'Pelanggan Terdekat',
-      icon: MapPin,
+      icon: Users,
       path: '/customer-map',
-      description: 'Cari pelanggan via GPS',
-      color: 'bg-rose-500 hover:bg-rose-600',
+      description: 'Cari pelanggan terdekat',
+      color: 'bg-blue-500 hover:bg-blue-600',
       textColor: 'text-white'
     },
     {
       title: 'Komisi Saya',
       icon: Coins,
       path: '/my-commission',
-      description: 'Lihat laporan komisi',
-      color: 'bg-yellow-500 hover:bg-yellow-600',
+      description: 'Lihat komisi penjualan',
+      color: 'bg-emerald-500 hover:bg-emerald-600',
       textColor: 'text-white'
     },
     {
@@ -180,29 +206,26 @@ const MobileLayout = () => {
       color: 'bg-teal-500 hover:bg-teal-600',
       textColor: 'text-white'
     }
-  ]
+  ].filter(item => isPathEnabled(item.path))
 
   // Regular menu items (for non-helper roles)
   const regularMenuItems = [
-    // POS Kasir - controlled by pos_access permission
     ...(canAccessPOS ? [{
       title: 'Point of Sale (POS)',
       icon: ShoppingCart,
       path: '/pos',
       description: 'Buat transaksi penjualan',
-      color: 'bg-blue-500 hover:bg-blue-600',
+      color: 'bg-green-500 hover:bg-green-600',
       textColor: 'text-white'
     }] : []),
-    // POS Supir - controlled by pos_driver_access permission
     ...(canAccessDriverPOS ? [{
       title: 'POS Supir',
       icon: Truck,
       path: '/driver-pos',
-      description: 'POS khusus Supir & Helper',
+      description: 'Input penjualan dari driver',
       color: 'bg-orange-500 hover:bg-orange-600',
       textColor: 'text-white'
     }] : []),
-    // Pengantaran - controlled by delivery_view permission
     ...(canViewDelivery ? [{
       title: 'Pengantaran',
       icon: Truck,
@@ -211,34 +234,30 @@ const MobileLayout = () => {
       color: 'bg-sky-500 hover:bg-sky-600',
       textColor: 'text-white'
     }] : []),
-    // Data Transaksi - controlled by transactions_view permission
     ...(canViewTransactions ? [{
       title: 'Data Transaksi',
       icon: List,
       path: '/transactions',
-      description: 'Lihat riwayat transaksi & cetak',
-      color: 'bg-purple-500 hover:bg-purple-600',
+      description: 'Lihat daftar transaksi',
+      color: 'bg-blue-500 hover:bg-blue-600',
       textColor: 'text-white'
     }] : []),
-    // Pengeluaran - controlled by expenses_view permission
     ...(canAccessExpenses ? [{
       title: 'Pengeluaran',
       icon: Receipt,
       path: '/expenses',
-      description: 'Catat & kelola pengeluaran',
+      description: 'Catat biaya operasional',
       color: 'bg-red-500 hover:bg-red-600',
       textColor: 'text-white'
     }] : []),
-    // Data Pelanggan - controlled by customers_view permission
     ...(canViewCustomers ? [{
-      title: 'Data Pelanggan',
+      title: 'Pelanggan',
       icon: Users,
       path: '/customers',
       description: 'Kelola data pelanggan',
       color: 'bg-cyan-500 hover:bg-cyan-600',
       textColor: 'text-white'
     }] : []),
-    // Pelanggan Terdekat - controlled by customer_map_access permission
     ...(canAccessCustomerMap ? [{
       title: 'Pelanggan Terdekat',
       icon: MapPin,
@@ -247,7 +266,6 @@ const MobileLayout = () => {
       color: 'bg-rose-500 hover:bg-rose-600',
       textColor: 'text-white'
     }] : []),
-    // Quotation/Penawaran - controlled by quotations_view or quotations_create permission
     ...(canAccessQuotations ? [{
       title: 'Penawaran',
       icon: FileText,
@@ -256,7 +274,14 @@ const MobileLayout = () => {
       color: 'bg-violet-500 hover:bg-violet-600',
       textColor: 'text-white'
     }] : []),
-    // Input Produksi - controlled by production_view or production_create permission
+    ...(canAccessProjects ? [{
+      title: 'Proyek',
+      icon: BriefcaseBusiness,
+      path: '/projects',
+      description: 'Pantau pekerjaan & biaya proyek',
+      color: 'bg-slate-700 hover:bg-slate-800',
+      textColor: 'text-white'
+    }] : []),
     ...(canAccessProduction ? [{
       title: 'Input Produksi',
       icon: Factory,
@@ -265,34 +290,30 @@ const MobileLayout = () => {
       color: 'bg-amber-500 hover:bg-amber-600',
       textColor: 'text-white'
     }] : []),
-    // Gudang - controlled by warehouse_access permission
     ...(canAccessWarehouse ? [{
       title: 'Gudang',
       icon: Warehouse,
       path: '/warehouse',
-      description: 'Persediaan & Purchase Order',
+      description: 'Kelola stok gudang',
       color: 'bg-indigo-500 hover:bg-indigo-600',
       textColor: 'text-white'
     }] : []),
-    // Retasi - controlled by retasi_view permission
     ...(canViewRetasi ? [{
       title: 'Retasi',
       icon: Navigation,
       path: '/retasi',
-      description: 'Input & kelola retasi',
-      color: 'bg-teal-500 hover:bg-teal-600',
+      description: 'Kelola retur & retasi',
+      color: 'bg-fuchsia-500 hover:bg-fuchsia-600',
       textColor: 'text-white'
     }] : []),
-    // Produk Laku - controlled by transaction_items_report permission
     ...(canViewSoldItems ? [{
       title: 'Produk Laku',
       icon: Package,
       path: '/sold-items',
-      description: 'Laporan produk terjual',
-      color: 'bg-emerald-500 hover:bg-emerald-600',
+      description: 'Lihat produk terjual',
+      color: 'bg-purple-500 hover:bg-purple-600',
       textColor: 'text-white'
     }] : []),
-    // Komisi - controlled by mobile_commission permission
     ...(canViewCommission ? [{
       title: 'Komisi Saya',
       icon: Coins,
@@ -301,7 +322,6 @@ const MobileLayout = () => {
       color: 'bg-yellow-500 hover:bg-yellow-600',
       textColor: 'text-white'
     }] : []),
-    // Absensi - controlled by mobile_attendance permission
     ...(canAccessAttendance ? [{
       title: 'Absensi',
       icon: Clock,
@@ -310,7 +330,6 @@ const MobileLayout = () => {
       color: 'bg-green-500 hover:bg-green-600',
       textColor: 'text-white'
     }] : []),
-    // Maintenance Aset - controlled by mobile_maintenance permission
     ...(canViewMaintenance ? [{
       title: 'Maintenance Aset',
       icon: Wrench,
@@ -319,7 +338,6 @@ const MobileLayout = () => {
       color: 'bg-zinc-600 hover:bg-zinc-700',
       textColor: 'text-white'
     }] : []),
-    // Laporan Sales - controlled by mobile_sales_report permission
     ...(canViewSalesReport ? [{
       title: 'Laporan Sales',
       icon: MapPin,
@@ -328,7 +346,6 @@ const MobileLayout = () => {
       color: 'bg-indigo-600 hover:bg-indigo-700',
       textColor: 'text-white'
     }] : []),
-    // Lapor Antar - controlled by mobile_delivery_report permission
     ...(canViewDeliveryReport ? [{
       title: 'Lapor Antar',
       icon: MapPin,
@@ -337,10 +354,9 @@ const MobileLayout = () => {
       color: 'bg-teal-500 hover:bg-teal-600',
       textColor: 'text-white'
     }] : [])
-  ]
+  ].filter(item => isPathEnabled(item.path))
 
-  // Consolidate all menu items to use permission-based regularMenuItems
-  const menuItems = regularMenuItems
+  const menuItems = isHelper ? helperMenuItems : regularMenuItems
 
   const handleLogout = async () => {
     try {
@@ -374,6 +390,8 @@ const MobileLayout = () => {
         return 'Data Transaksi'
       case '/customers':
         return 'Data Pelanggan'
+      case '/projects':
+        return 'Proyek'
       case '/production':
         return 'Input Produksi'
       case '/attendance':

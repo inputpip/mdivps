@@ -8,7 +8,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { Layout } from "@/components/layout/Layout";
 import MobileLayout from "@/components/layout/MobileLayout";
 import ProtectedRoute from "@/components/ProtectedRoute";
-import { Suspense, lazy, useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useState, type ReactNode } from "react";
 import PageLoader from "@/components/PageLoader";
 import { useChunkErrorHandler } from "@/hooks/useChunkErrorHandler";
 import { useMobileDetection } from "@/hooks/useMobileDetection";
@@ -19,12 +19,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Building2, MapPin, Check } from "lucide-react";
 import { PinValidationDialog } from "@/components/PinValidationDialog";
 import { RouteRefreshHandler } from "@/components/RouteRefreshHandler";
+import { AppFeatureKey, isFeatureEnabled } from "@/config/featureSettings";
 
 // Lazy load all pages
 const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
 const PosPage = lazy(() => import("@/pages/PosPage"));
 const TransactionListPage = lazy(() => import("@/pages/TransactionListPage"));
 const TransactionDetailPage = lazy(() => import("@/pages/TransactionDetailPage"));
+const TransactionEditPage = lazy(() => import("@/pages/TransactionEditPage"));
 const MasterDataStockPage = lazy(() => import("@/pages/MasterDataStockPage"));
 const ProductDetailPage = lazy(() => import("@/pages/ProductDetailPage"));
 // const MaterialPage = lazy(() => import("@/pages/MaterialPage")); // Replaced by MasterDataStockPage
@@ -79,6 +81,7 @@ const MobileSalesReportPage = lazy(() => import("@/pages/MobileSalesReportPage")
 const MobileDeliveryReportPage = lazy(() => import("@/pages/MobileDeliveryReportPage"));
 const SalesReportPage = lazy(() => import("@/pages/SalesReportPage"));
 const DeliveryReportPage = lazy(() => import("@/pages/DeliveryReportPage"));
+const ProjectsPage = lazy(() => import("@/pages/ProjectsPage"));
 
 
 const QuotationsPage = lazy(() => import("@/pages/QuotationsPage"));
@@ -86,22 +89,15 @@ const CompanyArchivePage = lazy(() => import("@/pages/CompanyArchivePage"));
 const AuditLogsPage = lazy(() => import("@/pages/AuditLogsPage"));
 const SERVERS = [
   {
-    id: 'nabire',
-    name: 'Aquvit Nabire',
-    url: 'https://nbx.aquvit.id',
-    description: 'Server utama Nabire',
+    id: 'matahari',
+    name: 'Matahari Percetakan',
+    url: 'https://matahari.aquvit.id',
+    description: 'Server utama Matahari',
     icon: '🏭',
-  },
-  {
-    id: 'manokwari',
-    name: 'Aquvit Manokwari',
-    url: 'https://mkw.aquvit.id',
-    description: 'Server Manokwari',
-    icon: '🏢',
   },
 ];
 
-const SERVER_STORAGE_KEY = 'aquvit_selected_server';
+const SERVER_STORAGE_KEY = 'matahari_selected_server';
 
 // Server Selection Screen Component
 function ServerSelector({ onSelect }: { onSelect: (url: string) => void }) {
@@ -134,8 +130,8 @@ function ServerSelector({ onSelect }: { onSelect: (url: string) => void }) {
               <Building2 className="w-10 h-10 text-blue-600" />
             )}
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Pilih Server</h1>
-          <p className="text-gray-600 mt-2">Pilih lokasi usaha yang ingin diakses</p>
+          <h1 className="text-2xl font-bold text-gray-900">Pilih Server Matahari</h1>
+          <p className="text-gray-600 mt-2">Pilih server aplikasi percetakan yang ingin diakses</p>
         </div>
 
         <div className="space-y-4">
@@ -207,7 +203,7 @@ function App() {
 
     if (isCapacitorApp() && !hardcodedServer) {
       // Clear previous selection so user always picks
-      localStorage.removeItem('aquvit_selected_server');
+      localStorage.removeItem(SERVER_STORAGE_KEY);
       setShowSelector(true);
     }
     setIsReady(true);
@@ -244,6 +240,10 @@ function WebApp() {
 
   // Company settings for favicon
   const { settings } = useCompanySettings();
+  const featureSettings = settings?.appFeatureSettings;
+  const renderFeatureRoute = (featureKey: AppFeatureKey, enabledElement: ReactNode) => {
+    return isFeatureEnabled(featureSettings, featureKey) ? enabledElement : <NotFound />;
+  };
 
   // Cache management and optimization
   const { prefetchCriticalData, getCacheStats } = useCacheManager();
@@ -288,25 +288,27 @@ function WebApp() {
                     <Route element={<ProtectedRoute><MobileLayout /></ProtectedRoute>}>
                       <Route path="/" element={<PosPage />} />
                       <Route path="/pos" element={<PosPage />} />
-                      <Route path="/driver-pos" element={<DriverPosPage />} />
-                      <Route path="/attendance" element={<AttendancePage />} />
+                      <Route path="/driver-pos" element={renderFeatureRoute('delivery', <DriverPosPage />)} />
+                      <Route path="/attendance" element={renderFeatureRoute('attendance', <AttendancePage />)} />
                       <Route path="/transactions" element={<TransactionListPage />} />
                       <Route path="/transactions/:id" element={<TransactionDetailPage />} />
+                      <Route path="/transactions/:id/edit" element={<TransactionEditPage />} />
                       <Route path="/customers" element={<CustomerPage />} />
                       <Route path="/customers/:id" element={<CustomerDetailPage />} />
                       <Route path="/customer-map" element={<CustomerMapPage />} />
-                      <Route path="/production" element={<ProductionPage />} />
+                      <Route path="/projects" element={renderFeatureRoute('projects', <ProjectsPage />)} />
+                      <Route path="/production" element={renderFeatureRoute('production_bom', <ProductionPage />)} />
                       <Route path="/warehouse" element={<WarehousePage />} />
-                      <Route path="/retasi" element={<MobileRetasiPage />} />
-                      <Route path="/delivery" element={<DeliveryPage />} />
+                      <Route path="/retasi" element={renderFeatureRoute('retasi', <MobileRetasiPage />)} />
+                      <Route path="/delivery" element={renderFeatureRoute('delivery', <DeliveryPage />)} />
                       <Route path="/sold-items" element={<MobileSoldItemsPage />} />
                       <Route path="/my-commission" element={<MobileCommissionPage />} />
                       <Route path="/expenses" element={<MobileExpensePage />} />
-                      <Route path="/mobile-maintenance" element={<MobileMaintenancePage />} />
-                      <Route path="/mobile-sales-report" element={<MobileSalesReportPage />} />
-                      <Route path="/delivery-report" element={<MobileDeliveryReportPage />} />
-                      <Route path="/quotations" element={<QuotationsPage />} />
-                      <Route path="/quotations/new" element={<QuotationsPage />} />
+                      <Route path="/mobile-maintenance" element={renderFeatureRoute('assets_maintenance', <MobileMaintenancePage />)} />
+                      <Route path="/mobile-sales-report" element={renderFeatureRoute('sales_reports', <MobileSalesReportPage />)} />
+                      <Route path="/delivery-report" element={renderFeatureRoute('delivery_reports', <MobileDeliveryReportPage />)} />
+                      <Route path="/quotations" element={renderFeatureRoute('quotations', <QuotationsPage />)} />
+                      <Route path="/quotations/new" element={renderFeatureRoute('quotations', <QuotationsPage />)} />
                       <Route path="/journal" element={<JournalPage />} />
                       <Route path="/employees" element={<EmployeePage />} />
 
@@ -319,17 +321,19 @@ function WebApp() {
                       <Route path="/pos" element={<PosPage />} />
                       <Route path="/transactions" element={<TransactionListPage />} />
                       <Route path="/transactions/:id" element={<TransactionDetailPage />} />
+                      <Route path="/transactions/:id/edit" element={<TransactionEditPage />} />
                       <Route path="/products" element={<MasterDataStockPage />} />
                       <Route path="/products/:id" element={<ProductDetailPage />} />
                       <Route path="/materials" element={<MasterDataStockPage />} />
-                      <Route path="/production" element={<ProductionPage />} />
+                      <Route path="/production" element={renderFeatureRoute('production_bom', <ProductionPage />)} />
                       <Route path="/materials/:materialId" element={<MaterialDetailPage />} />
                       <Route path="/customers" element={<CustomerPage />} />
                       <Route path="/customers/:id" element={<CustomerDetailPage />} />
+                      <Route path="/projects" element={renderFeatureRoute('projects', <ProjectsPage />)} />
                       <Route path="/employees" element={<EmployeePage />} />
                       <Route path="/payroll" element={<PayrollPage />} />
                       <Route path="/suppliers" element={<SupplierPage />} />
-                      <Route path="/purchase-orders" element={<PurchaseOrderPage />} />
+                      <Route path="/purchase-orders" element={renderFeatureRoute('purchase_orders', <PurchaseOrderPage />)} />
                       <Route path="/accounts" element={<ChartOfAccountsPage />} />
                       <Route path="/accounts/:id" element={<AccountDetailPage />} />
                       <Route path="/receivables" element={<ReceivablesPage />} />
@@ -338,8 +342,8 @@ function WebApp() {
                       <Route path="/advances" element={<ExpensesAndAdvancesPage />} />
                       <Route path="/settings" element={<SettingsPage />} />
                       <Route path="/account-settings" element={<AccountSettingsPage />} />
-                      <Route path="/attendance" element={<AttendancePage />} />
-                      <Route path="/attendance/report" element={<AttendanceReportPage />} />
+                      <Route path="/attendance" element={renderFeatureRoute('attendance', <AttendancePage />)} />
+                      <Route path="/attendance/report" element={renderFeatureRoute('attendance', <AttendanceReportPage />)} />
                       <Route path="/stock-report" element={<StockReportPage />} />
                       <Route path="/transaction-items-report" element={<TransactionItemsReportPage />} />
 
@@ -347,15 +351,15 @@ function WebApp() {
                       <Route path="/service-material-report" element={<ServiceMaterialReportPage />} />
                       <Route path="/cash-flow" element={<CashFlowPage />} />
                       <Route path="/roles" element={<RolesPage />} />
-                      <Route path="/retasi" element={<RetasiPage />} />
-                      <Route path="/delivery" element={<DeliveryPage />} />
-                      <Route path="/driver-pos" element={<DriverPosPage />} />
+                      <Route path="/retasi" element={renderFeatureRoute('retasi', <RetasiPage />)} />
+                      <Route path="/delivery" element={renderFeatureRoute('delivery', <DeliveryPage />)} />
+                      <Route path="/driver-pos" element={renderFeatureRoute('delivery', <DriverPosPage />)} />
                       <Route path="/commission-report" element={<CommissionReportPage />} />
                       <Route path="/financial-reports" element={<FinancialReportsPage />} />
-                      <Route path="/assets" element={<AssetsPage />} />
-                      <Route path="/maintenance" element={<MaintenancePage />} />
-                      <Route path="/zakat" element={<ZakatPage />} />
-                      <Route path="/tax" element={<TaxPage />} />
+                      <Route path="/assets" element={renderFeatureRoute('assets_maintenance', <AssetsPage />)} />
+                      <Route path="/maintenance" element={renderFeatureRoute('assets_maintenance', <MaintenancePage />)} />
+                      <Route path="/zakat" element={renderFeatureRoute('zakat', <ZakatPage />)} />
+                      <Route path="/tax" element={renderFeatureRoute('tax', <TaxPage />)} />
                       <Route path="/branches" element={<BranchManagementPage />} />
                       <Route path="/journal" element={<JournalPage />} />
                       <Route path="/material-usage-summary" element={<MaterialUsageSummaryPage />} />
@@ -363,10 +367,10 @@ function WebApp() {
                       <Route path="/company-archive" element={<CompanyArchivePage />} />
                       <Route path="/audit-logs" element={<AuditLogsPage />} />
                       <Route path="/customer-map" element={<CustomerMapPage />} />
-                      <Route path="/quotations" element={<QuotationsPage />} />
-                      <Route path="/quotations/new" element={<QuotationsPage />} />
-                      <Route path="/sales-reports" element={<SalesReportPage />} />
-                      <Route path="/delivery-report" element={<DeliveryReportPage />} />
+                      <Route path="/quotations" element={renderFeatureRoute('quotations', <QuotationsPage />)} />
+                      <Route path="/quotations/new" element={renderFeatureRoute('quotations', <QuotationsPage />)} />
+                      <Route path="/sales-reports" element={renderFeatureRoute('sales_reports', <SalesReportPage />)} />
+                      <Route path="/delivery-report" element={renderFeatureRoute('delivery_reports', <DeliveryReportPage />)} />
 
                       <Route path="*" element={<NotFound />} />
                     </Route>

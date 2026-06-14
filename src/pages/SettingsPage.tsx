@@ -18,6 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import BranchManagementPage from './BranchManagementPage'
 import { INDONESIA_TIMEZONES } from '@/utils/officeTime'
+import { FeatureSettings } from '@/components/FeatureSettings'
 
 export default function SettingsPage() {
   const { settings, isLoading, updateSettings } = useCompanySettings();
@@ -142,8 +143,9 @@ export default function SettingsPage() {
   return (
     <div className="space-y-6">
       <Tabs defaultValue="company" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="company">Company</TabsTrigger>
+          <TabsTrigger value="features">Feature Settings</TabsTrigger>
           <TabsTrigger value="branches">Branches</TabsTrigger>
           <TabsTrigger value="telegram">Telegram</TabsTrigger>
           <TabsTrigger value="integrations">Integrations</TabsTrigger>
@@ -315,6 +317,10 @@ export default function SettingsPage() {
               </CardContent>
             </Card>
           </form>
+        </TabsContent>
+
+        <TabsContent value="features" className="space-y-6">
+          <FeatureSettings />
         </TabsContent>
 
         <TabsContent value="branches" className="space-y-6">

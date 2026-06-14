@@ -44,6 +44,8 @@ import { Link } from 'react-router-dom'
 import { quotationService, Quotation } from '@/services/quotationService'
 import { useTimezone } from '@/contexts/TimezoneContext'
 import { getOfficeTime, getOfficeDateString } from '@/utils/officeTime'
+import { useCompanySettings } from '@/hooks/useCompanySettings'
+import { isFeatureEnabled } from '@/config/featureSettings'
 
 interface FormTransactionItem {
   id: number;
@@ -64,12 +66,14 @@ export const PosForm = () => {
   const location = useLocation()
   const [searchParams] = useSearchParams()
   const { user: currentUser } = useAuth()
+  const { settings } = useCompanySettings()
   const { hasGranularPermission } = useGranularPermission()
   const { timezone } = useTimezone()
   const queryClient = useQueryClient()
   const { currentBranch } = useBranch()
   const { products, isLoading: isLoadingProducts } = useProducts()
   const { materials } = useMaterials()
+  const isDeliveryEnabled = isFeatureEnabled(settings?.appFeatureSettings, 'delivery')
 
   // Check if user can sell materials
   const canSellMaterials = hasGranularPermission('material_sales')
@@ -110,12 +114,15 @@ export const PosForm = () => {
   const [retasiMessage, setRetasiMessage] = useState('');
   const [isOfficeSale, setIsOfficeSale] = useState(false);
   const [transactionNotes, setTransactionNotes] = useState('');
+  const [barcodeInput, setBarcodeInput] = useState('');
   const [loadingPrices, setLoadingPrices] = useState<{ [key: number]: boolean }>({});
   const [sourceQuotation, setSourceQuotation] = useState<Quotation | null>(null);
   const [gallonAdded, setGallonAdded] = useState<number>(0);
   const [gallonWithdrawn, setGallonWithdrawn] = useState<number>(0);
   const [gallonNotes, setGallonNotes] = useState<string>('');
   const productSearchInputRef = useRef<HTMLInputElement>(null);
+  const barcodeInputRef = useRef<HTMLInputElement>(null);
+  const barcodeSubmitTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Force autofocus on Product Search when Tambah Item is opened
   useEffect(() => {
@@ -407,12 +414,21 @@ export const PosForm = () => {
   useEffect(() => {
     return () => {
       Object.values(debounceTimers.current).forEach(timer => clearTimeout(timer));
+      if (barcodeSubmitTimerRef.current) {
+        clearTimeout(barcodeSubmitTimerRef.current);
+      }
     };
   }, []);
 
   // Check retasi validation for drivers
   useEffect(() => {
     const checkRetasiValidation = async () => {
+      if (!isDeliveryEnabled) {
+        setRetasiBlocked(false);
+        setRetasiMessage('');
+        return;
+      }
+
       if (currentUser?.role?.toLowerCase() === 'supir' && currentUser?.name) {
         try {
           // checkDriverAvailability returns TRUE if driver is AVAILABLE (no active retasi)
@@ -444,7 +460,13 @@ export const PosForm = () => {
     if (currentUser) {
       checkRetasiValidation();
     }
-  }, [currentUser, checkDriverAvailability]);
+  }, [currentUser, checkDriverAvailability, isDeliveryEnabled]);
+
+  useEffect(() => {
+    if (!isDeliveryEnabled) {
+      setIsOfficeSale(true);
+    }
+  }, [isDeliveryEnabled]);
 
   // Auto-set Laku Kantor for specific customers
   useEffect(() => {
@@ -453,13 +475,15 @@ export const PosForm = () => {
     if (name.includes('laku pabrik') || name.includes('laku kantor')) {
       if (!isOfficeSale) {
         setIsOfficeSale(true);
-        toast({
+        if (isDeliveryEnabled) {
+          toast({
           title: "Mode Laku Kantor Aktif",
           description: "Transaksi ini otomatis ditandai sebagai Laku Kantor (Tanpa Pengantaran).",
-        });
+          });
+        }
       }
     }
-  }, [selectedCustomer, customerSearch]);
+  }, [selectedCustomer, customerSearch, isOfficeSale, isDeliveryEnabled, toast]);
 
   const handleAddItem = () => {
     const newItem: FormTransactionItem = {
@@ -602,6 +626,7 @@ export const PosForm = () => {
     }));
 
     const paymentStatus: PaymentStatus = sisaTagihan <= 0 ? 'Lunas' : 'Belum Lunas';
+    const effectiveIsOfficeSale = !isDeliveryEnabled || isOfficeSale;
 
     // Generate sequential transaction ID: AQV-DDMM-NNN
     const transactionId = await generateTransactionId('kasir');
@@ -635,7 +660,7 @@ export const PosForm = () => {
       paymentStatus: paymentStatus,
       status: 'Pesanan Masuk',
       notes: transactionNotes.trim() || undefined,
-      isOfficeSale: isOfficeSale,
+      isOfficeSale: effectiveIsOfficeSale,
     };
 
     addTransaction.mutate({ newTransaction }, {
@@ -739,13 +764,18 @@ export const PosForm = () => {
     } as Product & { _isMaterial: boolean; _materialId: string }));
   }, [materials, canSellMaterials]);
 
-  const filteredProducts = useMemo(() => {
+  const activeProducts = useMemo(() => {
     const allItems = [...(products || []), ...materialsAsProducts];
-    const activeItems = allItems.filter(p => (p as any).isActive !== false);
-    return activeItems.filter(product =>
-      product.name?.toLowerCase().includes(productSearch.toLowerCase())
+    return allItems.filter(p => (p as any).isActive !== false);
+  }, [products, materialsAsProducts]);
+
+  const filteredProducts = useMemo(() => {
+    const keyword = productSearch.toLowerCase();
+    return activeProducts.filter(product =>
+      product.name?.toLowerCase().includes(keyword) ||
+      (product.barcode || '').toLowerCase().includes(keyword)
     ) || [];
-  }, [products, materialsAsProducts, productSearch]);
+  }, [activeProducts, productSearch]);
 
   const filteredCustomers = useMemo(() => {
     if (!customers) return [];
@@ -767,7 +797,14 @@ export const PosForm = () => {
     setSelectedProductIndex(0);
   }, [productSearch]);
 
-  const addToCart = async (product: Product) => {
+  const focusBarcodeInput = () => {
+    setTimeout(() => {
+      barcodeInputRef.current?.focus();
+      barcodeInputRef.current?.select();
+    }, 100);
+  };
+
+  const addToCart = async (product: Product, focusTarget: 'qty' | 'barcode' = 'qty') => {
     const existing = items.find(item => item.product?.id === product.id && !item.isBonus);
     let targetId = 0;
     if (existing) {
@@ -783,6 +820,11 @@ export const PosForm = () => {
     setShowProductDropdown(false);
     setProductSearch('');
 
+    if (focusTarget === 'barcode') {
+      focusBarcodeInput();
+      return;
+    }
+
     // INPUT CHAIN: Focus and auto-select Qty after adding item
     setTimeout(() => {
       const qtyInput = document.getElementById(`qty-input-${targetId}`) as HTMLInputElement;
@@ -791,6 +833,30 @@ export const PosForm = () => {
         qtyInput.select();
       }
     }, 100);
+  };
+
+  const submitBarcode = async (rawBarcode?: string) => {
+    const scannedBarcode = (rawBarcode ?? barcodeInput).trim();
+    if (!scannedBarcode) {
+      focusBarcodeInput();
+      return;
+    }
+
+    const matchedProduct = activeProducts.find(product => (product.barcode || '').trim() === scannedBarcode);
+
+    if (!matchedProduct) {
+      toast({
+        variant: 'destructive',
+        title: 'Barcode tidak ditemukan',
+        description: `Barcode ${scannedBarcode} tidak cocok dengan barang manapun.`,
+      });
+      setBarcodeInput('');
+      focusBarcodeInput();
+      return;
+    }
+
+    setBarcodeInput('');
+    await addToCart(matchedProduct, 'barcode');
   };
 
   const updateItemWithBonuses = async (existingItem: FormTransactionItem, newQty: number) => {
@@ -1166,22 +1232,23 @@ export const PosForm = () => {
                   )}
                 </div>
 
-                {/* Office Sale Checkbox */}
-                <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
-                  <label className="flex items-center space-x-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={isOfficeSale}
-                      onChange={(e) => setIsOfficeSale(e.target.checked)}
-                      className="w-5 h-5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
-                      disabled={retasiBlocked}
-                    />
-                    <div>
-                      <span className="text-lg font-medium text-blue-900">Laku Kantor</span>
-                      <p className="text-sm text-blue-700">Centang jika produk laku kantor (tidak perlu update ke pengantaran)</p>
-                    </div>
-                  </label>
-                </div>
+                {isDeliveryEnabled && (
+                  <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
+                    <label className="flex items-center space-x-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={isOfficeSale}
+                        onChange={(e) => setIsOfficeSale(e.target.checked)}
+                        className="w-5 h-5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                        disabled={retasiBlocked}
+                      />
+                      <div>
+                        <span className="text-lg font-medium text-blue-900">Laku Kantor</span>
+                        <p className="text-sm text-blue-700">Centang jika produk laku kantor (tidak perlu update ke pengantaran)</p>
+                      </div>
+                    </label>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 gap-4">
                   <div>
@@ -1304,6 +1371,48 @@ export const PosForm = () => {
                       </div>
                     )}
                   </div>
+                </div>
+
+                <div className="mb-4">
+                  <Label htmlFor="barcode-input" className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-2 block">
+                    Input Barcode
+                  </Label>
+                  <Input
+                    id="barcode-input"
+                    ref={barcodeInputRef}
+                    placeholder="Scan / input barcode di sini"
+                    value={barcodeInput}
+                    disabled={retasiBlocked}
+                    onFocus={() => setShowProductDropdown(false)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setBarcodeInput(value);
+
+                      if (barcodeSubmitTimerRef.current) {
+                        clearTimeout(barcodeSubmitTimerRef.current);
+                      }
+
+                      const trimmedValue = value.trim();
+                      if (!trimmedValue) return;
+
+                      barcodeSubmitTimerRef.current = setTimeout(() => {
+                        submitBarcode(trimmedValue);
+                      }, 180);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (barcodeSubmitTimerRef.current) {
+                          clearTimeout(barcodeSubmitTimerRef.current);
+                        }
+                        submitBarcode();
+                      }
+                    }}
+                    className="w-full text-sm h-11"
+                  />
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Saat barcode masuk, item otomatis ditambahkan lalu fokus kembali ke field barcode.
+                  </p>
                 </div>
 
                 <div className="border dark:border-gray-600 rounded-lg overflow-x-auto">

@@ -31,6 +31,7 @@ import { usePermissions } from '@/hooks/usePermissions'
 
 const materialSchema = z.object({
   name: z.string().min(3, { message: "Nama bahan minimal 3 karakter." }),
+  barcode: z.string().optional(),
   type: z.enum(['Stock', 'Beli'], { message: "Pilih jenis bahan." }),
   unit: z.string().min(1, { message: "Satuan harus diisi (cth: meter, lembar, kg)." }),
   pricePerUnit: z.coerce.number().min(0, { message: "Harga tidak boleh negatif." }),
@@ -53,6 +54,7 @@ type MaterialFormData = z.infer<typeof materialSchema>
 
 const EMPTY_FORM_DATA: MaterialFormData = {
   name: '',
+  barcode: '',
   type: 'Stock',
   unit: '',
   pricePerUnit: 0,
@@ -113,13 +115,13 @@ export const MaterialManagement = () => {
   const handleEditClick = (material: Material) => {
     setEditingMaterial(material);
     // Fix: Only pass allowed fields and map type if needed
-    const { name, unit, pricePerUnit, stock, minStock, description } = material;
+    const { name, barcode, unit, pricePerUnit, stock, minStock, description } = material;
     const type: 'Stock' | 'Beli' = material.type === 'Jasa' ? 'Stock' : material.type;
 
     // For "Beli" type, set minStock to 0 since it's not used
     const adjustedMinStock = type === 'Beli' ? 0 : minStock;
 
-    reset({ name, type, unit, pricePerUnit, stock, minStock: adjustedMinStock, description });
+    reset({ name, barcode: barcode || '', type, unit, pricePerUnit, stock, minStock: adjustedMinStock, description });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -242,6 +244,7 @@ export const MaterialManagement = () => {
       return [
         (index + 1).toString(),
         material.name,
+        material.barcode || '-',
         material.type,
         `${material.stock.toLocaleString('id-ID')} ${material.unit}`,
         material.type === 'Stock' ? `${(material.minStock || 0).toLocaleString('id-ID')} ${material.unit}` : '-',
@@ -253,7 +256,7 @@ export const MaterialManagement = () => {
 
     autoTable(doc, {
       startY: y,
-      head: [['No', 'Nama Bahan', 'Jenis', 'Stok Saat Ini', 'Stok Minimal', 'Harga/Satuan', 'Nilai Stok', 'Status']],
+      head: [['No', 'Nama Bahan', 'Barcode', 'Jenis', 'Stok Saat Ini', 'Stok Minimal', 'Harga/Satuan', 'Nilai Stok', 'Status']],
       body: tableData,
       theme: 'striped',
       headStyles: {
@@ -336,11 +339,15 @@ export const MaterialManagement = () => {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
                 <div className="space-y-2 lg:col-span-2">
                   <Label htmlFor="name">Nama Bahan</Label>
                   <Input id="name" {...register("name")} />
                   {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="barcode">Barcode</Label>
+                  <Input id="barcode" {...register("barcode")} placeholder="Barcode bahan" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="type">Jenis Bahan</Label>
@@ -407,7 +414,7 @@ export const MaterialManagement = () => {
                   {errors.stock && <p className="text-sm text-destructive">{errors.stock.message}</p>}
                 </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
                 {selectedType === 'Stock' && (
                   <div className="space-y-2">
                     <Label htmlFor="minStock">Stok Minimal</Label>
@@ -427,7 +434,7 @@ export const MaterialManagement = () => {
                     {errors.minStock && <p className="text-sm text-destructive">{errors.minStock.message}</p>}
                   </div>
                 )}
-                <div className="space-y-2 lg:col-span-4">
+                <div className="space-y-2 lg:col-span-5">
                   <Label htmlFor="description">Deskripsi (Opsional)</Label>
                   <Textarea id="description" {...register("description")} />
                 </div>
@@ -526,6 +533,7 @@ export const MaterialManagement = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nama</TableHead>
+                    <TableHead>Barcode</TableHead>
                     <TableHead>Jenis</TableHead>
                     <TableHead>Stok Saat Ini</TableHead>
                     <TableHead>Stok Minimal</TableHead>
@@ -535,7 +543,7 @@ export const MaterialManagement = () => {
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
-                    <TableRow><TableCell colSpan={6} className="text-center">Memuat data...</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center">Memuat data...</TableCell></TableRow>
                   ) : filteredMaterials?.map((material) => (
                     <TableRow key={material.id}>
                       <TableCell className="font-medium">
@@ -546,6 +554,7 @@ export const MaterialManagement = () => {
                           {material.name}
                         </Link>
                       </TableCell>
+                      <TableCell>{material.barcode || '-'}</TableCell>
                       <TableCell>
                         <Badge variant="outline" className={
                           material.type === 'Stock' ? 'bg-purple-100 text-purple-800' :

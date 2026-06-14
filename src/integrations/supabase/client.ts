@@ -12,16 +12,15 @@ interface TenantConfig {
 }
 
 const SESSION_STORAGE_KEY = 'postgrest_auth_session';
-const SERVER_STORAGE_KEY = 'aquvit_selected_server';
+const SERVER_STORAGE_KEY = 'matahari_selected_server';
 
 // Server configurations
 const SERVERS: Record<string, string> = {
-  'nabire': 'https://nbx.aquvit.id',
-  'manokwari': 'https://mkw.aquvit.id',
+  'matahari': 'https://matahari.aquvit.id',
 };
 
 // Hardcoded server URL for APK builds (set via environment variable)
-// VITE_APK_SERVER can be: 'nabire', 'manokwari', or a full URL
+// VITE_APK_SERVER can be: 'matahari' or a full URL
 const APK_SERVER = import.meta.env.VITE_APK_SERVER as string | undefined;
 
 // In-memory session reference for token access
@@ -83,7 +82,7 @@ const PROD_ANON_JWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIs
 // Local JWT (signed with docker-compose JWT secret: reallyreallyreallyreallyverysafeandsecurejwtsecret)
 const LOCAL_ANON_JWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImF1ZCI6ImFub24iLCJpYXQiOjE3Njc1MzE0ODUsImV4cCI6NDkyMTEzMTQ4NX0.5fqX3eXr6VhW2vGWUUlHQxPO_ATFsJxyX6zJXqMduxs';
 
-// Use production JWT for all connections (connect to mkw.aquvit.id)
+// Use production JWT for all non-local connections (including Matahari VPS)
 function getAnonJWT(): string {
   const baseUrl = getBaseUrl();
   if (baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1')) {
@@ -163,7 +162,7 @@ function getBaseUrl(): string {
 
   // Check if we're on a production domain (web browser)
   const origin = window.location.origin;
-  if (origin.includes('nbx.aquvit.id') || origin.includes('mkw.aquvit.id')) {
+  if (origin.includes('matahari.aquvit.id') || origin.includes('nbx.aquvit.id') || origin.includes('mkw.aquvit.id')) {
     return origin;
   }
 
@@ -179,14 +178,12 @@ function getBaseUrl(): string {
     if (selectedUrl) {
       return selectedUrl;
     }
-    // No server selected yet - fallback to default mkw instead of crashing
-    return 'https://mkw.aquvit.id';
+    // No server selected yet - fallback to Matahari instead of crashing
+    return 'https://matahari.aquvit.id';
   }
 
   // For localhost/development, use local proxy server for testing
-  // IMPORTANT: Change this to match server you want to test against
-  // 'https://nbx.aquvit.id' for Nabire
-  // 'https://mkw.aquvit.id' for Manokwari
+  // Default local target is the Matahari VPS tenant.
   // 'http://localhost:8090' for Local Docker testing
   return import.meta.env.VITE_POSTGREST_URL || 'http://localhost:8090';
 }

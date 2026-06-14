@@ -8,6 +8,7 @@ export type ProductType = 'Produksi' | 'Jual Langsung';
 export interface Product {
   id: string;
   name: string;
+  barcode?: string;
   type: ProductType; // Jenis barang (Produksi/Jual Langsung)
   basePrice: number;
   costPrice?: number; // Harga pokok/modal untuk produk Jual Langsung

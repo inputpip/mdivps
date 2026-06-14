@@ -31,6 +31,7 @@ import {
   Factory,
   Truck,
   Calculator,
+  BriefcaseBusiness,
   PieChart,
   Building,
   DollarSign,
@@ -53,6 +54,7 @@ import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { usePermissions, PERMISSIONS, Permission } from "@/hooks/usePermissions";
 import { useAuth } from "@/hooks/useAuth";
 import { useGranularPermission } from "@/hooks/useGranularPermission";
+import { isFeatureEnabled } from '@/config/featureSettings';
 
 // Section color configuration for modern gradient look (with dark mode support)
 const sectionColors: Record<string, { bg: string; text: string; activeBg: string }> = {
@@ -75,23 +77,31 @@ const sectionColors: Record<string, { bg: string; text: string; activeBg: string
  * simply modify the data structure below – the rendering logic will adapt
  * automatically.
  */
-const getMenuItems = (hasPermission: (permission: Permission) => boolean, hasGranularPermission: (permission: string) => boolean, userRole?: string) => [
+const getMenuItems = (
+  hasPermission: (permission: Permission) => boolean,
+  hasGranularPermission: (permission: string) => boolean,
+  userRole: string | undefined,
+  featureSettings?: Parameters<typeof isFeatureEnabled>[0]
+) => [
   {
     title: "Utama",
     items: [
       { href: "/", label: "Dashboard", icon: Home },
       { href: "/pos", label: "Point of Sale (POS)", icon: ShoppingCart, permission: PERMISSIONS.TRANSACTIONS },
-      { href: "/driver-pos", label: "POS Supir", icon: Truck, permission: PERMISSIONS.TRANSACTIONS },
+      { href: "/driver-pos", label: "POS Supir", icon: Truck, permission: PERMISSIONS.TRANSACTIONS, featureKey: 'delivery' as const },
       { href: "/transactions", label: "Data Transaksi", icon: List, permission: PERMISSIONS.TRANSACTIONS },
-      { href: "/quotations", label: "Penawaran", icon: FileText, granularPermission: 'quotations_view' },
-      { href: "/delivery", label: "Pengantaran", icon: Truck, permission: PERMISSIONS.DELIVERIES },
-      { href: "/delivery-report", label: "Lapor Antar", icon: MapPin, permission: PERMISSIONS.DELIVERIES },
-      { href: "/retasi", label: "Retasi", icon: Package, permission: PERMISSIONS.DELIVERIES },
+      { href: "/quotations", label: "Penawaran", icon: FileText, granularPermission: 'quotations_view', featureKey: 'quotations' as const },
+      { href: "/delivery", label: "Pengantaran", icon: Truck, permission: PERMISSIONS.DELIVERIES, featureKey: 'delivery' as const },
+      { href: "/delivery-report", label: "Lapor Antar", icon: MapPin, permission: PERMISSIONS.DELIVERIES, featureKey: 'delivery_reports' as const },
+      { href: "/retasi", label: "Retasi", icon: Package, permission: PERMISSIONS.DELIVERIES, featureKey: 'retasi' as const },
       { href: "/transaction-items-report", label: "Laporan Produk Laku", icon: PackageOpen, permission: PERMISSIONS.REPORTS },
-      { href: "/sales-reports", label: "Laporan Sales", icon: MapPin, permission: PERMISSIONS.REPORTS },
-      { href: "/attendance", label: "Absensi", icon: Fingerprint, permission: PERMISSIONS.ATTENDANCE },
+      { href: "/sales-reports", label: "Laporan Sales", icon: MapPin, permission: PERMISSIONS.REPORTS, featureKey: 'sales_reports' as const },
+      { href: "/attendance", label: "Absensi", icon: Fingerprint, permission: PERMISSIONS.ATTENDANCE, featureKey: 'attendance' as const },
       { href: "/expenses", label: "Pengeluaran & Kasbon", icon: FileText, permission: PERMISSIONS.FINANCIAL },
     ].filter(item => {
+      if (item.featureKey && !isFeatureEnabled(featureSettings, item.featureKey)) {
+        return false;
+      }
       // Check granular permission first
       if ('granularPermission' in item && item.granularPermission) {
         return hasGranularPermission(item.granularPermission) || hasGranularPermission('quotations_create');
@@ -114,17 +124,21 @@ const getMenuItems = (hasPermission: (permission: Permission) => boolean, hasGra
     title: "Manajemen Data",
     items: [
       { href: "/materials", label: "Barang & Stok", icon: Box, permission: PERMISSIONS.MATERIALS },
-      { href: "/production", label: "Produksi", icon: Factory, permission: PERMISSIONS.PRODUCTS },
+      { href: "/production", label: "Produksi", icon: Factory, permission: PERMISSIONS.PRODUCTS, featureKey: 'production_bom' as const },
       { href: "/customers", label: "Pelanggan", icon: Users, permission: PERMISSIONS.CUSTOMERS },
       { href: "/customer-map", label: "Pelanggan Terdekat", icon: MapPin, permission: PERMISSIONS.CUSTOMERS },
+      { href: "/projects", label: "Proyek", icon: BriefcaseBusiness, permission: PERMISSIONS.TRANSACTIONS, featureKey: 'projects' as const },
       { href: "/employees", label: "Karyawan", icon: IdCard, permission: PERMISSIONS.EMPLOYEES },
       { href: "/suppliers", label: "Supplier", icon: Building, permission: PERMISSIONS.MATERIALS },
-      { href: "/purchase-orders", label: "Purchase Orders", icon: ClipboardList, granularPermission: 'purchase_orders_view' },
+      { href: "/purchase-orders", label: "Purchase Orders", icon: ClipboardList, granularPermission: 'purchase_orders_view', featureKey: 'purchase_orders' as const },
     ].filter(item => {
+      if (item.featureKey && !isFeatureEnabled(featureSettings, item.featureKey)) {
+        return false;
+      }
       if ('granularPermission' in item && item.granularPermission) {
         return hasGranularPermission(item.granularPermission) || hasGranularPermission('purchase_orders_create');
       }
-      return hasPermission(item.permission);
+      return item.permission ? hasPermission(item.permission) : true;
     }),
   },
   {
@@ -136,25 +150,35 @@ const getMenuItems = (hasPermission: (permission: Permission) => boolean, hasGra
       { href: "/receivables", label: "Piutang", icon: ReceiptText, permission: PERMISSIONS.FINANCIAL },
       { href: "/accounts-payable", label: "Hutang", icon: DollarSign, permission: PERMISSIONS.FINANCIAL },
       { href: "/financial-reports", label: "Laporan Keuangan", icon: PieChart, permission: PERMISSIONS.FINANCIAL },
-    ].filter(item => hasPermission(item.permission)),
+    ].filter(item => item.permission ? hasPermission(item.permission) : true),
   },
   {
     title: "Aset, Zakat & Pajak",
     items: [
-      { href: "/assets", label: "Aset & Maintenance", icon: Wrench, permission: PERMISSIONS.FINANCIAL },
-      { href: "/maintenance", label: "Jadwal Maintenance", icon: Wrench, permission: PERMISSIONS.FINANCIAL },
-      { href: "/zakat", label: "Zakat & Sedekah", icon: Sparkles, permission: PERMISSIONS.FINANCIAL },
-      { href: "/tax", label: "Pajak (PPN)", icon: Receipt, permission: PERMISSIONS.FINANCIAL },
-    ].filter(item => hasPermission(item.permission)),
+      { href: "/assets", label: "Aset & Maintenance", icon: Wrench, permission: PERMISSIONS.FINANCIAL, featureKey: 'assets_maintenance' as const },
+      { href: "/maintenance", label: "Jadwal Maintenance", icon: Wrench, permission: PERMISSIONS.FINANCIAL, featureKey: 'assets_maintenance' as const },
+      { href: "/zakat", label: "Zakat & Sedekah", icon: Sparkles, permission: PERMISSIONS.FINANCIAL, featureKey: 'zakat' as const },
+      { href: "/tax", label: "Pajak (PPN)", icon: Receipt, permission: PERMISSIONS.FINANCIAL, featureKey: 'tax' as const },
+    ].filter(item => {
+      if (item.featureKey && !isFeatureEnabled(featureSettings, item.featureKey)) {
+        return false;
+      }
+      return item.permission ? hasPermission(item.permission) : true;
+    }),
   },
   {
     title: "Laporan",
     items: [
       { href: "/stock-report", label: "Laporan Stock", icon: BarChart3, permission: PERMISSIONS.REPORTS },
       { href: "/material-movements", label: "Pergerakan Penggunaan Bahan", icon: Package2, permission: PERMISSIONS.REPORTS },
-      { href: "/attendance/report", label: "Laporan Absensi", icon: BookCheck, permission: PERMISSIONS.REPORTS },
+      { href: "/attendance/report", label: "Laporan Absensi", icon: BookCheck, permission: PERMISSIONS.REPORTS, featureKey: 'attendance' as const },
       { href: "/commission-report", label: "Komisi Saya", icon: Calculator, permission: PERMISSIONS.REPORTS },
-    ].filter(item => hasPermission(item.permission)),
+    ].filter(item => {
+      if (item.featureKey && !isFeatureEnabled(featureSettings, item.featureKey)) {
+        return false;
+      }
+      return item.permission ? hasPermission(item.permission) : true;
+    }),
   },
   {
     title: "Pengaturan",
@@ -197,7 +221,12 @@ export function Sidebar({ isCollapsed, setCollapsed, onHoverChange }: SidebarPro
   const { hasGranularPermission } = useGranularPermission();
 
   // Get filtered menu items based on user permissions and role
-  const rawMenuItems = getMenuItems(hasPermission, hasGranularPermission, user?.role);
+  const rawMenuItems = getMenuItems(
+    hasPermission,
+    hasGranularPermission,
+    user?.role,
+    settings?.appFeatureSettings
+  );
 
   // Filter for Sales role specifically
   const menuItems = useMemo(() => {

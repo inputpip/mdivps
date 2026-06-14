@@ -8,6 +8,7 @@ import { useBranch } from '@/contexts/BranchContext'
 const fromDbToApp = (dbMaterial: any): Material => ({
   id: dbMaterial.id,
   name: dbMaterial.name,
+  barcode: dbMaterial.barcode || '',
   type: dbMaterial.type || 'Stock', // Default to Stock if not set (field may not exist yet)
   unit: dbMaterial.unit,
   pricePerUnit: dbMaterial.price_per_unit,
@@ -19,7 +20,7 @@ const fromDbToApp = (dbMaterial: any): Material => ({
 });
 
 const fromAppToDb = (appMaterial: Partial<Omit<Material, 'id' | 'createdAt' | 'updatedAt'>>) => {
-  const { pricePerUnit, minStock, type, ...rest } = appMaterial;
+  const { pricePerUnit, minStock, type, barcode, ...rest } = appMaterial;
   const dbData: any = { ...rest };
   if (pricePerUnit !== undefined) {
     dbData.price_per_unit = pricePerUnit;
@@ -30,6 +31,9 @@ const fromAppToDb = (appMaterial: Partial<Omit<Material, 'id' | 'createdAt' | 'u
   // Field type exists in DB
   if (type !== undefined) {
     dbData.type = type;
+  }
+  if (barcode !== undefined) {
+    dbData.barcode = barcode || null;
   }
   return dbData;
 };
