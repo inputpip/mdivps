@@ -14,8 +14,6 @@ import { useBranch } from '@/contexts/BranchContext'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { usePermissions } from '@/hooks/usePermissions'
-import { PERMISSIONS } from '@/hooks/usePermissions'
 import { useGranularPermission } from '@/hooks/useGranularPermission'
 import { AppFeatureKey, isFeatureEnabled } from '@/config/featureSettings'
 
@@ -31,8 +29,7 @@ const MobileLayout = () => {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const { theme, setTheme } = useTheme()
   const { currentBranch, availableBranches, canAccessAllBranches, switchBranch } = useBranch()
-  const { hasPermission } = usePermissions();
-  const { hasGranularPermission, canViewDeliveryReport: canViewDR } = useGranularPermission()
+  const { hasGranularPermission } = useGranularPermission()
   const [searchQuery, setSearchQuery] = useState('')
 
 
@@ -111,16 +108,6 @@ const MobileLayout = () => {
     setTheme(theme === 'dark' ? 'light' : 'dark')
   }
 
-  // Check if user is owner
-  const isOwner = user?.role?.toLowerCase() === 'owner'
-
-  // Check if user is helper - helper only gets limited menu access
-  const isHelper = !isOwner && (
-    user?.role?.toLowerCase()?.trim() === 'helper' ||
-    user?.role?.toLowerCase()?.trim() === 'supir' ||
-    hasGranularPermission('pos_driver_access')
-  )
-
   const featureSettings = settings?.appFeatureSettings
   const featurePathMap: Partial<Record<string, AppFeatureKey>> = {
     '/driver-pos': 'delivery',
@@ -144,69 +131,27 @@ const MobileLayout = () => {
     return featureKey ? isFeatureEnabled(featureSettings, featureKey) : true
   }
 
-  // Permission checks for mobile features (Specific mobile dashboard toggles)
-  const canAccessPOS = hasGranularPermission('mobile_pos')
-  const canAccessDriverPOS = hasGranularPermission('mobile_driver_pos')
-  const canViewDelivery = hasGranularPermission('mobile_delivery')
-  const canViewTransactions = hasGranularPermission('mobile_transactions')
-  const canAccessExpenses = hasGranularPermission('mobile_expenses')
-  const canViewCustomers = hasGranularPermission('mobile_customers')
-  const canAccessCustomerMap = hasGranularPermission('mobile_customer_map')
-  const canAccessQuotations = hasGranularPermission('mobile_quotations')
-  const canAccessProduction = hasGranularPermission('mobile_production')
-  const canAccessWarehouse = hasGranularPermission('mobile_warehouse')
-  const canViewRetasi = hasGranularPermission('mobile_retasi')
-  const canViewSoldItems = hasGranularPermission('mobile_sold_items')
-  const canViewCommission = hasGranularPermission('mobile_commission')
-  const canAccessAttendance = hasGranularPermission('mobile_attendance')
-  const canViewMaintenance = hasGranularPermission('mobile_maintenance')
-  const canViewSalesReport = hasGranularPermission('mobile_sales_report')
+  // Permission checks for mobile features.
+  // Mobile-specific menu toggles are allowed, but they no longer replace the main
+  // Role Management permissions. This keeps web/mobile access consistent.
+  const canAccessPOS = hasGranularPermission('mobile_pos') || hasGranularPermission('pos_access') || hasGranularPermission('transactions_create')
+  const canAccessDriverPOS = hasGranularPermission('mobile_driver_pos') || hasGranularPermission('pos_driver_access')
+  const canViewDelivery = hasGranularPermission('mobile_delivery') || hasGranularPermission('delivery_view')
+  const canViewTransactions = hasGranularPermission('mobile_transactions') || hasGranularPermission('transactions_view')
+  const canAccessExpenses = hasGranularPermission('mobile_expenses') || hasGranularPermission('expenses_view') || hasGranularPermission('advances_view')
+  const canViewCustomers = hasGranularPermission('mobile_customers') || hasGranularPermission('customers_view')
+  const canAccessCustomerMap = hasGranularPermission('mobile_customer_map') || hasGranularPermission('customer_map_access') || hasGranularPermission('customers_view')
+  const canAccessQuotations = hasGranularPermission('mobile_quotations') || hasGranularPermission('quotations_view') || hasGranularPermission('quotations_create')
+  const canAccessProduction = hasGranularPermission('mobile_production') || hasGranularPermission('production_view') || hasGranularPermission('production_create')
+  const canAccessWarehouse = hasGranularPermission('mobile_warehouse') || hasGranularPermission('warehouse_access') || hasGranularPermission('materials_view') || hasGranularPermission('products_view')
+  const canViewRetasi = hasGranularPermission('mobile_retasi') || hasGranularPermission('retasi_view')
+  const canViewSoldItems = hasGranularPermission('mobile_sold_items') || hasGranularPermission('transaction_items_report')
+  const canViewCommission = hasGranularPermission('mobile_commission') || hasGranularPermission('commission_view') || hasGranularPermission('commission_report')
+  const canAccessAttendance = hasGranularPermission('mobile_attendance') || hasGranularPermission('attendance_access') || hasGranularPermission('attendance_view')
+  const canViewMaintenance = hasGranularPermission('mobile_maintenance') || hasGranularPermission('maintenance_view')
+  const canViewSalesReport = hasGranularPermission('mobile_sales_report') || hasGranularPermission('transaction_reports') || hasGranularPermission('commission_report')
   const canViewDeliveryReport = hasGranularPermission('mobile_delivery_report') || hasGranularPermission('delivery_report_view')
-  const canAccessProjects = hasPermission(PERMISSIONS.TRANSACTIONS)
-
-  // Helper gets limited menu: POS Supir, Pelanggan Terdekat, Komisi Saya
-  const helperMenuItems = [
-    {
-      title: 'POS Supir',
-      icon: Truck,
-      path: '/driver-pos',
-      description: 'Input penjualan dari driver',
-      color: 'bg-orange-500 hover:bg-orange-600',
-      textColor: 'text-white'
-    },
-    {
-      title: 'Pelanggan Terdekat',
-      icon: Users,
-      path: '/customer-map',
-      description: 'Cari pelanggan terdekat',
-      color: 'bg-blue-500 hover:bg-blue-600',
-      textColor: 'text-white'
-    },
-    {
-      title: 'Komisi Saya',
-      icon: Coins,
-      path: '/my-commission',
-      description: 'Lihat komisi penjualan',
-      color: 'bg-emerald-500 hover:bg-emerald-600',
-      textColor: 'text-white'
-    },
-    {
-      title: 'Penawaran',
-      icon: FileText,
-      path: '/quotations',
-      description: 'Kelola penawaran harga',
-      color: 'bg-violet-500 hover:bg-violet-600',
-      textColor: 'text-white'
-    },
-    {
-      title: 'Lapor Antar',
-      icon: MapPin,
-      path: '/delivery-report',
-      description: 'Laporkan status pengantaran',
-      color: 'bg-teal-500 hover:bg-teal-600',
-      textColor: 'text-white'
-    }
-  ].filter(item => isPathEnabled(item.path))
+  const canAccessProjects = hasGranularPermission('transactions_view')
 
   // Regular menu items (for non-helper roles)
   const regularMenuItems = [
@@ -356,7 +301,9 @@ const MobileLayout = () => {
     }] : [])
   ].filter(item => isPathEnabled(item.path))
 
-  const menuItems = isHelper ? helperMenuItems : regularMenuItems
+  // Do not force helper/supir into a separate hardcoded menu. Role Management +
+  // Feature Settings decide which mobile menus are available.
+  const menuItems = regularMenuItems
 
   const handleLogout = async () => {
     try {
