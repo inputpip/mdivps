@@ -111,7 +111,7 @@ BEGIN
 
   -- Permission check
   IF auth.uid() IS NOT NULL THEN
-    IF NOT check_user_permission(auth.uid(), 'advances_manage') THEN
+    IF NOT check_user_permission(auth.uid(), 'advances_create') THEN
       RETURN QUERY SELECT FALSE, NULL::UUID, NULL::UUID, 'Tidak memiliki akses untuk membuat kasbon'::TEXT;
       RETURN;
     END IF;
@@ -360,6 +360,14 @@ BEGIN
     RETURN;
   END IF;
 
+  -- Permission check
+  IF auth.uid() IS NOT NULL THEN
+    IF NOT check_user_permission(auth.uid(), 'advances_edit') THEN
+      RETURN QUERY SELECT FALSE, NULL::UUID, NULL::UUID, 0::NUMERIC, FALSE, 'Tidak memiliki akses untuk membayar kasbon'::TEXT;
+      RETURN;
+    END IF;
+  END IF;
+
   IF p_amount <= 0 THEN
     RETURN QUERY SELECT FALSE, NULL::UUID, NULL::UUID, 0::NUMERIC, FALSE, 'Amount must be positive'::TEXT;
     RETURN;
@@ -502,6 +510,14 @@ BEGIN
   IF p_branch_id IS NULL THEN
     RETURN QUERY SELECT FALSE, 0, 'Branch ID is REQUIRED!'::TEXT;
     RETURN;
+  END IF;
+
+  -- Permission check
+  IF auth.uid() IS NOT NULL THEN
+    IF NOT check_user_permission(auth.uid(), 'advances_edit') THEN
+      RETURN QUERY SELECT FALSE, 0, 'Tidak memiliki akses untuk membatalkan kasbon'::TEXT;
+      RETURN;
+    END IF;
   END IF;
 
   -- Get advance
