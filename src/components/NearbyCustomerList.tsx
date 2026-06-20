@@ -348,6 +348,12 @@ export function NearbyCustomerList({
                         <Badge variant="outline" className="text-xs">
                           {customer.orderCount || 0} order
                         </Badge>
+                        <Badge
+                          variant="outline"
+                          className="text-xs border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-950/40 dark:text-cyan-300"
+                        >
+                          🥤 {customer.jumlah_galon_titip || 0} galon titip
+                        </Badge>
                       </div>
 
                       <div className="mt-2 flex items-start gap-2 rounded-md bg-muted/50 px-2 py-1.5 dark:bg-slate-700/40">

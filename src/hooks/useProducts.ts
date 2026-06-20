@@ -81,6 +81,17 @@ const toDb = (appProduct: Partial<Product>) => {
   return dbData;
 };
 
+const isMissingProductBarcodeColumnError = (error: any): boolean => {
+  const message = String(error?.message || error?.details || error?.hint || '').toLowerCase();
+  const code = String(error?.code || '');
+  return (code === '42703' || message.includes('barcode')) && message.includes('product');
+};
+
+const removeBarcodeField = (data: Record<string, any>) => {
+  const { barcode, ...rest } = data;
+  return rest;
+};
+
 async function ensureProductStockMovement(params: {
   productId: string;
   branchId?: string;
@@ -250,12 +261,22 @@ export const useProducts = () => {
         // products.current_stock is DEPRECATED
         delete dbData.current_stock;
 
-        const { data: dataRaw, error } = await supabase
+        let { data: dataRaw, error } = await supabase
           .from('products')
           .update(dbData)
           .eq('id', product.id)
           .select()
           .single();
+
+        if (error && isMissingProductBarcodeColumnError(error)) {
+          const fallbackData = removeBarcodeField(dbData);
+          ({ data: dataRaw, error } = await supabase
+            .from('products')
+            .update(fallbackData)
+            .eq('id', product.id)
+            .select()
+            .single());
+        }
 
         if (error) throw error;
         if (!dataRaw) {
@@ -274,11 +295,20 @@ export const useProducts = () => {
 
         logDebug('Product Insert', { insertData });
 
-        const { data: dataRaw, error } = await supabase
+        let { data: dataRaw, error } = await supabase
           .from('products')
           .insert(insertData)
           .select()
           .single();
+
+        if (error && isMissingProductBarcodeColumnError(error)) {
+          const fallbackData = removeBarcodeField(insertData);
+          ({ data: dataRaw, error } = await supabase
+            .from('products')
+            .insert(fallbackData)
+            .select()
+            .single());
+        }
 
         logDebug('Product Insert Result', { dataRaw, error });
 

@@ -15,9 +15,13 @@ export interface TransactionItem {
 }
 
 export type TransactionStatus =
-  | 'Pesanan Masuk'     // Order baru dibuat, siap diantar
+  | 'Pesanan Masuk'     // Order baru dibuat
+  | 'Antri Produksi'    // Pesanan masuk antrian produksi
+  | 'Sedang Produksi'   // Operator sedang memproses pesanan
+  | 'Selesai Produksi'  // Produksi selesai, siap ambil/kirim
+  | 'Siap Antar'        // Siap masuk jalur pengantaran
   | 'Diantar Sebagian'  // Sebagian sudah diantar
-  | 'Selesai'           // Semua sudah berhasil diantar
+  | 'Selesai'           // Semua sudah berhasil selesai
   | 'Dibatalkan';       // Order dibatalkan
 
 export type PaymentStatus =

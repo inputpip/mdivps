@@ -18,13 +18,25 @@ interface BOMManagementProps {
   productName: string;
 }
 
+const parseDecimalInput = (value: string): number => {
+  const normalized = value.replace(',', '.').trim();
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const formatDecimalDisplay = (value: number): string => {
+  if (!Number.isFinite(value)) return '0';
+  return value.toLocaleString('id-ID', { maximumFractionDigits: 4 });
+};
+
 export function BOMManagement({ productId, productName }: BOMManagementProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [bom, setBom] = useState<BOMItem[]>([]);
   const [selectedMaterialId, setSelectedMaterialId] = useState('');
-  const [quantity, setQuantity] = useState<number>(1);
+  const [quantityInput, setQuantityInput] = useState('1');
   const [notes, setNotes] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const quantity = parseDecimalInput(quantityInput);
   
   const { materials } = useMaterials();
   const { toast } = useToast();
@@ -113,7 +125,7 @@ export function BOMManagement({ productId, productName }: BOMManagementProps) {
 
       setBom([...bom, newItem]);
       setSelectedMaterialId('');
-      setQuantity(1);
+      setQuantityInput('1');
       setNotes('');
 
       // Auto-update product cost_price from BOM
@@ -209,13 +221,13 @@ export function BOMManagement({ productId, productName }: BOMManagementProps) {
               <div>
                 <Label htmlFor="quantity">Quantity</Label>
                 <Input
-                  type="number"
-                  value={quantity}
-                  onChange={(e) => setQuantity(Number(e.target.value) || 0)}
+                  type="text"
+                  inputMode="decimal"
+                  value={quantityInput}
+                  onChange={(e) => setQuantityInput(e.target.value)}
                   placeholder="0"
-                  step="0.01"
-                  min="0.01"
                 />
+                <p className="mt-1 text-[11px] text-muted-foreground">Bisa isi desimal, contoh: 1,5 atau 1.5</p>
               </div>
               <div>
                 <Label htmlFor="notes">Notes (optional)</Label>
@@ -276,7 +288,7 @@ export function BOMManagement({ productId, productName }: BOMManagementProps) {
                             <div className="font-medium">{item.materialName}</div>
                           </td>
                           <td className="px-3 py-2">{item.unit}</td>
-                          <td className="px-3 py-2 font-medium">{item.quantity}</td>
+                          <td className="px-3 py-2 font-medium">{formatDecimalDisplay(item.quantity)}</td>
                           <td className="px-3 py-2 text-gray-600">{item.notes || '-'}</td>
                           <td className="px-3 py-2">
                             <Button

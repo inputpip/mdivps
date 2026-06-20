@@ -22,9 +22,12 @@ export interface AppFeatureSetting {
   defaultEnabled: boolean;
 }
 
+export type ProductionWorkflowMode = 'stock' | 'order_based' | 'hybrid';
+
 export interface AppFeatureToggleState {
   enabled: boolean;
   notes?: string;
+  productionMode?: ProductionWorkflowMode;
 }
 
 export type AppFeatureSettingsMap = Record<AppFeatureKey, AppFeatureToggleState>;
@@ -145,6 +148,7 @@ export const createDefaultFeatureSettings = (): AppFeatureSettingsMap => {
     acc[feature.key] = {
       enabled: feature.defaultEnabled,
       notes: '',
+      ...(feature.key === 'production_bom' ? { productionMode: 'order_based' as ProductionWorkflowMode } : {}),
     };
     return acc;
   }, {} as AppFeatureSettingsMap);
@@ -164,10 +168,17 @@ export const mergeFeatureSettings = (
     defaults[feature.key] = {
       enabled: typeof savedValue.enabled === 'boolean' ? savedValue.enabled : defaults[feature.key].enabled,
       notes: typeof savedValue.notes === 'string' ? savedValue.notes : defaults[feature.key].notes,
+      productionMode: feature.key === 'production_bom' && isProductionWorkflowMode(savedValue.productionMode)
+        ? savedValue.productionMode
+        : defaults[feature.key].productionMode,
     };
   }
 
   return defaults;
+};
+
+export const isProductionWorkflowMode = (value: unknown): value is ProductionWorkflowMode => {
+  return value === 'stock' || value === 'order_based' || value === 'hybrid';
 };
 
 export const isFeatureEnabled = (
@@ -175,4 +186,10 @@ export const isFeatureEnabled = (
   featureKey: AppFeatureKey
 ): boolean => {
   return mergeFeatureSettings(settings as Partial<Record<AppFeatureKey, Partial<AppFeatureToggleState>>> | null)[featureKey].enabled;
+};
+
+export const getProductionWorkflowMode = (
+  settings: Partial<AppFeatureSettingsMap> | null | undefined
+): ProductionWorkflowMode => {
+  return mergeFeatureSettings(settings as Partial<Record<AppFeatureKey, Partial<AppFeatureToggleState>>> | null).production_bom.productionMode || 'order_based';
 };

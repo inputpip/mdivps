@@ -131,6 +131,7 @@ const getMenuItems = (
     items: [
       { href: "/materials", label: "Barang & Stok", icon: Box, permission: PERMISSIONS.MATERIALS },
       { href: "/production", label: "Produksi", icon: Factory, granularPermission: 'production_view', featureKey: 'production_bom' as const },
+      { href: "/production-operator", label: "Panel Operator", icon: Factory, granularPermissions: ['production_view', 'production_create', 'mobile_production'], featureKey: 'production_bom' as const },
       { href: "/customers", label: "Pelanggan", icon: Users, granularPermission: 'customers_view' },
       { href: "/customer-map", label: "Pelanggan Terdekat", icon: MapPin, granularPermissions: ['customer_map_access', 'customers_view'] },
       { href: "/projects", label: "Proyek", icon: BriefcaseBusiness, permission: PERMISSIONS.TRANSACTIONS, featureKey: 'projects' as const },

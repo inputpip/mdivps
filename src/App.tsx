@@ -31,6 +31,7 @@ const MasterDataStockPage = lazy(() => import("@/pages/MasterDataStockPage"));
 const ProductDetailPage = lazy(() => import("@/pages/ProductDetailPage"));
 // const MaterialPage = lazy(() => import("@/pages/MaterialPage")); // Replaced by MasterDataStockPage
 const ProductionPage = lazy(() => import("@/pages/ProductionPage"));
+const OperatorProductionPage = lazy(() => import("@/pages/OperatorProductionPage"));
 const MaterialDetailPage = lazy(() => import("@/pages/MaterialDetailPage"));
 const CustomerPage = lazy(() => import("@/pages/CustomerPage"));
 const CustomerDetailPage = lazy(() => import("@/pages/CustomerDetailPage"));
@@ -298,6 +299,7 @@ function WebApp() {
                       <Route path="/customer-map" element={<CustomerMapPage />} />
                       <Route path="/projects" element={renderFeatureRoute('projects', <ProjectsPage />)} />
                       <Route path="/production" element={renderFeatureRoute('production_bom', <ProductionPage />)} />
+                      <Route path="/production-operator" element={renderFeatureRoute('production_bom', <OperatorProductionPage />)} />
                       <Route path="/warehouse" element={<WarehousePage />} />
                       <Route path="/retasi" element={renderFeatureRoute('retasi', <MobileRetasiPage />)} />
                       <Route path="/delivery" element={renderFeatureRoute('delivery', <DeliveryPage />)} />
@@ -326,6 +328,7 @@ function WebApp() {
                       <Route path="/products/:id" element={<ProductDetailPage />} />
                       <Route path="/materials" element={<MasterDataStockPage />} />
                       <Route path="/production" element={renderFeatureRoute('production_bom', <ProductionPage />)} />
+                      <Route path="/production-operator" element={renderFeatureRoute('production_bom', <OperatorProductionPage />)} />
                       <Route path="/materials/:materialId" element={<MaterialDetailPage />} />
                       <Route path="/customers" element={<CustomerPage />} />
                       <Route path="/customers/:id" element={<CustomerDetailPage />} />

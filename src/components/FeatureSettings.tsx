@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/components/ui/use-toast'
 import { useAuth } from '@/hooks/useAuth'
 import { useCompanySettings } from '@/hooks/useCompanySettings'
@@ -17,6 +18,7 @@ import {
   AppFeatureSettingsMap,
   createDefaultFeatureSettings,
   mergeFeatureSettings,
+  ProductionWorkflowMode,
 } from '@/config/featureSettings'
 import { CheckCircle2, FileCog, Workflow } from 'lucide-react'
 
@@ -58,6 +60,16 @@ export function FeatureSettings() {
       [featureKey]: {
         ...prev[featureKey],
         notes,
+      },
+    }))
+  }
+
+  const handleProductionModeChange = (mode: ProductionWorkflowMode) => {
+    setLocalSettings((prev) => ({
+      ...prev,
+      production_bom: {
+        ...prev.production_bom,
+        productionMode: mode,
       },
     }))
   }
@@ -160,6 +172,28 @@ export function FeatureSettings() {
                         ))}
                       </div>
                     </div>
+
+                    {feature.key === 'production_bom' && (
+                      <div className="space-y-2 rounded-md border bg-muted/20 p-3">
+                        <Label>Mode Produksi</Label>
+                        <Select
+                          value={state?.productionMode || 'order_based'}
+                          onValueChange={(value) => handleProductionModeChange(value as ProductionWorkflowMode)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Pilih mode produksi" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="stock">Produksi Stok / Manufaktur Umum</SelectItem>
+                            <SelectItem value="order_based">Produksi Berdasarkan Pesanan</SelectItem>
+                            <SelectItem value="hybrid">Hybrid</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          Mode ini mengatur apakah produksi berjalan dari stok, dari antrian pesanan, atau keduanya.
+                        </p>
+                      </div>
+                    )}
 
                     <div className="space-y-2">
                       <Label htmlFor={`notes-${feature.key}`}>Catatan internal</Label>

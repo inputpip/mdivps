@@ -116,6 +116,7 @@ const MobileLayout = () => {
     '/mobile-sales-report': 'sales_reports',
     '/quotations': 'quotations',
     '/production': 'production_bom',
+    '/production-operator': 'production_bom',
     '/retasi': 'retasi',
     '/attendance': 'attendance',
     '/assets': 'assets_maintenance',
@@ -233,6 +234,13 @@ const MobileLayout = () => {
       path: '/production',
       description: 'Catat hasil produksi',
       color: 'bg-amber-500 hover:bg-amber-600',
+      textColor: 'text-white'
+    }, {
+      title: 'Panel Operator',
+      icon: Factory,
+      path: '/production-operator',
+      description: 'Antrian dan pekerjaan produksi',
+      color: 'bg-yellow-600 hover:bg-yellow-700',
       textColor: 'text-white'
     }] : []),
     ...(canAccessWarehouse ? [{
