@@ -223,6 +223,7 @@ export function BOMManagement({ productId, productName }: BOMManagementProps) {
                 <Input
                   type="text"
                   inputMode="decimal"
+                  noFormat
                   value={quantityInput}
                   onChange={(e) => setQuantityInput(e.target.value)}
                   placeholder="0"
