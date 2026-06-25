@@ -261,6 +261,11 @@ export const useTransactions = (filters?: {
         throw new Error(rpcResult?.error_message || 'Gagal menyimpan transaksi (Unknown RPC Error)');
       }
 
+      if (!rpcResult?.journal_id) {
+        console.error('❌ Transaction RPC returned success without journal_id:', rpcResult);
+        throw new Error('Transaksi tidak disimpan karena jurnal penjualan gagal dibuat. Silakan cek jurnal/accounting terlebih dahulu.');
+      }
+
       console.log('✅ Transaction Created Successfully via RPC:', {
         trxId: rpcResult.transaction_id,
         journalId: rpcResult.journal_id,

@@ -1189,6 +1189,14 @@ BEGIN
 
     IF v_fifo_result.success THEN
       v_journal_id := v_fifo_result.journal_id;
+
+      IF v_journal_id IS NULL THEN
+        RAISE EXCEPTION 'Jurnal penjualan gagal dibuat untuk transaksi %: journal_id kosong', v_transaction_id;
+      END IF;
+    ELSE
+      RAISE EXCEPTION 'Gagal membuat jurnal penjualan untuk transaksi %: %',
+        v_transaction_id,
+        COALESCE(v_fifo_result.error_message, 'Unknown journal error');
     END IF;
   END IF;
 
