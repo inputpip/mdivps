@@ -25,13 +25,15 @@ import { Badge } from '@/components/ui/badge';
 import { useBranches } from '@/hooks/useBranches';
 import { Branch } from '@/types/branch';
 
+// Default company ID yang sudah dibuat di migration
+const DEFAULT_COMPANY_ID = '00000000-0000-0000-0000-000000000001';
+
 export default function BranchManagementPage() {
   const { branches, isLoading, createBranch, updateBranch, deleteBranch } = useBranches();
-  const getDefaultCompanyId = () => branches.find((branch) => branch.companyId)?.companyId ?? null;
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
   const [formData, setFormData] = useState({
-    companyId: null as string | null,
+    companyId: DEFAULT_COMPANY_ID,
     name: '',
     code: '',
     address: '',
@@ -59,7 +61,7 @@ export default function BranchManagementPage() {
     } else {
       setEditingBranch(null);
       setFormData({
-        companyId: getDefaultCompanyId(),
+        companyId: DEFAULT_COMPANY_ID,
         name: '',
         code: '',
         address: '',

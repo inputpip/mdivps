@@ -23,16 +23,12 @@ import { useAuth } from "@/hooks/useAuth";
 import { usePermissions, PERMISSIONS } from "@/hooks/usePermissions";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useCompanySettings } from "@/hooks/useCompanySettings";
-import { isFeatureEnabled } from "@/config/featureSettings";
 
 export function Header() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { hasPermission } = usePermissions();
-  const { settings } = useCompanySettings();
-  const isDeliveryEnabled = isFeatureEnabled(settings?.appFeatureSettings, 'delivery');
 
   const handleLogout = async () => {
     await signOut();
@@ -46,11 +42,11 @@ export function Header() {
     { href: "/", label: "Dashboard", icon: Home },
     { href: "/pos", label: "POS Kasir", icon: Store, permission: PERMISSIONS.TRANSACTIONS },
     { href: "/transactions", label: "Transaksi", icon: List, permission: PERMISSIONS.TRANSACTIONS },
-    { href: "/delivery", label: "Pengantaran", icon: Truck, permission: PERMISSIONS.DELIVERIES, enabled: isDeliveryEnabled },
+    { href: "/delivery", label: "Pengantaran", icon: Truck, permission: PERMISSIONS.DELIVERIES },
     { href: "/materials", label: "Data Barang", icon: Package, permission: PERMISSIONS.MATERIALS },
     { href: "/production", label: "Produksi", icon: Factory, permission: PERMISSIONS.PRODUCTION },
     { href: "/customers", label: "Pelanggan", icon: Users, permission: PERMISSIONS.CUSTOMERS },
-  ].filter(item => (item.enabled ?? true) && (!item.permission || hasPermission(item.permission)));
+  ].filter(item => !item.permission || hasPermission(item.permission));
 
   // Menu Keuangan Utama
   const financialMenus = [

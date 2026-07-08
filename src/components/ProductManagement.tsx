@@ -20,8 +20,6 @@ import { ProductType } from "@/types/product"
 import { Link } from "react-router-dom"
 import { useProductStockMovements, STOCK_OUT_REASONS } from "@/hooks/useProductStockMovements"
 import { MinusCircle } from "lucide-react"
-import { listItemUnitConversions, replaceItemUnitConversions } from '@/services/itemUnitConversionService'
-import { parseUnitConversionsText, serializeUnitConversionsText } from '@/utils/unitConversions'
 
 export function ProductManagement() {
   const { products, upsertProduct, deleteProduct, isLoading } = useProducts()
@@ -43,7 +41,6 @@ export function ProductManagement() {
     minOrder: 1,
     description: "",
   })
-  const [unitConversionsText, setUnitConversionsText] = useState('')
 
   // Stock Out Dialog State
   const [stockOutDialogOpen, setStockOutDialogOpen] = useState(false)
@@ -271,16 +268,10 @@ export function ProductManagement() {
     }
 
     try {
-      const savedProduct = await upsertProduct.mutateAsync({
+      await upsertProduct.mutateAsync({
         ...form,
         specifications: [],
         materials: [],
-      })
-
-      await replaceItemUnitConversions({
-        itemType: 'product',
-        itemId: savedProduct.id,
-        conversions: parseUnitConversionsText(unitConversionsText),
       })
 
       setOpen(false)
@@ -296,7 +287,6 @@ export function ProductManagement() {
         minOrder: 1,
         description: "",
       })
-      setUnitConversionsText('')
 
       toast({
         title: "Success",
@@ -346,12 +336,7 @@ export function ProductManagement() {
         <div className="text-lg font-semibold">Produk (Finished Goods)</div>
         <div className="flex gap-2">
           {canManage && (
-            <Dialog open={open} onOpenChange={(nextOpen) => {
-              setOpen(nextOpen)
-              if (!nextOpen) {
-                setUnitConversionsText('')
-              }
-            }}>
+            <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
                 <Button size="sm">Tambah</Button>
               </DialogTrigger>
@@ -509,22 +494,6 @@ export function ProductManagement() {
                   </div>
 
                   <div>
-                    <Label htmlFor="unitConversions" className="text-sm">
-                      Konversi Satuan PO (opsional)
-                    </Label>
-                    <Textarea
-                      id="unitConversions"
-                      placeholder={"dus=24\npack=12"}
-                      value={unitConversionsText}
-                      onChange={(e) => setUnitConversionsText(e.target.value)}
-                      className="text-sm mt-1"
-                    />
-                    <p className="text-[11px] text-muted-foreground mt-1">
-                      Format per baris: nama_satuan=jumlah_satuan_dasar. Contoh: dus=24 jika satuan dasar pcs.
-                    </p>
-                  </div>
-
-                  <div>
                     <Label htmlFor="description" className="text-sm">
                       Deskripsi
                     </Label>
@@ -639,20 +608,9 @@ function EditProductButton({ product, onSaved }: { product: any; onSaved: () => 
     minOrder: product.minOrder,
     description: product.description || "",
   })
-  const [unitConversionsText, setUnitConversionsText] = useState('')
 
   const { upsertProduct } = useProducts()
   const { toast } = useToast()
-
-  const loadConversions = async () => {
-    try {
-      const conversions = await listItemUnitConversions({ itemType: 'product', itemIds: [product.id] })
-      setUnitConversionsText(serializeUnitConversionsText(conversions, product.unit))
-    } catch (error) {
-      console.error('Gagal memuat konversi satuan produk:', error)
-      setUnitConversionsText('')
-    }
-  }
 
   const handleSave = async () => {
     if (!form.name.trim()) {
@@ -668,12 +626,6 @@ function EditProductButton({ product, onSaved }: { product: any; onSaved: () => 
       await upsertProduct.mutateAsync({
         id: product.id,
         ...form,
-      })
-
-      await replaceItemUnitConversions({
-        itemType: 'product',
-        itemId: product.id,
-        conversions: parseUnitConversionsText(unitConversionsText),
       })
 
       setOpen(false)
@@ -693,14 +645,7 @@ function EditProductButton({ product, onSaved }: { product: any; onSaved: () => 
   }
 
   return (
-    <Dialog open={open} onOpenChange={(nextOpen) => {
-      setOpen(nextOpen)
-      if (nextOpen) {
-        void loadConversions()
-      } else {
-        setUnitConversionsText('')
-      }
-    }}>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button size="sm" variant="outline">
           Edit
@@ -858,22 +803,6 @@ function EditProductButton({ product, onSaved }: { product: any; onSaved: () => 
                 className="text-sm mt-1"
               />
             </div>
-          </div>
-
-          <div>
-            <Label htmlFor="edit-unitConversions" className="text-sm">
-              Konversi Satuan PO (opsional)
-            </Label>
-            <Textarea
-              id="edit-unitConversions"
-              placeholder={"dus=24\npack=12"}
-              value={unitConversionsText}
-              onChange={(e) => setUnitConversionsText(e.target.value)}
-              className="text-sm mt-1"
-            />
-            <p className="text-[11px] text-muted-foreground mt-1">
-              Format per baris: nama_satuan=jumlah_satuan_dasar. Contoh: pack=12 jika satuan dasar pcs.
-            </p>
           </div>
 
           <div>

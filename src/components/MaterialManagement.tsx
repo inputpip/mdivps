@@ -28,8 +28,6 @@ import { id as idLocale } from 'date-fns/locale'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { usePermissions } from '@/hooks/usePermissions'
-import { listItemUnitConversions, replaceItemUnitConversions } from '@/services/itemUnitConversionService'
-import { parseUnitConversionsText, serializeUnitConversionsText } from '@/utils/unitConversions'
 
 const materialSchema = z.object({
   name: z.string().min(3, { message: "Nama bahan minimal 3 karakter." }),
@@ -81,7 +79,6 @@ export const MaterialManagement = () => {
   const [isMaterialListOpen, setIsMaterialListOpen] = useState(true)
   const [typeFilter, setTypeFilter] = useState<string>("")
   const [lowStockFilter, setLowStockFilter] = useState(false)
-  const [unitConversionsText, setUnitConversionsText] = useState('')
 
   const { register, handleSubmit, reset, control, watch, formState: { errors } } = useForm<MaterialFormData>({
     resolver: zodResolver(materialSchema),
@@ -115,28 +112,21 @@ export const MaterialManagement = () => {
     setIsAdjustmentOpen(true)
   }
 
-  const handleEditClick = async (material: Material) => {
+  const handleEditClick = (material: Material) => {
     setEditingMaterial(material);
+    // Fix: Only pass allowed fields and map type if needed
     const { name, barcode, unit, pricePerUnit, stock, minStock, description } = material;
     const type: 'Stock' | 'Beli' = material.type === 'Jasa' ? 'Stock' : material.type;
+
+    // For "Beli" type, set minStock to 0 since it's not used
     const adjustedMinStock = type === 'Beli' ? 0 : minStock;
 
     reset({ name, barcode: barcode || '', type, unit, pricePerUnit, stock, minStock: adjustedMinStock, description });
-
-    try {
-      const conversions = await listItemUnitConversions({ itemType: 'material', itemIds: [material.id] })
-      setUnitConversionsText(serializeUnitConversionsText(conversions, material.unit))
-    } catch (error) {
-      console.error('Gagal memuat konversi satuan material:', error)
-      setUnitConversionsText('')
-    }
-
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleCancelEdit = () => {
     setEditingMaterial(null);
-    setUnitConversionsText('')
     reset(EMPTY_FORM_DATA);
   };
 
@@ -160,36 +150,33 @@ export const MaterialManagement = () => {
     }
   }
 
-  const onFormSubmit = async (data: MaterialFormData) => {
+  const onFormSubmit = (data: MaterialFormData) => {
     const materialToSave: Partial<Material> = {
       ...data,
-      id: editingMaterial?.id,
+      id: editingMaterial?.id, // Include ID if editing
     };
 
+    // If editing, explicitly remove stock to prevent accidental overwrites of FIFO data
     if (editingMaterial) {
       delete materialToSave.stock;
     }
 
-    try {
-      const savedMaterial = await upsertMaterial.mutateAsync(materialToSave)
-      await replaceItemUnitConversions({
-        itemType: 'material',
-        itemId: savedMaterial.id,
-        conversions: parseUnitConversionsText(unitConversionsText),
-      })
-
-      toast({
-        title: "Sukses!",
-        description: `Bahan "${savedMaterial.name}" berhasil ${editingMaterial ? 'diperbarui' : 'ditambahkan'}.`,
-      })
-      handleCancelEdit();
-    } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Gagal!",
-        description: `Terjadi kesalahan: ${error.message}`,
-      })
-    }
+    upsertMaterial.mutate(materialToSave, {
+      onSuccess: (savedMaterial) => {
+        toast({
+          title: "Sukses!",
+          description: `Bahan "${savedMaterial.name}" berhasil ${editingMaterial ? 'diperbarui' : 'ditambahkan'}.`,
+        })
+        handleCancelEdit();
+      },
+      onError: (error) => {
+        toast({
+          variant: "destructive",
+          title: "Gagal!",
+          description: `Terjadi kesalahan: ${error.message}`,
+        })
+      },
+    })
   }
 
   // Fungsi cetak PDF Stok Bahan Baku
@@ -447,19 +434,7 @@ export const MaterialManagement = () => {
                     {errors.minStock && <p className="text-sm text-destructive">{errors.minStock.message}</p>}
                   </div>
                 )}
-                <div className="space-y-2 lg:col-span-2">
-                  <Label htmlFor="unitConversions">Konversi Satuan PO (opsional)</Label>
-                  <Textarea
-                    id="unitConversions"
-                    value={unitConversionsText}
-                    onChange={(e) => setUnitConversionsText(e.target.value)}
-                    placeholder={"dus=24\npack=12"}
-                  />
-                  <p className="text-[11px] text-muted-foreground">
-                    Isi satu baris per konversi. Format: nama_satuan=jumlah_satuan_dasar. Contoh jika satuan dasar pcs: dus=24.
-                  </p>
-                </div>
-                <div className="space-y-2 lg:col-span-3">
+                <div className="space-y-2 lg:col-span-5">
                   <Label htmlFor="description">Deskripsi (Opsional)</Label>
                   <Textarea id="description" {...register("description")} />
                 </div>

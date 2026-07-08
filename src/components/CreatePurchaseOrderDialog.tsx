@@ -52,8 +52,6 @@ import { useToast } from "@/components/ui/use-toast"
 import { PurchaseOrderItem } from "@/types/purchaseOrder"
 import { useTimezone } from "@/contexts/TimezoneContext"
 import { getOfficeTime } from "@/utils/officeTime"
-import { groupItemUnitConversions, listItemUnitConversions } from '@/services/itemUnitConversionService'
-import { buildUnitOptions, formatUnitConversionPreview, getBaseQuantity } from '@/utils/unitConversions'
 
 // Combined item for dropdown (material or product)
 interface PurchasableItem {
@@ -129,7 +127,6 @@ export function CreatePurchaseOrderDialog({ materialId, children, open: external
 
   // State for PO items
   const [items, setItems] = React.useState<PurchaseOrderItem[]>([])
-  const [unitConversionMap, setUnitConversionMap] = React.useState<Record<string, any[]>>({})
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -153,29 +150,6 @@ export function CreatePurchaseOrderDialog({ materialId, children, open: external
       }
     }
   }, [materialId, open, materials])
-
-  React.useEffect(() => {
-    if (!open) return
-
-    const loadConversions = async () => {
-      try {
-        const materialIds = (materials || []).map((item) => item.id)
-        const productIds = (products || []).filter((item) => item.type === 'Jual Langsung').map((item) => item.id)
-
-        const [materialConversions, productConversions] = await Promise.all([
-          materialIds.length ? listItemUnitConversions({ itemType: 'material', itemIds: materialIds }) : Promise.resolve([]),
-          productIds.length ? listItemUnitConversions({ itemType: 'product', itemIds: productIds }) : Promise.resolve([]),
-        ])
-
-        setUnitConversionMap(groupItemUnitConversions([...materialConversions, ...productConversions]))
-      } catch (error) {
-        console.error('Gagal memuat konversi satuan item:', error)
-        setUnitConversionMap({})
-      }
-    }
-
-    void loadConversions()
-  }, [open, materials, products])
 
   // Reset form when dialog closes
   React.useEffect(() => {
@@ -211,28 +185,6 @@ export function CreatePurchaseOrderDialog({ materialId, children, open: external
     ? (ppnMode === 'include' ? itemsTotal : subtotal + ppnAmount)
     : subtotal
 
-  const getConversionKey = (itemType?: 'material' | 'product', itemId?: string) => {
-    return itemType && itemId ? `${itemType}:${itemId}` : ''
-  }
-
-  const getUnitOptionsForSelection = (itemType?: 'material' | 'product', itemId?: string, baseUnit?: string) => {
-    const key = getConversionKey(itemType, itemId)
-    return buildUnitOptions(baseUnit || '', key ? unitConversionMap[key] || [] : [])
-  }
-
-  const applyUnitSelection = (draftItem: PurchaseOrderItem, purchaseUnit?: string) => {
-    const options = getUnitOptionsForSelection(draftItem.itemType, draftItem.materialId || draftItem.productId, draftItem.baseUnit || draftItem.unit)
-    const selectedOption = options.find((option) => option.unitName === purchaseUnit) || options[0]
-
-    if (!selectedOption) return draftItem
-
-    draftItem.unit = selectedOption.unitName
-    draftItem.baseUnit = draftItem.baseUnit || selectedOption.unitName
-    draftItem.conversionQty = selectedOption.conversionQty
-    draftItem.baseQuantity = getBaseQuantity(draftItem.quantity || 0, selectedOption.conversionQty)
-    return draftItem
-  }
-
   // Add new item
   const addItem = (preselectedItemId?: string) => {
     const newItem: PurchaseOrderItem = {
@@ -240,10 +192,6 @@ export function CreatePurchaseOrderDialog({ materialId, children, open: external
       materialId: undefined,
       productId: undefined,
       itemType: undefined,
-      unit: undefined,
-      baseUnit: undefined,
-      conversionQty: 1,
-      baseQuantity: 1,
       quantity: 1,
       unitPrice: 0,
       notes: "",
@@ -261,13 +209,12 @@ export function CreatePurchaseOrderDialog({ materialId, children, open: external
           newItem.productId = purchasableItem.id.replace('prod-', '');
           newItem.productName = purchasableItem.name;
           newItem.itemType = 'product';
+          // Auto-fill cost price for products
           if (purchasableItem.costPrice) {
             newItem.unitPrice = purchasableItem.costPrice;
           }
         }
-        newItem.baseUnit = purchasableItem.unit;
         newItem.unit = purchasableItem.unit;
-        applyUnitSelection(newItem, purchasableItem.unit)
       }
     }
 
@@ -290,9 +237,11 @@ export function CreatePurchaseOrderDialog({ materialId, children, open: external
       if (item.id === itemId) {
         const updatedItem = { ...item }
 
+        // Handle combined item selection
         if (field === 'combinedItemId') {
           const purchasableItem = purchasableItems.find(pi => pi.id === value);
           if (purchasableItem) {
+            // Reset both IDs first
             updatedItem.materialId = undefined;
             updatedItem.productId = undefined;
             updatedItem.materialName = undefined;
@@ -306,22 +255,15 @@ export function CreatePurchaseOrderDialog({ materialId, children, open: external
               updatedItem.productId = purchasableItem.id.replace('prod-', '');
               updatedItem.productName = purchasableItem.name;
               updatedItem.itemType = 'product';
+              // Auto-fill cost price for products
               if (purchasableItem.costPrice && updatedItem.unitPrice === 0) {
                 updatedItem.unitPrice = purchasableItem.costPrice;
               }
             }
-
-            updatedItem.baseUnit = purchasableItem.unit;
             updatedItem.unit = purchasableItem.unit;
-            applyUnitSelection(updatedItem, purchasableItem.unit)
           }
-        } else if (field === 'unit') {
-          applyUnitSelection(updatedItem, value)
         } else {
           (updatedItem as any)[field] = value;
-          if (field === 'quantity') {
-            updatedItem.baseQuantity = getBaseQuantity(updatedItem.quantity, updatedItem.conversionQty || 1)
-          }
         }
 
         return updatedItem
@@ -356,14 +298,7 @@ export function CreatePurchaseOrderDialog({ materialId, children, open: external
     }
 
     // Validate all items have material or product selected
-    const invalidItems = items.filter(item => (
-      (!item.materialId && !item.productId) ||
-      item.quantity <= 0 ||
-      item.unitPrice < 0 ||
-      !item.unit ||
-      !item.baseUnit ||
-      (item.conversionQty || 0) <= 0
-    ))
+    const invalidItems = items.filter(item => (!item.materialId && !item.productId) || item.quantity <= 0 || item.unitPrice < 0)
     if (invalidItems.length > 0) {
       toast({
         variant: "destructive",
@@ -404,9 +339,6 @@ export function CreatePurchaseOrderDialog({ materialId, children, open: external
         materialName: item.materialName,
         productName: item.productName,
         unit: item.unit,
-        baseUnit: item.baseUnit,
-        conversionQty: item.conversionQty || 1,
-        baseQuantity: item.baseQuantity || getBaseQuantity(item.quantity, item.conversionQty || 1),
         quantity: item.quantity,
         unitPrice: item.unitPrice,
         notes: item.notes,
@@ -557,40 +489,18 @@ export function CreatePurchaseOrderDialog({ materialId, children, open: external
                             </Select>
                           </TableCell>
                           <TableCell>
-                            <div className="space-y-2">
+                            <div className="flex items-center space-x-2">
                               <NumberInput
                                 value={item.quantity}
                                 onChange={(value) => updateItem(item.id!, 'quantity', value || 0)}
                                 min={0.01}
                                 decimalPlaces={2}
-                                className="w-24"
+                                className="w-20"
                               />
-                              {item.baseUnit && (
-                                <Select
-                                  value={item.unit || item.baseUnit}
-                                  onValueChange={(value) => updateItem(item.id!, 'unit', value)}
-                                >
-                                  <SelectTrigger className="w-28">
-                                    <SelectValue placeholder="Satuan" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {getUnitOptionsForSelection(item.itemType, item.materialId || item.productId, item.baseUnit).map((option) => (
-                                      <SelectItem key={option.unitName} value={option.unitName}>
-                                        {option.unitName}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              )}
-                              {item.unit && item.baseUnit && (
-                                <p className="text-[11px] text-muted-foreground">
-                                  {formatUnitConversionPreview(
-                                    item.quantity,
-                                    item.unit,
-                                    item.baseQuantity || getBaseQuantity(item.quantity, item.conversionQty || 1),
-                                    item.baseUnit,
-                                  )}
-                                </p>
+                              {item.unit && (
+                                <span className="text-xs text-muted-foreground">
+                                  {item.unit}
+                                </span>
                               )}
                             </div>
                           </TableCell>

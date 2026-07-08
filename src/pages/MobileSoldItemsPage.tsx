@@ -10,8 +10,6 @@ import { format } from 'date-fns'
 import { id } from 'date-fns/locale/id'
 import { supabase } from '@/integrations/supabase/client'
 import { useBranch } from '@/contexts/BranchContext'
-import { useCompanySettings } from '@/hooks/useCompanySettings'
-import { isFeatureEnabled } from '@/config/featureSettings'
 
 interface SoldProduct {
   transactionId: string
@@ -44,15 +42,6 @@ export default function MobileSoldItemsPage() {
   const [initialLoad, setInitialLoad] = useState(true)
 
   const { currentBranch } = useBranch()
-  const { settings } = useCompanySettings()
-  const isDeliveryEnabled = isFeatureEnabled(settings?.appFeatureSettings, 'delivery')
-
-  useEffect(() => {
-    if (!isDeliveryEnabled && sourceFilter === 'delivery') {
-      setSourceFilter('all')
-      setDriverFilter('all')
-    }
-  }, [isDeliveryEnabled, sourceFilter])
 
   // Auto-generate report on page load (default: today's data)
   useEffect(() => {
@@ -60,7 +49,7 @@ export default function MobileSoldItemsPage() {
       setInitialLoad(false)
       generateReport(todayStr, todayStr, 'all')
     }
-  }, [initialLoad, isDeliveryEnabled])
+  }, [initialLoad])
 
   const generateReport = async (fromDateStr: string, toDateStr: string, source: 'all' | 'delivery' | 'office_sale' | 'retasi') => {
     setIsLoading(true)
@@ -73,7 +62,7 @@ export default function MobileSoldItemsPage() {
       const items: SoldProduct[] = []
 
       // 1. Fetch delivered items
-      if (isDeliveryEnabled && (source === 'all' || source === 'delivery')) {
+      if (source === 'all' || source === 'delivery') {
         let deliveryQuery = supabase
           .from('deliveries')
           .select(`
@@ -388,7 +377,7 @@ export default function MobileSoldItemsPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Semua Sumber</SelectItem>
-              {isDeliveryEnabled && <SelectItem value="delivery">Pengantaran</SelectItem>}
+              <SelectItem value="delivery">Pengantaran</SelectItem>
               <SelectItem value="office_sale">Laku Kantor</SelectItem>
               <SelectItem value="retasi">Retasi</SelectItem>
             </SelectContent>

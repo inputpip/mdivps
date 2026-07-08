@@ -191,19 +191,19 @@ function getBaseUrl(): string {
 function getTenantConfig(): TenantConfig {
   const baseUrl = getBaseUrl();
 
-  // Auth must follow the selected API/base URL, not a separate fixed build-time env.
-  // This keeps the shared production frontend safe:
-  // - mkw.aquvit.id       -> https://mkw.aquvit.id/auth
-  // - matahari.aquvit.id  -> https://matahari.aquvit.id/auth
-  // - nbx.aquvit.id       -> https://nbx.aquvit.id/auth
-  // For localhost:8080, getBaseUrl() may still point to the Matahari VPS via
-  // VITE_POSTGREST_URL, so auth becomes that same VPS host + /auth.
-  const authUrl = `${baseUrl}/auth`;
+  // For localhost, auth server runs on separate port (3002)
+  // For production, auth is on same server as PostgREST
+  let authUrl = `${baseUrl}/auth`;
+
+  // REMOVED: Hardcoded localhost override to allow connecting to VPS from local
+  // if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+  //   authUrl = 'http://localhost:3002/auth';
+  // }
 
   return {
     supabaseUrl: baseUrl,
     supabaseAnonKey: getAnonJWT(), // Valid JWT for anon role (local or production)
-    authUrl,
+    authUrl: import.meta.env.VITE_AUTH_URL || authUrl,
     isPostgREST: true,
   };
 }

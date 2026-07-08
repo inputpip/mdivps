@@ -1,5 +1,4 @@
-import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMemo, useEffect, useState } from 'react';
 import { useAuth } from './useAuth';
 import { getRolePermissions } from '@/services/rolePermissionService';
 
@@ -9,44 +8,63 @@ import { getRolePermissions } from '@/services/rolePermissionService';
  */
 export const useGranularPermission = () => {
   const { user } = useAuth();
-  const shouldFetchRolePermissions = !!user && user.role !== 'owner' && user.role !== 'admin';
+  const [rolePermissions, setRolePermissions] = useState<Record<string, Record<string, boolean>>>({});
+  const [isLoading, setIsLoading] = useState(true);
 
-  const { data: rolePermissions = {}, isLoading } = useQuery<Record<string, Record<string, boolean>>>({
-    queryKey: ['rolePermissions'],
-    queryFn: async () => {
-      const dbPerms = await getRolePermissions();
-      const permsByRole: Record<string, Record<string, boolean>> = {};
-
-      if (dbPerms && dbPerms.length > 0) {
-        dbPerms.forEach((rp: { role_id: string; permissions: Record<string, boolean> }) => {
-          permsByRole[rp.role_id] = rp.permissions || {};
-        });
-
-        try {
-          localStorage.setItem('rolePermissions', JSON.stringify(permsByRole));
-        } catch (error) {
-          console.warn('Failed to cache role permissions locally:', error);
-        }
-
-        return permsByRole;
-      }
-
+  // Load role permissions from database - ALWAYS fetch from DB first
+  useEffect(() => {
+    const loadPermissions = async () => {
       try {
-        const saved = localStorage.getItem('rolePermissions');
-        return saved ? JSON.parse(saved) : {};
+        // ALWAYS fetch from database first (tidak pakai cache sebagai prioritas)
+        const dbPerms = await getRolePermissions();
+        if (dbPerms && dbPerms.length > 0) {
+          const permsByRole: Record<string, Record<string, boolean>> = {};
+          dbPerms.forEach((rp: { role_id: string; permissions: Record<string, boolean> }) => {
+            permsByRole[rp.role_id] = rp.permissions;
+          });
+          setRolePermissions(permsByRole);
+          // Update localStorage cache sebagai backup
+          localStorage.setItem('rolePermissions', JSON.stringify(permsByRole));
+        }
       } catch (error) {
-        console.warn('Error loading granular permissions from cache:', error);
-        return {};
+        console.warn('Error loading granular permissions from DB, using cache:', error);
+        // Fallback to localStorage only if DB fails
+        try {
+          const saved = localStorage.getItem('rolePermissions');
+          if (saved) {
+            setRolePermissions(JSON.parse(saved));
+          }
+        } catch (e) {
+          console.error('Error loading from localStorage:', e);
+        }
+      } finally {
+        setIsLoading(false);
       }
-    },
-    enabled: shouldFetchRolePermissions,
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
-    refetchInterval: 5 * 60 * 1000,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-    retry: 1,
-  });
+    };
+
+    loadPermissions();
+
+    // Refresh permissions setiap 5 menit untuk mendapat update terbaru
+    const refreshInterval = setInterval(loadPermissions, 5 * 60 * 1000);
+
+    // Listen for changes from other tabs
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'rolePermissions') {
+        try {
+          const perms = e.newValue ? JSON.parse(e.newValue) : {};
+          setRolePermissions(perms);
+        } catch (error) {
+          console.error('Error parsing storage change:', error);
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(refreshInterval);
+    };
+  }, []);
 
   /**
    * Get all granular permissions for the current user's role

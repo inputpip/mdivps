@@ -13,8 +13,9 @@ import { useToast } from "@/components/ui/use-toast"
 import { useAuth } from "@/hooks/useAuth"
 import { useTimezone } from "@/contexts/TimezoneContext"
 import { getOfficeTime, getOfficeDateString } from "@/utils/officeTime"
-import { Loader2, Plus, History, Camera, Image as ImageIcon, X } from "lucide-react"
+import { Loader2, Plus, History, Camera, Image as ImageIcon, X, Trash2 } from "lucide-react"
 import { format } from "date-fns"
+import { id } from "date-fns/locale/id"
 import { Badge } from "@/components/ui/badge"
 import { formatNumber } from "@/utils/formatNumber"
 import { useNavigate } from "react-router-dom"
@@ -33,7 +34,7 @@ type ExpenseFormData = z.infer<typeof expenseSchema>
 
 export default function MobileExpensePage() {
     const { expenses, isLoading: isLoadingExpenses, addExpense } = useExpenses()
-    const { accounts } = useAccounts()
+    const { accounts, isLoading: isLoadingAccounts } = useAccounts()
     const { toast } = useToast()
     const { user } = useAuth()
     const { timezone } = useTimezone()
@@ -44,6 +45,18 @@ export default function MobileExpensePage() {
     const [photoPreview, setPhotoPreview] = useState<string | null>(null)
     const [isUploading, setIsUploading] = useState(false)
     const fileInputRef = useRef<HTMLInputElement>(null)
+
+    // PERMISSION CHECK
+    const allowedRoles = ['admin', 'owner', 'cashier'];
+    if (user && !allowedRoles.includes(user.role)) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-screen p-4">
+                <h2 className="text-xl font-bold text-destructive">Akses Ditolak</h2>
+                <p className="text-muted-foreground mt-2">Anda tidak memiliki izin untuk mengakses halaman ini.</p>
+                <Button className="mt-4" onClick={() => navigate('/')}>Kembali ke Home</Button>
+            </div>
+        )
+    }
 
     const { register, handleSubmit, setValue, watch, reset, formState: { errors } } = useForm<ExpenseFormData>({
         resolver: zodResolver(expenseSchema),
@@ -56,6 +69,7 @@ export default function MobileExpensePage() {
     })
 
     // Watch Amount
+    const watchAmount = watch("amount")
     const [displayAmount, setDisplayAmount] = useState("")
 
     // Filter Accounts
@@ -164,11 +178,10 @@ export default function MobileExpensePage() {
                     toast({ variant: "destructive", title: "Gagal Simpan", description: error.message })
                 }
             })
-        } catch (error: unknown) {
+        } catch (error: any) {
             setIsUploading(false)
-            const message = error instanceof Error ? error.message : "Gagal mengupload foto bukti"
             console.error("Upload error:", error)
-            toast({ variant: "destructive", title: "Gagal Upload", description: "Gagal mengupload foto bukti: " + message })
+            toast({ variant: "destructive", title: "Gagal Upload", description: "Gagal mengupload foto bukti: " + error.message })
         }
     }
 
@@ -185,18 +198,6 @@ export default function MobileExpensePage() {
         return expenseDateStr === todayStr;
     }) || [];
     const todaysTotal = todaysExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
-
-    // PERMISSION CHECK
-    const allowedRoles = ['admin', 'owner', 'cashier'];
-    if (user && !allowedRoles.includes(user.role)) {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-screen p-4">
-                <h2 className="text-xl font-bold text-destructive">Akses Ditolak</h2>
-                <p className="text-muted-foreground mt-2">Anda tidak memiliki izin untuk mengakses halaman ini.</p>
-                <Button className="mt-4" onClick={() => navigate('/')}>Kembali ke Home</Button>
-            </div>
-        )
-    }
 
 
     return (
@@ -318,8 +319,8 @@ export default function MobileExpensePage() {
                                 {errors.description && <p className="text-xs text-destructive">{errors.description.message}</p>}
                             </div>
 
-                            <Button type="submit" className="w-full h-12 text-md mt-2" disabled={addExpense.isPending || isUploading}>
-                                {addExpense.isPending || isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Simpan Pengeluaran"}
+                            <Button type="submit" className="w-full h-12 text-md mt-2" disabled={addExpense.isPending}>
+                                {addExpense.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Simpan Pengeluaran"}
                             </Button>
 
                         </form>

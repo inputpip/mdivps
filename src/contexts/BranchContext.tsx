@@ -221,40 +221,18 @@ export function BranchProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // Fetch role permissions to check for granular branch access.
-      // Owner/admin do not need DB permission lookup, and regular roles use a short local cache
-      // so layout remounts do not repeatedly hit role_permissions.
+      // Fetch role permissions to check for granular branch access
       let granularPermissions: Record<string, boolean> = {};
-      if (user.role && user.role !== 'owner' && user.role !== 'admin') {
-        const cacheKey = `branchRolePermissions:${user.role}`;
-        try {
-          const cached = localStorage.getItem(cacheKey);
-          if (cached) {
-            const parsed = JSON.parse(cached);
-            if (Date.now() - parsed.cachedAt < 5 * 60 * 1000) {
-              granularPermissions = parsed.permissions || {};
-            }
-          }
-        } catch {
-          // Ignore broken cache and refetch below.
-        }
+      if (user.role && user.role !== 'owner') {
+        const { data: rolePermData } = await supabase
+          .from('role_permissions')
+          .select('permissions')
+          .eq('role_id', user.role)
+          .limit(1);
 
-        if (Object.keys(granularPermissions).length === 0) {
-          const { data: rolePermData } = await supabase
-            .from('role_permissions')
-            .select('permissions')
-            .eq('role_id', user.role)
-            .limit(1);
-
-          const rolePerm = Array.isArray(rolePermData) ? rolePermData[0] : rolePermData;
-          if (rolePerm?.permissions) {
-            granularPermissions = rolePerm.permissions;
-            try {
-              localStorage.setItem(cacheKey, JSON.stringify({ permissions: granularPermissions, cachedAt: Date.now() }));
-            } catch {
-              // Ignore cache write failures.
-            }
-          }
+        const rolePerm = Array.isArray(rolePermData) ? rolePermData[0] : rolePermData;
+        if (rolePerm?.permissions) {
+          granularPermissions = rolePerm.permissions;
         }
       }
 

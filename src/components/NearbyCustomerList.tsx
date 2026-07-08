@@ -23,8 +23,6 @@ import {
 import { useBranch } from '@/contexts/BranchContext'
 import { PhotoUploadService } from '@/services/photoUploadService'
 import { useGranularPermission } from '@/hooks/useGranularPermission'
-import { useCompanySettings } from '@/hooks/useCompanySettings'
-import { isFeatureEnabled } from '@/config/featureSettings'
 
 interface NearbyCustomerListProps {
   customers: Customer[]
@@ -91,13 +89,11 @@ export function NearbyCustomerList({
   const navigate = useNavigate()
   const { hasGranularPermission } = useGranularPermission()
   const { currentBranch } = useBranch()
-  const { settings } = useCompanySettings()
-  const isDeliveryEnabled = isFeatureEnabled(settings?.appFeatureSettings, 'delivery')
 
   const { user } = useAuth()
 
   // Check permissions
-  const canAccessDriverPos = isDeliveryEnabled && hasGranularPermission('pos_driver_access')
+  const canAccessDriverPos = hasGranularPermission('pos_driver_access')
   const canAccessQuotations = hasGranularPermission('quotations_create')
 
   // Check if user is sales or owner

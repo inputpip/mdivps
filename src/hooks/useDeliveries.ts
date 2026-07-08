@@ -5,8 +5,6 @@ import { useToast } from '@/hooks/use-toast';
 import { useBranch } from '@/contexts/BranchContext';
 import { PhotoUploadService } from '@/services/photoUploadService';
 import { format } from 'date-fns';
-import { useCompanySettings } from '@/hooks/useCompanySettings';
-import { isFeatureEnabled } from '@/config/featureSettings';
 
 // Type for delivery employees
 interface DeliveryEmployee {
@@ -104,8 +102,6 @@ export const useDeliveries = (transactionId?: string) => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { currentBranch } = useBranch();
-  const { settings } = useCompanySettings();
-  const isDeliveryEnabled = isFeatureEnabled(settings?.appFeatureSettings, 'delivery');
 
   const { data: deliveries, isLoading } = useQuery<Delivery[]>({
     queryKey: ['deliveries', transactionId, currentBranch?.id],
@@ -118,7 +114,7 @@ export const useDeliveries = (transactionId?: string) => {
           *,
           delivery_items(*),
           transactions(
-            total,
+            total, 
             cashier_name,
             customer:customer_id(address)
           ),
@@ -140,12 +136,11 @@ export const useDeliveries = (transactionId?: string) => {
       if (error) throw error;
       return (data || []).map(fromDbToDelivery);
     },
-    enabled: !!currentBranch && isDeliveryEnabled,
+    enabled: !!currentBranch,
   });
 
   const createDelivery = useMutation({
     mutationFn: async (input: DeliveryInput) => {
-      if (!isDeliveryEnabled) throw new Error('Fitur pengantaran sedang dinonaktifkan');
       if (!currentBranch?.id) throw new Error('Branch tidak dipilih');
 
       // 1. Upload Photo if present
@@ -226,7 +221,6 @@ export const useDeliveries = (transactionId?: string) => {
 
   const createDeliveryNoStock = useMutation({
     mutationFn: async (input: DeliveryInput) => {
-      if (!isDeliveryEnabled) throw new Error('Fitur pengantaran sedang dinonaktifkan');
       if (!currentBranch?.id) throw new Error('Branch tidak dipilih');
 
       // Filter out material items - materials are sold directly and don't go through delivery
@@ -278,7 +272,6 @@ export const useDeliveries = (transactionId?: string) => {
 
   const updateDelivery = useMutation({
     mutationFn: async (input: DeliveryUpdateInput) => {
-      if (!isDeliveryEnabled) throw new Error('Fitur pengantaran sedang dinonaktifkan');
       if (!currentBranch?.id) throw new Error('Branch tidak dipilih');
 
       // Filter out material items - materials are sold directly and don't go through delivery
@@ -332,7 +325,6 @@ export const useDeliveries = (transactionId?: string) => {
 
   const deleteDelivery = useMutation({
     mutationFn: async (id: string) => {
-      if (!isDeliveryEnabled) throw new Error('Fitur pengantaran sedang dinonaktifkan');
       if (!currentBranch?.id) throw new Error('Branch tidak dipilih');
 
       // Fetch the delivery's photo_url before we delete the record
@@ -354,7 +346,9 @@ export const useDeliveries = (transactionId?: string) => {
       const res = Array.isArray(data) ? data[0] : data;
       if (!res?.success) throw new Error(res?.error_message || 'Gagal membatalkan pengiriman');
 
-      // Delivery sekarang di-soft-cancel oleh RPC; jangan hard delete row agar jejak pembatalan tetap ada.
+      // Finally delete the record if RPC success (void_delivery_atomic in 07_void.sql doesn't delete the record)
+      const { error: deleteError } = await supabase.from('deliveries').delete().eq('id', id);
+      if (deleteError) throw deleteError;
 
       // Actually delete the physical delivery photo from the VPS
       if (photoUrlToDelete) {
@@ -377,7 +371,7 @@ export const useDeliveries = (transactionId?: string) => {
       queryClient.invalidateQueries({ queryKey: ['journalEntries'] });
       queryClient.invalidateQueries({ queryKey: ['commissionEntries'] });
       queryClient.invalidateQueries({ queryKey: ['transactionsReadyForDelivery'] });
-      toast({ title: 'Sukses', description: 'Pengiriman berhasil dibatalkan & stok dikembalikan' });
+      toast({ title: 'Sukses', description: 'Pengiriman berhasil dihapus & stok dikembalikan' });
     },
   });
 
@@ -387,8 +381,6 @@ export const useDeliveries = (transactionId?: string) => {
 // Hook to get employees that can do delivery (drivers and helpers)
 export const useDeliveryEmployees = () => {
   const { currentBranch } = useBranch();
-  const { settings } = useCompanySettings();
-  const isDeliveryEnabled = isFeatureEnabled(settings?.appFeatureSettings, 'delivery');
 
   return useQuery<DeliveryEmployee[]>({
     queryKey: ['deliveryEmployees', currentBranch?.id],
@@ -409,15 +401,13 @@ export const useDeliveryEmployees = () => {
         role: emp.role || ''
       }));
     },
-    enabled: !!currentBranch && isDeliveryEnabled,
+    enabled: !!currentBranch,
   });
 };
 
 // Hook to get delivery history
 export const useDeliveryHistory = () => {
   const { currentBranch } = useBranch();
-  const { settings } = useCompanySettings();
-  const isDeliveryEnabled = isFeatureEnabled(settings?.appFeatureSettings, 'delivery');
 
   return useQuery<Delivery[]>({
     queryKey: ['deliveryHistory', currentBranch?.id],
@@ -445,7 +435,7 @@ export const useDeliveryHistory = () => {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-
+      
       // Also filter out deliveries tied to cancelled/voided transactions
       const validDeliveries = (data || []).filter(d => {
         const txn = d.transactions;
@@ -459,15 +449,13 @@ export const useDeliveryHistory = () => {
 
       return validDeliveries.map(fromDbToDelivery);
     },
-    enabled: !!currentBranch && isDeliveryEnabled,
+    enabled: !!currentBranch,
   });
 };
 
 // Hook to get transactions ready for delivery
 export const useTransactionsReadyForDelivery = () => {
   const { currentBranch } = useBranch();
-  const { settings } = useCompanySettings();
-  const isDeliveryEnabled = isFeatureEnabled(settings?.appFeatureSettings, 'delivery');
 
   return useQuery<TransactionDeliveryInfo[]>({
     queryKey: ['transactionsReadyForDelivery', currentBranch?.id],
@@ -672,7 +660,7 @@ export const useTransactionsReadyForDelivery = () => {
         };
       });
     },
-    enabled: !!currentBranch && isDeliveryEnabled,
+    enabled: !!currentBranch,
   });
 };
 
@@ -680,8 +668,6 @@ export const useTransactionsReadyForDelivery = () => {
 // Hook to get delivery info for a specific transaction
 export const useTransactionDeliveryInfo = (transactionId: string, options?: { enabled?: boolean }) => {
   const { currentBranch } = useBranch();
-  const { settings } = useCompanySettings();
-  const isDeliveryEnabled = isFeatureEnabled(settings?.appFeatureSettings, 'delivery');
 
   return useQuery<TransactionDeliveryInfo | null>({
     queryKey: ['transactionDeliveryInfo', transactionId, currentBranch?.id],
@@ -887,6 +873,6 @@ export const useTransactionDeliveryInfo = (transactionId: string, options?: { en
         deliverySummary,
       };
     },
-    enabled: !!transactionId && !!currentBranch && isDeliveryEnabled && (options?.enabled ?? true),
+    enabled: !!transactionId && !!currentBranch && (options?.enabled ?? true),
   });
 };

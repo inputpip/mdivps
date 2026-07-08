@@ -185,16 +185,7 @@ export const isFeatureEnabled = (
   settings: Partial<AppFeatureSettingsMap> | null | undefined,
   featureKey: AppFeatureKey
 ): boolean => {
-  const mergedSettings = mergeFeatureSettings(settings as Partial<Record<AppFeatureKey, Partial<AppFeatureToggleState>>> | null);
-
-  // Laporan pengantaran adalah turunan dari fitur pengantaran.
-  // Jika Pengantaran OFF, seluruh menu/route/alur lapor antar ikut mati walaupun
-  // toggle delivery_reports tersimpan ON dari konfigurasi lama.
-  if (featureKey === 'delivery_reports' && !mergedSettings.delivery.enabled) {
-    return false;
-  }
-
-  return mergedSettings[featureKey].enabled;
+  return mergeFeatureSettings(settings as Partial<Record<AppFeatureKey, Partial<AppFeatureToggleState>>> | null)[featureKey].enabled;
 };
 
 export const getProductionWorkflowMode = (

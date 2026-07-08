@@ -35,8 +35,6 @@ import { useTimezone } from '@/contexts/TimezoneContext'
 import { getOfficeTime } from '@/utils/officeTime'
 import { usePermissions, PERMISSIONS } from '@/hooks/usePermissions'
 import { useBranch } from '@/contexts/BranchContext'
-import { useCompanySettings } from '@/hooks/useCompanySettings'
-import { isFeatureEnabled } from '@/config/featureSettings'
 
 interface FormTransactionItem {
   id: number;
@@ -69,8 +67,6 @@ export const MobilePosForm = ({ preselectedCustomerId }: MobilePosFormProps) => 
   const { data: salesEmployees } = useSalesEmployees();
   const { hasPermission } = usePermissions();
   const { currentBranch } = useBranch();
-  const { settings } = useCompanySettings();
-  const isDeliveryEnabled = isFeatureEnabled(settings?.appFeatureSettings, 'delivery');
   const canEditPrice = true; // Default to true for all roles in mobile view as requested
 
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
@@ -203,11 +199,11 @@ export const MobilePosForm = ({ preselectedCustomerId }: MobilePosFormProps) => 
     // If it's quantity change, trigger background bonus calculation (Async) with Debounce to prevent race conditions
     if (field === 'qty') {
       const itemId = item.id;
-
+      
       if (debounceTimers.current[itemId]) {
         clearTimeout(debounceTimers.current[itemId]);
       }
-
+      
       debounceTimers.current[itemId] = setTimeout(async () => {
         setLoadingPrices(prev => ({ ...prev, [itemId]: true }));
         await updateItemWithBonuses(item, Number(value) || 0);
@@ -357,7 +353,7 @@ export const MobilePosForm = ({ preselectedCustomerId }: MobilePosFormProps) => 
 
     // Use functional update to get latest items state
     setItems(prevItems => {
-      // Update main item's price and metadata, but do NOT overwrite qty from prevItems
+      // Update main item's price and metadata, but do NOT overwrite qty from prevItems 
       // as it might have been changed by another sync event in the meantime.
       let newItems = prevItems.map(item =>
         item.id === existingItem.id
@@ -633,25 +629,20 @@ export const MobilePosForm = ({ preselectedCustomerId }: MobilePosFormProps) => 
       }
     }
 
-    const transactionItems: TransactionItem[] = validItems.map(item => {
-      const product = item.isBonus
-        ? { ...item.product!, name: `${item.product!.name} (Bonus)` }
-        : item.product!;
-
-      return {
-        product,
-        quantity: item.qty,
-        price: item.harga,
-        unit: item.unit,
-        width: 0,
-        height: 0,
-        notes: item.isBonus
-          ? `${item.keterangan}${item.keterangan ? ' - ' : ''}BONUS: ${item.bonusDescription || 'Bonus Item'}`
-          : item.keterangan,
-        designFileName: item.designFileName,
-        isBonus: item.isBonus || false,
-      };
-    });
+    const transactionItems: TransactionItem[] = validItems.map(item => ({
+      product: item.product!,
+      quantity: item.qty,
+      price: item.harga,
+      unit: item.unit,
+      width: 0,
+      height: 0,
+      notes: item.isBonus
+        ? `${item.keterangan}${item.keterangan ? ' - ' : ''}BONUS: ${item.bonusDescription || 'Bonus Item'}`
+        : item.keterangan,
+      designFileName: item.designFileName,
+      isBonus: item.isBonus || false,
+      name: item.isBonus ? `${item.product!.name} (Bonus)` : item.product!.name
+    }));
 
     const paymentStatus: PaymentStatus = sisaTagihan <= 0 ? 'Lunas' : 'Belum Lunas';
 
@@ -686,7 +677,6 @@ export const MobilePosForm = ({ preselectedCustomerId }: MobilePosFormProps) => 
       paidAmount: paidAmount,
       paymentStatus: paymentStatus,
       status: 'Pesanan Masuk',
-      isOfficeSale: !isDeliveryEnabled,
     };
 
     addTransaction.mutate({ newTransaction }, {
@@ -830,7 +820,6 @@ export const MobilePosForm = ({ preselectedCustomerId }: MobilePosFormProps) => 
           </div>
           <div className="flex gap-2">
             <Button
-              type="button"
               onClick={() => setIsCustomerSearchOpen(true)}
               size="sm"
               className="flex-1 bg-yellow-400 hover:bg-yellow-500 text-black h-9"
@@ -838,7 +827,6 @@ export const MobilePosForm = ({ preselectedCustomerId }: MobilePosFormProps) => 
               <Search className="mr-1 h-3.5 w-3.5" /> Cari
             </Button>
             <Button
-              type="button"
               onClick={() => setIsCustomerAddOpen(true)}
               size="sm"
               className="flex-1 h-9"
@@ -930,6 +918,10 @@ export const MobilePosForm = ({ preselectedCustomerId }: MobilePosFormProps) => 
                             onClick={() => {
                               addProductToCart(product);
                               // Tidak tutup sheet agar bisa tambah banyak produk
+                            }}
+                            onTouchEnd={(e) => {
+                              e.preventDefault();
+                              addProductToCart(product);
                             }}
                             className={cn(
                               "p-3 rounded-lg border-2 cursor-pointer transition-all active:scale-95 select-none touch-manipulation",

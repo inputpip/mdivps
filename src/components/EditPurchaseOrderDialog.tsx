@@ -50,8 +50,6 @@ import { PurchaseOrder, PurchaseOrderItem } from "@/types/purchaseOrder"
 import { supabase } from "@/integrations/supabase/client"
 import { useTimezone } from "@/contexts/TimezoneContext"
 import { getOfficeTime } from "@/utils/officeTime"
-import { groupItemUnitConversions, listItemUnitConversions } from '@/services/itemUnitConversionService'
-import { buildUnitOptions, formatUnitConversionPreview, getBaseQuantity } from '@/utils/unitConversions'
 
 const formSchema = z.object({
   supplierId: z.string().min(1, "Supplier harus dipilih"),
@@ -80,7 +78,6 @@ export function EditPurchaseOrderDialog({ purchaseOrder, open, onOpenChange }: E
   const [items, setItems] = React.useState<PurchaseOrderItem[]>([])
   const [isLoadingItems, setIsLoadingItems] = React.useState(false)
   const [isSaving, setIsSaving] = React.useState(false)
-  const [unitConversionMap, setUnitConversionMap] = React.useState<Record<string, any[]>>({})
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -118,10 +115,6 @@ export function EditPurchaseOrderDialog({ purchaseOrder, open, onOpenChange }: E
               material_id,
               quantity,
               unit_price,
-              unit,
-              base_unit,
-              conversion_qty,
-              base_quantity,
               notes,
               materials:material_id (
                 name,
@@ -138,9 +131,6 @@ export function EditPurchaseOrderDialog({ purchaseOrder, open, onOpenChange }: E
                 materialId: purchaseOrder.materialId,
                 materialName: purchaseOrder.materialName,
                 unit: purchaseOrder.unit,
-                baseUnit: purchaseOrder.unit,
-                conversionQty: 1,
-                baseQuantity: purchaseOrder.quantity || 0,
                 quantity: purchaseOrder.quantity || 0,
                 unitPrice: purchaseOrder.unitPrice || 0,
               }])
@@ -153,10 +143,7 @@ export function EditPurchaseOrderDialog({ purchaseOrder, open, onOpenChange }: E
               id: item.id,
               materialId: item.material_id,
               materialName: item.materials?.name,
-              unit: item.unit || item.materials?.unit,
-              baseUnit: item.base_unit || item.materials?.unit,
-              conversionQty: item.conversion_qty || 1,
-              baseQuantity: item.base_quantity || getBaseQuantity(item.quantity, item.conversion_qty || 1),
+              unit: item.materials?.unit,
               quantity: item.quantity,
               unitPrice: item.unit_price,
               notes: item.notes,
@@ -169,9 +156,6 @@ export function EditPurchaseOrderDialog({ purchaseOrder, open, onOpenChange }: E
                 materialId: purchaseOrder.materialId,
                 materialName: purchaseOrder.materialName,
                 unit: purchaseOrder.unit,
-                baseUnit: purchaseOrder.unit,
-                conversionQty: 1,
-                baseQuantity: purchaseOrder.quantity || 0,
                 quantity: purchaseOrder.quantity || 0,
                 unitPrice: purchaseOrder.unitPrice || 0,
               }])
@@ -208,25 +192,6 @@ export function EditPurchaseOrderDialog({ purchaseOrder, open, onOpenChange }: E
     }
   }, [open, purchaseOrder, form, timezone])
 
-  React.useEffect(() => {
-    if (!open) return
-
-    const loadConversions = async () => {
-      try {
-        const materialIds = (materials || []).map((item) => item.id)
-        const conversions = materialIds.length
-          ? await listItemUnitConversions({ itemType: 'material', itemIds: materialIds })
-          : []
-        setUnitConversionMap(groupItemUnitConversions(conversions))
-      } catch (error) {
-        console.error('Gagal memuat konversi satuan material:', error)
-        setUnitConversionMap({})
-      }
-    }
-
-    void loadConversions()
-  }, [open, materials])
-
   const selectedSupplier = activeSuppliers?.find(s => s.id === form.watch("supplierId"))
   const includePpn = form.watch("includePpn") || false
 
@@ -235,33 +200,11 @@ export function EditPurchaseOrderDialog({ purchaseOrder, open, onOpenChange }: E
   const ppnAmount = includePpn ? subtotal * 0.11 : 0
   const totalCost = subtotal + ppnAmount
 
-  const getUnitOptions = (materialId?: string, baseUnit?: string) => {
-    const key = materialId ? `material:${materialId}` : ''
-    return buildUnitOptions(baseUnit || '', key ? unitConversionMap[key] || [] : [])
-  }
-
-  const applyUnitSelection = (draftItem: PurchaseOrderItem, purchaseUnit?: string) => {
-    const options = getUnitOptions(draftItem.materialId, draftItem.baseUnit || draftItem.unit)
-    const selectedOption = options.find((option) => option.unitName === purchaseUnit) || options[0]
-
-    if (!selectedOption) return draftItem
-
-    draftItem.unit = selectedOption.unitName
-    draftItem.baseUnit = draftItem.baseUnit || selectedOption.unitName
-    draftItem.conversionQty = selectedOption.conversionQty
-    draftItem.baseQuantity = getBaseQuantity(draftItem.quantity || 0, selectedOption.conversionQty)
-    return draftItem
-  }
-
   // Add new item
   const addItem = () => {
     const newItem: PurchaseOrderItem = {
       id: `temp-${Date.now()}`,
       materialId: "",
-      unit: undefined,
-      baseUnit: undefined,
-      conversionQty: 1,
-      baseQuantity: 1,
       quantity: 1,
       unitPrice: 0,
       notes: "",
@@ -275,18 +218,13 @@ export function EditPurchaseOrderDialog({ purchaseOrder, open, onOpenChange }: E
       if (item.id === itemId) {
         const updatedItem = { ...item, [field]: value }
 
+        // Auto-populate material name and unit when material is selected
         if (field === 'materialId') {
           const material = materials?.find(m => m.id === value)
           if (material) {
             updatedItem.materialName = material.name
-            updatedItem.baseUnit = material.unit
             updatedItem.unit = material.unit
-            applyUnitSelection(updatedItem, material.unit)
           }
-        } else if (field === 'unit') {
-          applyUnitSelection(updatedItem, value)
-        } else if (field === 'quantity') {
-          updatedItem.baseQuantity = getBaseQuantity(updatedItem.quantity, updatedItem.conversionQty || 1)
         }
 
         return updatedItem
@@ -314,7 +252,7 @@ export function EditPurchaseOrderDialog({ purchaseOrder, open, onOpenChange }: E
     }
 
     // Validate all items have material selected
-    const invalidItems = items.filter(item => !item.materialId || item.quantity <= 0 || item.unitPrice < 0 || !item.unit || !item.baseUnit || (item.conversionQty || 0) <= 0)
+    const invalidItems = items.filter(item => !item.materialId || item.quantity <= 0 || item.unitPrice < 0)
     if (invalidItems.length > 0) {
       toast({
         variant: "destructive",
@@ -369,12 +307,6 @@ export function EditPurchaseOrderDialog({ purchaseOrder, open, onOpenChange }: E
       const poItems = items.map((item: any) => ({
         purchase_order_id: purchaseOrder.id,
         material_id: item.materialId,
-        material_name: item.materialName || null,
-        item_type: 'material',
-        unit: item.unit,
-        base_unit: item.baseUnit,
-        conversion_qty: item.conversionQty || 1,
-        base_quantity: item.baseQuantity || getBaseQuantity(item.quantity, item.conversionQty || 1),
         quantity: item.quantity,
         unit_price: item.unitPrice,
         notes: item.notes || null,
@@ -501,40 +433,18 @@ export function EditPurchaseOrderDialog({ purchaseOrder, open, onOpenChange }: E
                             </Select>
                           </TableCell>
                           <TableCell>
-                            <div className="space-y-2">
+                            <div className="flex items-center space-x-2">
                               <NumberInput
                                 value={item.quantity}
                                 onChange={(value) => updateItem(item.id!, 'quantity', value || 0)}
                                 min={0.01}
                                 decimalPlaces={2}
-                                className="w-24"
+                                className="w-20"
                               />
-                              {item.baseUnit && (
-                                <Select
-                                  value={item.unit || item.baseUnit}
-                                  onValueChange={(value) => updateItem(item.id!, 'unit', value)}
-                                >
-                                  <SelectTrigger className="w-28">
-                                    <SelectValue placeholder="Satuan" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {getUnitOptions(item.materialId, item.baseUnit).map((option) => (
-                                      <SelectItem key={option.unitName} value={option.unitName}>
-                                        {option.unitName}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              )}
-                              {item.unit && item.baseUnit && (
-                                <p className="text-[11px] text-muted-foreground">
-                                  {formatUnitConversionPreview(
-                                    item.quantity,
-                                    item.unit,
-                                    item.baseQuantity || getBaseQuantity(item.quantity, item.conversionQty || 1),
-                                    item.baseUnit,
-                                  )}
-                                </p>
+                              {material && (
+                                <span className="text-xs text-muted-foreground">
+                                  {material.unit}
+                                </span>
                               )}
                             </div>
                           </TableCell>

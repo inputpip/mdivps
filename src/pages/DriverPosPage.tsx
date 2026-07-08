@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef, useCallback } from "react"
 import { useSearchParams } from "react-router-dom"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -21,7 +21,6 @@ import { useAuth } from "@/hooks/useAuth"
 import { useQueryClient } from "@tanstack/react-query"
 import { supabase } from "@/integrations/supabase/client"
 import { useActiveRetasi } from "@/hooks/useRetasi"
-import { useSalesEmployees } from "@/hooks/useSalesCommission"
 import { TransactionItem, Transaction } from "@/types/transaction"
 import { DriverDeliveryDialog } from "@/components/DriverDeliveryDialog"
 import { DriverPrintDialog } from "@/components/DriverPrintDialog"
@@ -38,7 +37,6 @@ import {
 } from "@/components/ui/alert-dialog"
 import { PricingService } from "@/services/pricingService"
 import { Product } from "@/types/product"
-import { CustomerClassificationType } from "@/types/pricing"
 import { useTimezone } from "@/contexts/TimezoneContext"
 import { getOfficeTime } from "@/utils/officeTime"
 
@@ -49,24 +47,6 @@ interface CartItem extends TransactionItem {
   isManualPrice?: boolean  // Flag to preserve manually edited price
 }
 
-type UnpaidTransactionRow = {
-  id: string
-  total: number | string | null
-  paid_amount: number | string | null
-  due_date: string | null
-}
-
-type GallonMovementInsert = {
-  customer_id: string
-  transaction_id: string
-  branch_id: string | null
-  delta: number
-  type: 'addition' | 'withdrawal'
-  notes: string | null
-  created_by: string | null
-  created_by_name: string | null
-}
-
 export default function DriverPosPage() {
   const { toast } = useToast()
   const { user } = useAuth()
@@ -75,7 +55,6 @@ export default function DriverPosPage() {
   const { products } = useProducts()
   const { accounts, getEmployeeCashAccount } = useAccounts()
   const { addTransaction } = useTransactions()
-  const { data: salesEmployees } = useSalesEmployees()
   const { currentBranch } = useBranch()
   const queryClient = useQueryClient()
   const [searchParams] = useSearchParams()
@@ -100,7 +79,6 @@ export default function DriverPosPage() {
     }
   }, [searchParams, customers, selectedCustomer])
   const [items, setItems] = useState<CartItem[]>([])
-  const [selectedSales, setSelectedSales] = useState("none")
   const [paymentAccount, setPaymentAccount] = useState("")
 
   // Auto-select payment account based on logged-in user's assigned cash account
@@ -112,7 +90,7 @@ export default function DriverPosPage() {
         console.log(`[DriverPOS] Auto-selected cash account "${employeeCashAccount.name}" for user ${user.name}`);
       }
     }
-  }, [user?.id, user?.name, accounts, paymentAccount, getEmployeeCashAccount]);
+  }, [user?.id, accounts, paymentAccount, getEmployeeCashAccount]);
   const [paidAmount, setPaidAmount] = useState(0)
 
   // Auto-set paidAmount to total when items change (default to full payment)
@@ -158,9 +136,6 @@ export default function DriverPosPage() {
   }, [customers, customerSearch]);
 
   const selectedCustomerData = customers?.find(c => c.id === selectedCustomer)
-  const selectedSalesData = selectedSales !== 'none'
-    ? salesEmployees?.find((sales) => sales.id === selectedSales)
-    : null
   const customerOutstandingReceivable = Math.max(0, Number(selectedCustomerData?.sisaPiutang) || 0)
   const customerReceivableCount = Number(selectedCustomerData?.jumlahPiutang) || 0
   const customerNearestDueDate = selectedCustomerData?.jatuhTempoTerdekat
@@ -200,7 +175,7 @@ export default function DriverPosPage() {
         const customerPricing = await PricingService.getCustomerProductPrice(
           product.id,
           selectedCustomerData.id,
-          selectedCustomerData.classification as CustomerClassificationType | undefined
+          selectedCustomerData.classification as any
         )
         if (customerPricing && customerPricing.customerAdjustedPrice !== basePrice) {
           basePrice = customerPricing.customerAdjustedPrice
@@ -267,7 +242,7 @@ export default function DriverPosPage() {
         price: price,
         unit: product.unit || "pcs"
       }
-      const newItems = [...items, newItem]
+      let newItems = [...items, newItem]
 
       // Add bonus items if any
       for (const bonus of bonuses) {
@@ -413,7 +388,6 @@ export default function DriverPosPage() {
     setSelectedCustomer("")
     setCustomerSearch('')
     setItems([])
-    setSelectedSales("none")
     setPaymentAccount("")
     setPaidAmount(0)
     const newDueDate = getOfficeTime(timezone)
@@ -453,15 +427,14 @@ export default function DriverPosPage() {
           .eq('is_voided', false)
 
         if (!unpaidErr && unpaidTx && unpaidTx.length > 0) {
-          const unpaidRows = unpaidTx as UnpaidTransactionRow[]
-          const sisaTotal = unpaidRows.reduce((sum: number, t) => sum + (Number(t.total) - Number(t.paid_amount || 0)), 0)
+          const sisaTotal = unpaidTx.reduce((sum: number, t: any) => sum + (Number(t.total) - Number(t.paid_amount || 0)), 0)
           if (sisaTotal > 0) {
             // Store live piutang data ke state untuk display di dialog
             setLivePiutangData({
               total: sisaTotal,
-              count: unpaidRows.length,
-              nearestDue: unpaidRows
-                .map((t) => t.due_date)
+              count: unpaidTx.length,
+              nearestDue: unpaidTx
+                .map((t: any) => t.due_date)
                 .filter(Boolean)
                 .sort()[0] || null,
             })
@@ -506,8 +479,6 @@ export default function DriverPosPage() {
         customerName,
         cashierId: user!.id,
         cashierName: user?.name || user?.email || 'Driver POS',
-        salesId: selectedSalesData?.id || null,
-        salesName: selectedSalesData?.name || null,
         paymentAccountId: paymentAccount || null,
         retasiId: activeRetasi?.id || null,
         retasiNumber: activeRetasi?.retasi_number || null,
@@ -532,7 +503,7 @@ export default function DriverPosPage() {
       // Trigger DB akan auto-update customers.jumlah_galon_titip
       if (selectedCustomerData?.id && (gallonAdded > 0 || gallonWithdrawn > 0)) {
         try {
-          const movements: GallonMovementInsert[] = []
+          const movements: any[] = []
           if (gallonAdded > 0) {
             movements.push({
               customer_id: selectedCustomerData.id,
@@ -600,8 +571,6 @@ export default function DriverPosPage() {
         customerName: savedTransaction?.customerName || newTransaction.customerName,
         cashierId: savedTransaction?.cashierId || newTransaction.cashierId,
         cashierName: savedTransaction?.cashierName || newTransaction.cashierName,
-        salesId: savedTransaction?.salesId ?? newTransaction.salesId,
-        salesName: savedTransaction?.salesName ?? newTransaction.salesName,
         paymentAccountId: savedTransaction?.paymentAccountId ?? newTransaction.paymentAccountId,
         retasiId: savedTransaction?.retasiId ?? newTransaction.retasiId,
         retasiNumber: savedTransaction?.retasiNumber ?? newTransaction.retasiNumber,
@@ -634,9 +603,8 @@ export default function DriverPosPage() {
       toast({ title: "Berhasil", description: `Transaksi ${transactionId} disimpan` })
       setDeliveryDialogOpen(true)
 
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Gagal menyimpan"
-      toast({ variant: "destructive", title: "Error", description: message })
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message || "Gagal menyimpan" })
     } finally {
       setIsSubmitting(false)
     }
@@ -832,38 +800,6 @@ export default function DriverPosPage() {
               </div>
             )}
           </>
-        )}
-      </div>
-
-      {/* Sales Selection - Optional */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg p-3 mb-2 shadow-sm">
-        <Label className="text-base font-semibold text-gray-700 dark:text-gray-200 mb-2 flex items-center">
-          <User className="h-5 w-5 mr-2 text-green-600 dark:text-green-400" />
-          Sales <span className="ml-1 text-xs font-normal text-gray-500 dark:text-gray-400">(opsional)</span>
-        </Label>
-        <Select value={selectedSales} onValueChange={setSelectedSales}>
-          <SelectTrigger className="h-11 text-base bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-            <SelectValue placeholder="Pilih Sales (Opsional)" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">
-              <span className="text-gray-500">Tanpa Sales</span>
-            </SelectItem>
-            {salesEmployees?.map((sales) => (
-              <SelectItem key={sales.id} value={sales.id}>
-                {sales.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {selectedSalesData ? (
-          <div className="mt-2 text-xs text-green-700 dark:text-green-300">
-            <strong>Sales:</strong> {selectedSalesData.name}
-          </div>
-        ) : (
-          <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-            Transaksi tetap bisa disimpan tanpa sales.
-          </div>
         )}
       </div>
 

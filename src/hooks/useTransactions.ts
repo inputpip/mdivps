@@ -9,8 +9,6 @@ import { getOfficeDateString } from '@/utils/officeTime'
 import { findAccountByLookup, AccountLookupType } from '@/services/accountLookupService'
 import { Account } from '@/types/account'
 import { markAsVisitedAsync } from '@/utils/customerVisitUtils'
-import { useCompanySettings } from '@/hooks/useCompanySettings'
-import { isFeatureEnabled } from '@/config/featureSettings'
 
 // ============================================================================
 // FULL RPC IMPLEMENTATION
@@ -108,13 +106,6 @@ const fromDb = (dbTransaction: any): Transaction => {
   };
 };
 
-const transactionSelectFields = `
-  *,
-  customer:customers(classification, address, phone),
-  payment_account:payment_account_id(name)
-`;
-
-
 export const useTransactions = (filters?: {
   status?: string;
   payment_status?: string;
@@ -126,17 +117,21 @@ export const useTransactions = (filters?: {
   const { currentBranch } = useBranch()
   const { timezone } = useTimezone()
   const { user } = useAuth()
-  const { settings } = useCompanySettings()
-  const isDeliveryEnabled = isFeatureEnabled(settings?.appFeatureSettings, 'delivery')
 
   const { data: transactions, isLoading } = useQuery<Transaction[]>({
     queryKey: ['transactions', filters, currentBranch?.id],
     queryFn: async () => {
       // Join dengan customers untuk mendapatkan classification DAN address
       // Join dengan accounts untuk mendapatkan nama akun pembayaran
+      const selectFields = `
+        *,
+        customer:customers(classification, address, phone),
+        payment_account:payment_account_id(name)
+      `;
+
       let query = supabase
         .from('transactions')
-        .select(transactionSelectFields)
+        .select(selectFields)
         .eq('is_voided', false)  // Only show non-voided transactions
         .eq('is_cancelled', false) // Only show non-cancelled transactions
         .order('created_at', { ascending: false });
@@ -184,13 +179,10 @@ export const useTransactions = (filters?: {
         items: newTransaction.items.length
       });
 
-      // Memastikan penjualan bahan baku (material) otomatis menjadi Laku Kantor walau tidak dicentang.
-      // Jika fitur Pengantaran OFF, semua transaksi baru juga dipaksa Laku Kantor
-      // sebagai guard pusat meskipun form pemanggil lupa mengirim flag isOfficeSale.
+      // Memastikan penjualan bahan baku (material) otomatis menjadi Laku Kantor walau tidak dicentang
       const hasMaterialItem = newTransaction.items.some((item: any) =>
         item.product?._isMaterial || item.product?.type === 'material' || item.productId?.startsWith('material-')
       );
-      const effectiveIsOfficeSale = !isDeliveryEnabled || hasMaterialItem || (newTransaction.isOfficeSale || false);
 
       // Prepare Transaction Data (Snake Case for RPC)
       const transactionData = {
@@ -201,7 +193,7 @@ export const useTransactions = (filters?: {
         paid_amount: newTransaction.paidAmount || 0,
         payment_method: newTransaction.paymentMethod || 'Tunai',
         payment_account_id: newTransaction.paymentAccountId || null,
-        is_office_sale: effectiveIsOfficeSale,
+        is_office_sale: hasMaterialItem ? true : (newTransaction.isOfficeSale || false),
         date: newTransaction.orderDate instanceof Date
           ? newTransaction.orderDate.toISOString()
           : newTransaction.orderDate,
@@ -313,18 +305,7 @@ export const useTransactions = (filters?: {
         } as Transaction;
       }
 
-      const createdTransactionRow = Array.isArray(createdRow) ? createdRow[0] : createdRow;
-      if (!createdTransactionRow) {
-        console.warn('⚠️ Created transaction refetch returned empty data, falling back to optimistic object');
-        return {
-          ...newTransaction,
-          createdAt: new Date(),
-          status: 'Pesanan Masuk',
-          paymentStatus: transactionData.paid_amount >= transactionData.total ? 'Lunas' : 'Belum Lunas'
-        } as Transaction;
-      }
-
-      return fromDb(createdTransactionRow);
+      return fromDb(createdRow);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] })
@@ -464,9 +445,9 @@ export const useTransactions = (filters?: {
       // Use pay_receivable_complete_rpc to store in payment_history (Source of Truth)
       const { data: rpcResultRaw, error: rpcError } = await supabase
         .rpc('pay_receivable_complete_rpc', {
-          p_transaction_id: transactionId,
+          p_transaction_id: transactionId, 
           p_amount: amount,
-          p_payment_account_id: accountId,
+          p_payment_account_id: accountId, 
           p_notes: notes || `Pelunasan Piutang by ${recordedBy || user?.full_name || 'User'}`,
           p_branch_id: currentBranch.id,
           p_user_id: user?.id || null,
@@ -584,7 +565,7 @@ export const useTransactions = (filters?: {
         for (const url of photoUrlsToDelete) {
           try {
             const filename = url.split('/').pop();
-            // EXTRA SAFETY CHECK: Pastikan filename valid, bukan string kosong, bukan sekadar spasi, dan minimal 5 karakter
+            // EXTRA SAFETY CHECK: Pastikan filename valid, bukan string kosong, bukan sekadar spasi, dan minimal 5 karakter 
             // format nama file kita: delivery-uuid-123456.jpg (>5 chars)
             if (filename && filename.trim().length > 5 && !filename.includes('/') && filename.includes('.')) {
               await PhotoUploadService.deletePhoto(filename, 'deliveries');
@@ -638,25 +619,16 @@ export const useTransactions = (filters?: {
 }
 
 export const useTransactionById = (id: string) => {
-  const { currentBranch } = useBranch()
-
   const { data: transaction, isLoading } = useQuery<Transaction | undefined>({
-    queryKey: ['transaction', id, currentBranch?.id],
+    queryKey: ['transaction', id],
     queryFn: async () => {
-      let query = supabase
+      const { data: rawData, error } = await supabase
         .from('transactions')
-        .select(transactionSelectFields)
+        .select('*')
         .eq('id', id)
         .eq('is_voided', false)
         .eq('is_cancelled', false)
-        .order('id')
-        .limit(1);
-
-      if (currentBranch?.id) {
-        query = query.eq('branch_id', currentBranch.id);
-      }
-
-      const { data: rawData, error } = await query;
+        .order('id').limit(1);
       if (error) {
         console.error(error.message);
         return undefined;
@@ -665,7 +637,7 @@ export const useTransactionById = (id: string) => {
       if (!data) return undefined;
       return fromDb(data);
     },
-    enabled: !!id && !!currentBranch,
+    enabled: !!id,
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
     refetchOnWindowFocus: false,

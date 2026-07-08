@@ -42,11 +42,6 @@ CREATE TABLE public.material_stock_movements (
     user_name text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     branch_id uuid,
-    is_voided boolean DEFAULT false NOT NULL,
-    voided_at timestamp with time zone,
-    voided_by uuid,
-    voided_by_name text,
-    void_reason text,
     CONSTRAINT material_stock_movements_reason_check CHECK ((reason = ANY (ARRAY['PURCHASE'::text, 'PRODUCTION_CONSUMPTION'::text, 'PRODUCTION_ACQUISITION'::text, 'ADJUSTMENT'::text, 'RETURN'::text, 'PRODUCTION_ERROR'::text, 'PRODUCTION_DELETE_RESTORE'::text]))),
     CONSTRAINT material_stock_movements_type_check CHECK ((type = ANY (ARRAY['IN'::text, 'OUT'::text, 'ADJUSTMENT'::text]))),
     CONSTRAINT positive_quantity CHECK ((quantity > (0)::numeric))
@@ -129,13 +124,6 @@ CREATE INDEX idx_material_stock_movements_created_at ON public.material_stock_mo
 --
 
 CREATE INDEX idx_material_stock_movements_material ON public.material_stock_movements USING btree (material_id);
-
-
---
--- Name: idx_material_stock_movements_not_voided; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_material_stock_movements_not_voided ON public.material_stock_movements USING btree (is_voided, created_at DESC);
 
 
 --

@@ -9,10 +9,7 @@ export interface PurchaseOrderItem {
   itemType?: 'material' | 'product';  // Type of item being purchased
   materialName?: string;
   productName?: string;
-  unit?: string; // Satuan pembelian / input PO
-  baseUnit?: string; // Satuan dasar stok
-  conversionQty?: number; // 1 unit pembelian = X satuan dasar
-  baseQuantity?: number; // Qty dasar yang masuk stok
+  unit?: string;
   quantity: number;
   unitPrice: number;
   quantityReceived?: number;
