@@ -19,6 +19,12 @@ const fromDbToApp = (dbMovement: any): MaterialMovement => ({
   userId: dbMovement.user_id,
   userName: dbMovement.user_name,
   createdAt: dbMovement.created_at,
+  branchId: dbMovement.branch_id,
+  isVoided: dbMovement.is_voided ?? false,
+  voidedAt: dbMovement.voided_at,
+  voidedBy: dbMovement.voided_by,
+  voidedByName: dbMovement.voided_by_name,
+  voidReason: dbMovement.void_reason,
 });
 
 // Helper to map from App (camelCase) to DB (snake_case)
@@ -48,6 +54,7 @@ export const useMaterialMovements = () => {
       let query = supabase
         .from('material_stock_movements')
         .select('*')
+        .eq('is_voided', false)
         .order('created_at', { ascending: false });
 
       // Apply branch filter - ALWAYS filter by selected branch
@@ -111,6 +118,7 @@ export const useMaterialMovements = () => {
     let query = supabase
       .from('material_stock_movements')
       .select('*')
+      .eq('is_voided', false)
       .eq('material_id', materialId)
       .order('created_at', { ascending: false });
 
@@ -134,6 +142,7 @@ export const useMaterialMovements = () => {
     let query = supabase
       .from('material_stock_movements')
       .select('*')
+      .eq('is_voided', false)
       .gte('created_at', from.toISOString())
       .lte('created_at', to.toISOString())
       .order('created_at', { ascending: false });

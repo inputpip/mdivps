@@ -68,6 +68,7 @@ export function ReceiveGoodsTab() {
             unit
           )
         `)
+        .eq('is_voided', false)
         .eq('reason', 'PURCHASE')
         .eq('type', 'IN')
         .order('created_at', { ascending: false })

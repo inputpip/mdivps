@@ -91,6 +91,9 @@ export const usePurchaseOrders = () => {
         quantity: item.quantity,
         unit_price: item.unitPrice,
         unit: item.unit,
+        base_unit: item.baseUnit,
+        conversion_qty: item.conversionQty || 1,
+        base_quantity: item.baseQuantity,
         subtotal: item.subtotal,
         notes: item.notes,
       }));

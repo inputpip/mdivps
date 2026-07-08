@@ -6,6 +6,40 @@ import { Transaction } from "@/types/transaction"
 import { format, isValid } from "date-fns"
 import { id } from "date-fns/locale/id"
 
+function getPrintReceiptItemMeta(item: { [key: string]: any }) {
+  const anyItem = item as Record<string, any>;
+  const name = anyItem?.product?.name || anyItem['productName'] || anyItem['product_name'] || anyItem['name'] || anyItem['description'] || 'Item';
+  const quantity = toSafeNumber(anyItem['quantity'] ?? anyItem['qty'] ?? anyItem['quantitySold'] ?? 0);
+  const price = toSafeNumber(anyItem['price'] ?? anyItem['harga'] ?? anyItem['unit_price'] ?? anyItem['unitPrice'] ?? 0);
+  const unit = anyItem['unit'] || anyItem['unitName'] || anyItem['unit_name'] || '';
+  const notes = anyItem['notes'] || '';
+
+  return { name, quantity, price, unit, notes };
+}
+
+function toSafeNumber(value: unknown, fallback = 0): number {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : fallback;
+  if (typeof value === 'string') {
+    const normalized = value.replace(/[^\d,.-]/g, '').replace(/,/g, '.');
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function formatIdNumber(value: unknown): string {
+  return new Intl.NumberFormat("id-ID").format(toSafeNumber(value));
+}
+
+function formatIdCurrency(value: unknown, options?: Intl.NumberFormatOptions): string {
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    ...options,
+  }).format(toSafeNumber(value));
+}
+
 // Helper function to safely format date
 function safeFormatDate(date: Date | string | null | undefined, formatStr: string): string {
   if (!date) return '-';
@@ -122,31 +156,35 @@ const ReceiptTemplate = ({ transaction, companyInfo }: { transaction: Transactio
           </tr>
         </thead>
         <tbody>
-          {transaction.items.filter(item => item.product?.name).map((item, index) => (
-            <tr key={index}>
-              <td className="pt-1 align-top">
-                {item.product.name}<br />
-                {`${item.quantity}x @${new Intl.NumberFormat("id-ID").format(item.price)}`}
-              </td>
-              <td className="pt-1 text-right align-top">{new Intl.NumberFormat("id-ID").format(item.price * item.quantity)}</td>
-            </tr>
-          ))}
+          {transaction.items.map((item, index) => {
+            const itemMeta = getPrintReceiptItemMeta(item as any);
+            return (
+              <tr key={index}>
+                <td className="pt-1 align-top">
+                  {itemMeta.name}<br />
+                  {`${formatIdNumber(itemMeta.quantity)}x @${formatIdNumber(itemMeta.price)}`}
+                </td>
+                <td className="pt-1 text-right align-top">{formatIdNumber(itemMeta.price * itemMeta.quantity)}</td>
+              </tr>
+            );
+          })}
         </tbody>
+
       </table>
       <div className="mt-2 pt-1 border-t border-dashed border-black text-xs space-y-1">
         <div className="flex justify-between">
           <span>Subtotal:</span>
-          <span>{new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR" }).format(transaction.subtotal)}</span>
+          <span>{formatIdCurrency(transaction.subtotal)}</span>
         </div>
         {transaction.ppnEnabled && (
           <div className="flex justify-between">
             <span>PPN ({transaction.ppnPercentage}%):</span>
-            <span>{new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR" }).format(transaction.ppnAmount)}</span>
+            <span>{formatIdCurrency(transaction.ppnAmount)}</span>
           </div>
         )}
         <div className="flex justify-between font-semibold border-t border-dashed border-black pt-1">
           <span>Total:</span>
-          <span>{new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR" }).format(transaction.total)}</span>
+          <span>{formatIdCurrency(transaction.total)}</span>
         </div>
         {/* Info metode pembayaran dan jatuh tempo */}
         <div className="mt-1 pt-1 border-t border-dashed border-black space-y-0.5">
@@ -166,7 +204,7 @@ const ReceiptTemplate = ({ transaction, companyInfo }: { transaction: Transactio
           {transaction.paymentStatus !== 'Lunas' && (
             <div className="flex justify-between">
               <span>Sisa Bayar:</span>
-              <span className="font-semibold">{new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR" }).format(transaction.total - transaction.paidAmount)}</span>
+              <span className="font-semibold">{formatIdCurrency(toSafeNumber(transaction.total) - toSafeNumber(transaction.paidAmount))}</span>
             </div>
           )}
         </div>
@@ -254,20 +292,24 @@ const InvoiceTemplate = ({ transaction, companyInfo }: { transaction: Transactio
               </TableRow>
             </TableHeader>
             <TableBody>
-              {transaction.items.filter(item => item.product?.name).map((item, index) => (
-                <TableRow key={index} className={`border-b border-gray-100 hover:bg-gray-50 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
-                  <TableCell className="font-semibold text-gray-900 py-4 px-6">{item.product.name}</TableCell>
-                  <TableCell className="text-center text-gray-700 py-4 px-4 font-medium">{item.quantity}</TableCell>
-                  <TableCell className="text-right text-gray-700 py-4 px-4">
-                    {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(item.price)}
-                  </TableCell>
-                  <TableCell className="text-right font-bold text-gray-900 py-4 px-6">
-                    {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(item.price * item.quantity)}
-                  </TableCell>
-                </TableRow>
-              ))}
+              {transaction.items.map((item, index) => {
+                const itemMeta = getPrintReceiptItemMeta(item as any);
+                return (
+                  <TableRow key={index} className={`border-b border-gray-100 hover:bg-gray-50 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+                    <TableCell className="font-semibold text-gray-900 py-4 px-6">{itemMeta.name}</TableCell>
+                    <TableCell className="text-center text-gray-700 py-4 px-4 font-medium">{itemMeta.quantity}</TableCell>
+                    <TableCell className="text-right text-gray-700 py-4 px-4">
+                      {formatIdCurrency(itemMeta.price, { minimumFractionDigits: 0 })}
+                    </TableCell>
+                    <TableCell className="text-right font-bold text-gray-900 py-4 px-6">
+                      {formatIdCurrency(itemMeta.price * itemMeta.quantity, { minimumFractionDigits: 0 })}
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
             </TableBody>
-          </Table>
+
+            </Table>
         </div>
       </div>
       <div className="flex justify-end mt-10">
@@ -277,14 +319,14 @@ const InvoiceTemplate = ({ transaction, companyInfo }: { transaction: Transactio
               <div className="flex justify-between items-center py-2 border-b border-gray-300">
                 <span className="text-gray-700 font-medium">Subtotal:</span>
                 <span className="font-semibold text-gray-900">
-                  {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(transaction.subtotal)}
+                  {formatIdCurrency(transaction.subtotal, { minimumFractionDigits: 0 })}
                 </span>
               </div>
               {transaction.ppnEnabled && (
                 <div className="flex justify-between items-center py-2 border-b border-gray-300">
                   <span className="text-gray-700 font-medium">PPN ({transaction.ppnPercentage}%):</span>
                   <span className="font-semibold text-gray-900">
-                    {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(transaction.ppnAmount)}
+                    {formatIdCurrency(transaction.ppnAmount, { minimumFractionDigits: 0 })}
                   </span>
                 </div>
               )}
@@ -292,7 +334,7 @@ const InvoiceTemplate = ({ transaction, companyInfo }: { transaction: Transactio
                 <div className="flex justify-between items-center">
                   <span className="text-xl font-bold">TOTAL TAGIHAN:</span>
                   <span className="text-2xl font-bold">
-                    {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(transaction.total)}
+                    {formatIdCurrency(transaction.total, { minimumFractionDigits: 0 })}
                   </span>
                 </div>
               </div>
@@ -307,13 +349,13 @@ const InvoiceTemplate = ({ transaction, companyInfo }: { transaction: Transactio
                   <div className="text-center p-2 bg-white rounded border">
                     <div className="text-gray-600">Dibayar</div>
                     <div className="font-bold text-gray-900">
-                      {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(transaction.paidAmount || 0)}
+                      {formatIdCurrency(transaction.paidAmount, { minimumFractionDigits: 0 })}
                     </div>
                   </div>
                   <div className="text-center p-2 bg-white rounded border">
                     <div className="text-gray-600">Sisa Bayar</div>
-                    <div className={`font-bold ${(transaction.total - (transaction.paidAmount || 0)) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                      {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(transaction.total - (transaction.paidAmount || 0))}
+                    <div className={`font-bold ${(toSafeNumber(transaction.total) - toSafeNumber(transaction.paidAmount)) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                      {formatIdCurrency(toSafeNumber(transaction.total) - toSafeNumber(transaction.paidAmount), { minimumFractionDigits: 0 })}
                     </div>
                   </div>
                 </div>
@@ -437,7 +479,10 @@ export function PrintReceiptDialog({ open, onOpenChange, transaction, template, 
     doc.setFontSize(14).setFont("helvetica", "bold").setTextColor(0, 0, 0);
     doc.text(transaction.customerName, margin + 5, y + 16);
     y += 35;
-    const tableData = transaction.items.filter(item => item.product?.name).map(item => [item.product.name, item.quantity, new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR" }).format(item.price), new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR" }).format(item.price * item.quantity)]);
+    const tableData = transaction.items.map(item => {
+      const itemMeta = getPrintReceiptItemMeta(item as any);
+      return [itemMeta.name, itemMeta.quantity, formatIdCurrency(itemMeta.price), formatIdCurrency(itemMeta.price * itemMeta.quantity)];
+    });
     // Professional table with better styling
     autoTable(doc, {
       startY: y,
@@ -482,12 +527,12 @@ export function PrintReceiptDialog({ open, onOpenChange, transaction, template, 
 
     doc.setFontSize(11).setFont("helvetica", "normal").setTextColor(0, 0, 0);
     doc.text("Subtotal:", summaryX + 5, summaryY + 3);
-    doc.text(new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(transaction.subtotal), pageWidth - margin - 5, summaryY + 3, { align: 'right' });
+    doc.text(formatIdCurrency(transaction.subtotal, { minimumFractionDigits: 0 }), pageWidth - margin - 5, summaryY + 3, { align: 'right' });
     summaryY += 7;
 
     if (transaction.ppnEnabled) {
       doc.text(`PPN (${transaction.ppnPercentage}%):`, summaryX + 5, summaryY);
-      doc.text(new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(transaction.ppnAmount), pageWidth - margin - 5, summaryY, { align: 'right' });
+      doc.text(formatIdCurrency(transaction.ppnAmount, { minimumFractionDigits: 0 }), pageWidth - margin - 5, summaryY, { align: 'right' });
       summaryY += 7;
     }
 
@@ -496,7 +541,7 @@ export function PrintReceiptDialog({ open, onOpenChange, transaction, template, 
     doc.roundedRect(summaryX, summaryY, summaryWidth, 12, 3, 3, 'F');
     doc.setFontSize(12).setFont("helvetica", "bold").setTextColor(255, 255, 255);
     doc.text("TOTAL TAGIHAN:", summaryX + 5, summaryY + 8);
-    doc.text(new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(transaction.total), pageWidth - margin - 5, summaryY + 8, { align: 'right' });
+    doc.text(formatIdCurrency(transaction.total, { minimumFractionDigits: 0 }), pageWidth - margin - 5, summaryY + 8, { align: 'right' });
     summaryY += 15;
 
     // Payment status section
@@ -515,7 +560,7 @@ export function PrintReceiptDialog({ open, onOpenChange, transaction, template, 
       doc.setTextColor(0, 0, 0);
       doc.setFontSize(10).setFont("helvetica", "normal");
       doc.text("Sudah Dibayar:", summaryX + 5, summaryY + 3);
-      doc.text(new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(transaction.paidAmount || 0), pageWidth - margin - 5, summaryY + 3, { align: 'right' });
+      doc.text(formatIdCurrency(transaction.paidAmount, { minimumFractionDigits: 0 }), pageWidth - margin - 5, summaryY + 3, { align: 'right' });
       summaryY += 7;
 
       // Remaining amount with red highlight
@@ -523,7 +568,7 @@ export function PrintReceiptDialog({ open, onOpenChange, transaction, template, 
       doc.roundedRect(summaryX, summaryY, summaryWidth, 10, 3, 3, 'F');
       doc.setFontSize(10).setFont("helvetica", "bold").setTextColor(185, 28, 28);
       doc.text("SISA BAYAR:", summaryX + 5, summaryY + 6);
-      doc.text(new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(transaction.total - (transaction.paidAmount || 0)), pageWidth - margin - 5, summaryY + 6, { align: 'right' });
+      doc.text(formatIdCurrency(toSafeNumber(transaction.total) - toSafeNumber(transaction.paidAmount), { minimumFractionDigits: 0 }), pageWidth - margin - 5, summaryY + 6, { align: 'right' });
       summaryY += 12;
     }
 
@@ -794,15 +839,18 @@ export function PrintReceiptDialog({ open, onOpenChange, transaction, template, 
             </tr>
           </thead>
           <tbody>
-            ${transaction.items.filter(item => item.product?.name).map((item, idx) => `
+            ${transaction.items.map((item) => {
+              const itemMeta = getPrintReceiptItemMeta(item as any);
+              return `
               <tr>
-                <td style="padding: 3mm 1mm 1.5mm 1mm; font-size: 10.5pt; border-bottom: 0.5px dotted #999;">${item.product.name}${item.notes ? `<br/><small style="font-size: 9.5pt;">${item.notes}</small>` : ''}</td>
-                <td style="text-align: center; padding: 3mm 1mm 1.5mm 1mm; font-size: 10.5pt; border-bottom: 0.5px dotted #999;">${item.quantity} ${item.unit}</td>
-                <td style="text-align: right; padding: 3mm 1mm 1.5mm 1mm; font-size: 10.5pt; border-bottom: 0.5px dotted #999;">${new Intl.NumberFormat("id-ID", { minimumFractionDigits: 0 }).format(item.price)}</td>
-                <td style="text-align: right; padding: 3mm 1mm 1.5mm 1mm; font-size: 10.5pt; font-weight: bold; border-bottom: 0.5px dotted #999;">${new Intl.NumberFormat("id-ID", { minimumFractionDigits: 0 }).format(item.price * item.quantity)}</td>
+                <td style="padding: 3mm 1mm 1.5mm 1mm; font-size: 10.5pt; border-bottom: 0.5px dotted #999;">${itemMeta.name}${itemMeta.notes ? `<br/><small style="font-size: 9.5pt;">${itemMeta.notes}</small>` : ''}</td>
+                <td style="text-align: center; padding: 3mm 1mm 1.5mm 1mm; font-size: 10.5pt; border-bottom: 0.5px dotted #999;">${itemMeta.quantity} ${itemMeta.unit}</td>
+                <td style="text-align: right; padding: 3mm 1mm 1.5mm 1mm; font-size: 10.5pt; border-bottom: 0.5px dotted #999;">${new Intl.NumberFormat("id-ID", { minimumFractionDigits: 0 }).format(itemMeta.price)}</td>
+                <td style="text-align: right; padding: 3mm 1mm 1.5mm 1mm; font-size: 10.5pt; font-weight: bold; border-bottom: 0.5px dotted #999;">${formatIdNumber(itemMeta.price * itemMeta.quantity)}</td>
               </tr>
-            `).join('')}
-          </tbody>
+            `;}).join('')}
+            </tbody>
+
         </table>
 
         <!-- Summary Section -->
@@ -820,17 +868,17 @@ export function PrintReceiptDialog({ open, onOpenChange, transaction, template, 
               <table style="width: 100%; font-size: 10.5pt;">
                 <tr>
                   <td style="padding: 1mm 2mm; text-align: left;">Subtotal:</td>
-                  <td style="padding: 1mm 2mm; text-align: right; font-weight: bold;">${new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(transaction.subtotal)}</td>
+                  <td style="padding: 1mm 2mm; text-align: right; font-weight: bold;">${formatIdCurrency(transaction.subtotal, { minimumFractionDigits: 0 })}</td>
                 </tr>
                 ${transaction.ppnEnabled ? `
                 <tr>
                   <td style="padding: 1mm 2mm; text-align: left;">PPN (${transaction.ppnPercentage}%):</td>
-                  <td style="padding: 1mm 2mm; text-align: right; font-weight: bold;">${new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(transaction.ppnAmount)}</td>
+                  <td style="padding: 1mm 2mm; text-align: right; font-weight: bold;">${formatIdCurrency(transaction.ppnAmount, { minimumFractionDigits: 0 })}</td>
                 </tr>
                 ` : ''}
                 <tr style="border-top: 0.5px solid #000; border-bottom: 0.5px solid #000;">
                   <td style="padding: 2mm; text-align: left; font-size: 12.5pt; font-weight: bold;">TOTAL:</td>
-                  <td style="padding: 2mm; text-align: right; font-size: 12.5pt; font-weight: bold;">${new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(transaction.total)}</td>
+                  <td style="padding: 2mm; text-align: right; font-size: 12.5pt; font-weight: bold;">${formatIdCurrency(transaction.total, { minimumFractionDigits: 0 })}</td>
                 </tr>
               </table>
             </td>
@@ -846,10 +894,10 @@ export function PrintReceiptDialog({ open, onOpenChange, transaction, template, 
           </tr>
           <tr>
             <td style="width: 50%; padding: 2mm 3mm; font-size: 10.5pt; border-right: 1px solid #ccc;">
-              Dibayar: <strong>${new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(transaction.paidAmount || 0)}</strong>
+              Dibayar: <strong>${formatIdCurrency(transaction.paidAmount, { minimumFractionDigits: 0 })}</strong>
             </td>
             <td style="width: 50%; padding: 2mm 3mm; font-size: 10.5pt; text-align: right;">
-              Sisa: <strong style="color: ${(transaction.total - (transaction.paidAmount || 0)) > 0 ? '#dc2626' : '#16a34a'};">${new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(transaction.total - (transaction.paidAmount || 0))}</strong>
+              Sisa: <strong style="color: ${(toSafeNumber(transaction.total) - toSafeNumber(transaction.paidAmount)) > 0 ? '#dc2626' : '#16a34a'};">${formatIdCurrency(toSafeNumber(transaction.total) - toSafeNumber(transaction.paidAmount), { minimumFractionDigits: 0 })}</strong>
             </td>
           </tr>
           ${(transaction.dueDate || (transaction as any).due_date) ? `
@@ -1047,10 +1095,17 @@ export function PrintReceiptDialog({ open, onOpenChange, transaction, template, 
 
     // Items
     receipt += LEFT;
-    transaction.items.filter(item => item.product?.name).forEach((item) => {
-      receipt += item.product.name + '\n';
-      const qtyPrice = '  ' + item.quantity + 'x @' + new Intl.NumberFormat("id-ID").format(item.price);
-      const itemTotal = new Intl.NumberFormat("id-ID").format(item.price * item.quantity);
+    transaction.items.forEach((item) => {
+      const itemMeta = getPrintReceiptItemMeta(item as any);
+
+      // Skip only truly empty rows
+      if (!itemMeta.name || itemMeta.quantity === 0) {
+        return;
+      }
+
+      receipt += itemMeta.name + '\n';
+      const qtyPrice = '  ' + itemMeta.quantity + 'x @' + formatIdNumber(itemMeta.price);
+      const itemTotal = formatIdNumber(itemMeta.price * itemMeta.quantity);
       receipt += formatLine(qtyPrice, itemTotal) + '\n';
     });
 
@@ -1058,12 +1113,12 @@ export function PrintReceiptDialog({ open, onOpenChange, transaction, template, 
 
     // Subtotal
     receipt += LEFT;
-    const subtotalAmount = 'Rp ' + new Intl.NumberFormat("id-ID").format(transaction.subtotal);
+    const subtotalAmount = 'Rp ' + formatIdNumber(transaction.subtotal);
     receipt += formatLine('Subtotal:', subtotalAmount) + '\n';
 
     // PPN if enabled
     if (transaction.ppnEnabled) {
-      const ppnAmount = 'Rp ' + new Intl.NumberFormat("id-ID").format(transaction.ppnAmount);
+      const ppnAmount = 'Rp ' + formatIdNumber(transaction.ppnAmount);
       receipt += formatLine('PPN (' + transaction.ppnPercentage + '%):', ppnAmount) + '\n';
     }
 
@@ -1071,24 +1126,24 @@ export function PrintReceiptDialog({ open, onOpenChange, transaction, template, 
 
     // Total - bold
     receipt += LEFT + BOLD_ON;
-    const totalAmount = 'Rp ' + new Intl.NumberFormat("id-ID").format(transaction.total);
+    const totalAmount = 'Rp ' + formatIdNumber(transaction.total);
     receipt += formatLine('TOTAL:', totalAmount) + '\n';
     receipt += BOLD_OFF;
 
     // Payment info
     receipt += CENTER + separatorDash + '\n';
     receipt += LEFT;
-    if (transaction.paidAmount > 0) {
-      const paidAmount = 'Rp ' + new Intl.NumberFormat("id-ID").format(transaction.paidAmount);
+    if (toSafeNumber(transaction.paidAmount) > 0) {
+      const paidAmount = 'Rp ' + formatIdNumber(transaction.paidAmount);
       receipt += formatLine('Dibayar:', paidAmount) + '\n';
     }
-    const sisaBayar = transaction.total - (transaction.paidAmount || 0);
+    const sisaBayar = toSafeNumber(transaction.total) - toSafeNumber(transaction.paidAmount);
     if (sisaBayar > 0) {
-      const sisaAmount = 'Rp ' + new Intl.NumberFormat("id-ID").format(sisaBayar);
+      const sisaAmount = 'Rp ' + formatIdNumber(sisaBayar);
       receipt += BOLD_ON + formatLine('Sisa:', sisaAmount) + BOLD_OFF + '\n';
     }
     receipt += formatLine('Status:', transaction.paymentStatus === 'Lunas' ? 'LUNAS' : 'BELUM LUNAS') + '\n';
-    
+
     if ((transaction.dueDate || (transaction as any).due_date) && transaction.paymentStatus !== 'Lunas') {
       const dueText = safeFormatDate(transaction.dueDate || (transaction as any).due_date, "dd/MM/yyyy");
       receipt += formatLine('Jth Tempo:', dueText) + '\n';
@@ -1100,15 +1155,33 @@ export function PrintReceiptDialog({ open, onOpenChange, transaction, template, 
     receipt += format(new Date(), "dd/MM/yy HH:mm", { locale: id }) + '\n';
     receipt += '\n\n\n'; // Feed paper
 
-    // Convert to Base64 for RawBT URL scheme
-    const base64Data = btoa(unescape(encodeURIComponent(receipt)));
+    const printableText = receipt?.trim() || '';
 
-    // RawBT URL scheme format: rawbt:base64,{base64_data}
-    const rawbtUrl = 'rawbt:base64,' + base64Data;
+    if (!printableText) {
+      console.error('RawBT print canceled: Receipt content is empty.');
+      return;
+    }
 
-    // Try to open RawBT app
-    window.location.href = rawbtUrl;
+    // Gunakan format URL yang sama dengan halaman detail transaksi.
+    // Ini lebih kompatibel dengan device yang sudah berhasil membuka RawBT lewat flow detail.
+    const encodedText = encodeURIComponent(printableText);
+    const rawbtUrl = `rawbt:${encodedText}`;
+
+    try {
+      const isMobileDevice = /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent) || isMobile;
+
+      if (isMobileDevice) {
+        // Pada mobile/WebView, navigasi langsung lebih konsisten dari open() agar tidak tampil blank page.
+        window.location.assign(rawbtUrl);
+      } else {
+        window.open(rawbtUrl, "_blank");
+      }
+    } catch (error) {
+      console.error('Failed to open RawBT protocol:', error);
+    }
+
   };
+
 
   const handlePdfDownload = () => {
     if (template === 'invoice') {
@@ -1167,11 +1240,12 @@ export function PrintReceiptDialog({ open, onOpenChange, transaction, template, 
     doc.line(5, currentY, 75, currentY);
     currentY += 4;
 
-    transaction.items.filter(item => item.product?.name).forEach((item) => {
-      doc.text(item.product.name, 5, currentY);
+    transaction.items.forEach((item) => {
+      const itemMeta = getPrintReceiptItemMeta(item as any);
+      doc.text(itemMeta.name, 5, currentY);
       currentY += 3;
-      doc.text(`${item.quantity}x @${new Intl.NumberFormat("id-ID").format(item.price)}`, 5, currentY);
-      doc.text(new Intl.NumberFormat("id-ID").format(item.price * item.quantity), 75, currentY, { align: 'right' });
+      doc.text(`${itemMeta.quantity}x @${formatIdNumber(itemMeta.price)}`, 5, currentY);
+      doc.text(formatIdNumber(itemMeta.price * itemMeta.quantity), 75, currentY, { align: 'right' });
       currentY += 5;
     });
 
@@ -1181,19 +1255,19 @@ export function PrintReceiptDialog({ open, onOpenChange, transaction, template, 
 
     // Totals
     doc.text('Subtotal:', 5, currentY);
-    doc.text(new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR" }).format(transaction.subtotal), 75, currentY, { align: 'right' });
+    doc.text(formatIdCurrency(transaction.subtotal), 75, currentY, { align: 'right' });
     currentY += 4;
 
     if (transaction.ppnEnabled) {
       doc.text(`PPN (${transaction.ppnPercentage}%):`, 5, currentY);
-      doc.text(new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR" }).format(transaction.ppnAmount), 75, currentY, { align: 'right' });
+      doc.text(formatIdCurrency(transaction.ppnAmount), 75, currentY, { align: 'right' });
       currentY += 4;
     }
 
     // Final total
     doc.setFont('helvetica', 'bold');
     doc.text('Total:', 5, currentY);
-    doc.text(new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR" }).format(transaction.total), 75, currentY, { align: 'right' });
+    doc.text(formatIdCurrency(transaction.total), 75, currentY, { align: 'right' });
     currentY += 8;
 
     // Thank you message

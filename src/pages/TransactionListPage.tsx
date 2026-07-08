@@ -6,10 +6,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useGranularPermission } from "@/hooks/useGranularPermission";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, ArrowLeft, Wallet, BookOpen, Receipt, PackageSearch, BarChart3, Truck, ArrowRightLeft } from "lucide-react";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { isFeatureEnabled } from "@/config/featureSettings";
 
 export default function TransactionListPage() {
   const { hasGranularPermission, isLoading } = useGranularPermission();
   const navigate = useNavigate();
+  const { settings } = useCompanySettings();
+  const isDeliveryEnabled = isFeatureEnabled(settings?.appFeatureSettings, 'delivery');
   const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
 
   if (!isLoading && !hasGranularPermission('transactions_view')) {
@@ -42,10 +46,12 @@ export default function TransactionListPage() {
           </CardDescription>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <Button variant="outline" size="sm" onClick={() => navigate('/delivery')}>
-            <Truck className="h-4 w-4 mr-2 text-sky-500" />
-            Pengantaran
-          </Button>
+          {isDeliveryEnabled && (
+            <Button variant="outline" size="sm" onClick={() => navigate('/delivery')}>
+              <Truck className="h-4 w-4 mr-2 text-sky-500" />
+              Pengantaran
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={() => setIsTransferDialogOpen(true)}>
             <ArrowRightLeft className="h-4 w-4 mr-2 text-violet-500" />
             Transfer Antar Kas

@@ -375,7 +375,7 @@ BEGIN
        -- Build Journal Lines for create_journal_atomic
        -- Dr. Persediaan Barang Dagang (1310)
        -- Cr. Persediaan Bahan Baku (1320)
-       
+
        DECLARE
          v_journal_lines JSONB;
          v_journal_res RECORD;
@@ -408,7 +408,7 @@ BEGIN
          IF v_journal_res.success THEN
             v_journal_id := v_journal_res.journal_id;
          ELSE
-            -- Log error but don't fail transaction? Or fail? 
+            -- Log error but don't fail transaction? Or fail?
             -- Better to fail if journal fails.
             RAISE EXCEPTION 'Gagal membuat jurnal: %', v_journal_res.error_message;
          END IF;
@@ -634,45 +634,53 @@ DECLARE
   v_consumption RECORD;
   v_movement RECORD;
   v_journal_id UUID;
+  v_material_reference_type TEXT;
 BEGIN
   -- 1. Get Production Record
-  SELECT * INTO v_record FROM production_records 
+  SELECT * INTO v_record FROM production_records
   WHERE id = p_production_id AND branch_id = p_branch_id;
-  
+
   IF v_record.id IS NULL THEN
     RETURN QUERY SELECT FALSE, 'Data produksi tidak ditemukan'::TEXT;
     RETURN;
   END IF;
 
+  v_material_reference_type := CASE
+    WHEN v_record.quantity < 0 AND v_record.product_id IS NULL THEN 'spoilage'
+    ELSE 'production'
+  END;
+
   -- 2. Handle Stock Rollback (FIFO)
   -- Rollback Materials (Ingredients)
   IF v_record.consume_bom THEN
-    FOR v_movement IN 
-      SELECT material_id, quantity FROM material_stock_movements 
-      WHERE (reference_id = v_record.id::TEXT OR reference_id = v_record.ref) 
-        AND reference_type = 'production' AND type = 'OUT'
+    FOR v_movement IN
+      SELECT material_id, quantity FROM material_stock_movements
+      WHERE (reference_id = v_record.id::TEXT OR reference_id = v_record.ref)
+        AND reference_type = v_material_reference_type AND type = 'OUT'
+        AND COALESCE(is_voided, FALSE) = FALSE
     LOOP
       PERFORM public.restore_material_fifo_v2(
-        v_movement.material_id, 
-        v_movement.quantity, 
+        v_movement.material_id,
+        v_movement.quantity,
         0, -- cost handled by batch
-        v_record.id::TEXT, 
+        v_record.ref,
         'void_production',
         p_branch_id
       );
     END LOOP;
   ELSIF v_record.quantity < 0 AND v_record.product_id IS NULL THEN
     -- This was a spoilage/error record
-    FOR v_movement IN 
-      SELECT material_id, quantity FROM material_stock_movements 
-      WHERE (reference_id = v_record.id::TEXT OR reference_id = v_record.ref) 
-        AND reference_type = 'production' AND type = 'OUT'
+    FOR v_movement IN
+      SELECT material_id, quantity FROM material_stock_movements
+      WHERE (reference_id = v_record.id::TEXT OR reference_id = v_record.ref)
+        AND reference_type = v_material_reference_type AND type = 'OUT'
+        AND COALESCE(is_voided, FALSE) = FALSE
     LOOP
       PERFORM public.restore_material_fifo_v2(
-        v_movement.material_id, 
-        v_movement.quantity, 
+        v_movement.material_id,
+        v_movement.quantity,
         0, -- cost handled by batch
-        v_record.id::TEXT, 
+        v_record.ref,
         'void_production_error',
         p_branch_id
       );
@@ -681,36 +689,42 @@ BEGIN
 
   -- 3. Delete Produced Product Batch (Hasil Produksi)
   -- Instead of just deleting, we should check if the stock is still there
-  -- For production, we usually delete the batch if it's still full, 
-  -- but since produced items might have been sold, the safest path for void_production 
+  -- For production, we usually delete the batch if it's still full,
+  -- but since produced items might have been sold, the safest path for void_production
   -- is often to consume it back if sold, or simply delete the remaining.
   -- Current logic: Hard delete produced batch.
   IF v_record.quantity > 0 AND v_record.product_id IS NOT NULL THEN
-    DELETE FROM inventory_batches 
-    WHERE product_id = v_record.product_id 
+    DELETE FROM inventory_batches
+    WHERE product_id = v_record.product_id
       AND (production_id = v_record.id OR notes = 'Produksi ' || v_record.ref);
-    
+
     -- Update product stock (legacy column but kept for products in v2)
-    UPDATE products 
-    SET current_stock = GREATEST(0, current_stock - v_record.quantity), 
+    UPDATE products
+    SET current_stock = GREATEST(0, current_stock - v_record.quantity),
         updated_at = NOW()
     WHERE id = v_record.product_id;
   END IF;
 
-  -- 4. Delete Material Stock Movements
-  DELETE FROM material_stock_movements 
-  WHERE (reference_id = v_record.id::TEXT OR reference_id = v_record.ref) 
-    AND reference_type = 'production';
+  -- 4. Void Material Stock Movements (keep audit trail, hide from operational reports)
+  UPDATE material_stock_movements
+  SET
+    is_voided = TRUE,
+    voided_at = NOW(),
+    void_reason = 'Production deleted: ' || v_record.ref,
+    voided_by_name = COALESCE(voided_by_name, 'System')
+  WHERE (reference_id = v_record.id::TEXT OR reference_id = v_record.ref)
+    AND reference_type = v_material_reference_type
+    AND COALESCE(is_voided, FALSE) = FALSE;
 
   -- 5. Void Related Journals
-  FOR v_journal_id IN 
-    SELECT id FROM journal_entries 
-    WHERE reference_id = v_record.id::TEXT 
-      AND reference_type IN ('production', 'adjustment') 
+  FOR v_journal_id IN
+    SELECT id FROM journal_entries
+    WHERE reference_id = v_record.id::TEXT
+      AND reference_type IN ('production', 'adjustment')
       AND is_voided = FALSE
   LOOP
-    UPDATE journal_entries 
-    SET is_voided = TRUE, 
+    UPDATE journal_entries
+    SET is_voided = TRUE,
         voided_reason = 'Production deleted: ' || v_record.ref,
         status = 'voided',
         updated_at = NOW()

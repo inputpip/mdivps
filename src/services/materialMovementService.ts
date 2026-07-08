@@ -122,6 +122,7 @@ export class MaterialMovementService {
         *,
         materials(name, type, unit, price_per_unit)
       `)
+      .eq('is_voided', false)
       .order('created_at', { ascending: false });
 
     if (dateFrom) {
@@ -135,7 +136,7 @@ export class MaterialMovementService {
 
     // Filter out movements without materials (simulating !inner behavior)
     const movements = (rawMovements || []).filter((m: any) => m.materials !== null);
-    
+
     if (error) {
       console.error('Error fetching material movements:', error);
       return [];
@@ -145,7 +146,7 @@ export class MaterialMovementService {
     const enrichedMovements = await Promise.all(
       (movements || []).map(async (movement) => {
         let transactionData = null;
-        
+
         if (movement.reference_type === 'transaction' && movement.reference_id) {
           // Use .order('id').limit(1) instead of .single() because our client forces Accept: application/json
           const { data: transactionRaw } = await supabase

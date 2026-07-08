@@ -68,10 +68,12 @@ import { DeliveryCompletionDialog } from "@/components/DeliveryCompletionDialog"
 import { TransactionDeliveryInfo } from "@/types/delivery"
 import { useTransactionsReadyForDelivery } from "@/hooks/useDeliveries"
 import { Delivery } from "@/types/delivery"
+import { isFeatureEnabled } from "@/config/featureSettings"
 
 
 export function TransactionTable() {
   const { settings: companyInfo } = useCompanySettings();
+  const isDeliveryEnabled = isFeatureEnabled(companyInfo?.appFeatureSettings, 'delivery');
   const { currentBranch } = useBranch();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -670,7 +672,7 @@ export function TransactionTable() {
       cell: ({ row }) => {
         const transaction = row.original;
         const searchLower = itemSearch.toLowerCase().trim();
-        const displayItems = searchLower 
+        const displayItems = searchLower
           ? transaction.items.filter(item => item.product?.name?.toLowerCase().includes(searchLower))
           : transaction.items;
 
@@ -840,9 +842,9 @@ export function TransactionTable() {
         // Check if fully delivered to disable Antar button
         // Note: Without exact delivery counts here, this is a best-effort check or visual toggle.
         // Ideally we need aggregated delivery status from backend.
-        // For now, we always enable it unless we know it's done. 
+        // For now, we always enable it unless we know it's done.
         // User asked to disable if done. Let's assume passed "status" might help, or we keep it enabled but handle it in detail.
-        // Correction: User said "tombol antar mati ketika sudah selesai". 
+        // Correction: User said "tombol antar mati ketika sudah selesai".
         // We really need to filter `deliveryHistory` for this transaction ID to count items.
 
         const myDeliveries = deliveryHistory?.filter(d => d.transactionId === transaction.id) || [];
@@ -869,29 +871,31 @@ export function TransactionTable() {
             >
               <Eye className="h-4 w-4" />
             </Button>
-            <Button
-              size="sm"
-              onClick={(e) => {
-                e.stopPropagation()
-                // Find transaction in ready for delivery list
-                const readyTransaction = transactionsReadyForDelivery?.find(t => t.id === transaction.id)
-                if (readyTransaction) {
-                  setSelectedDeliveryTransaction(readyTransaction)
-                  setIsDeliveryDialogOpen(true)
-                }
-              }}
-              disabled={isFullyDelivered}
-              className={cn(
-                "text-xs px-2 py-1",
-                isFullyDelivered
-                  ? "bg-gray-200 text-gray-500 cursor-not-allowed"
-                  : "bg-green-600 hover:bg-green-700 text-white"
-              )}
-              title={isFullyDelivered ? "Pengantaran Selesai" : "Input Pengantaran"}
-            >
-              <Truck className="h-3 w-3 sm:mr-1" />
-              <span className="hidden sm:inline">{isFullyDelivered ? "Selesai" : "Antar"}</span>
-            </Button>
+            {isDeliveryEnabled && (
+              <Button
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  // Find transaction in ready for delivery list
+                  const readyTransaction = transactionsReadyForDelivery?.find(t => t.id === transaction.id)
+                  if (readyTransaction) {
+                    setSelectedDeliveryTransaction(readyTransaction)
+                    setIsDeliveryDialogOpen(true)
+                  }
+                }}
+                disabled={isFullyDelivered}
+                className={cn(
+                  "text-xs px-2 py-1",
+                  isFullyDelivered
+                    ? "bg-gray-200 text-gray-500 cursor-not-allowed"
+                    : "bg-green-600 hover:bg-green-700 text-white"
+                )}
+                title={isFullyDelivered ? "Pengantaran Selesai" : "Input Pengantaran"}
+              >
+                <Truck className="h-3 w-3 sm:mr-1" />
+                <span className="hidden sm:inline">{isFullyDelivered ? "Selesai" : "Antar"}</span>
+              </Button>
+            )}
 
             {/* Dot Matrix Print Button */}
             <Button
@@ -1595,7 +1599,7 @@ export function TransactionTable() {
                         {transaction.items.map((item, idx) => {
                           const isMatch = itemSearch.trim() && item.product?.name?.toLowerCase().includes(itemSearch.toLowerCase().trim());
                           if (itemSearch.trim() && !isMatch) return null; // Optionally only show matches
-                          
+
                           return (
                           <div key={idx} className={cn("bg-card rounded p-2 border", isMatch ? "border-blue-300 bg-blue-50 dark:bg-blue-900/20" : "border-border")}>
                             <div className="flex justify-between items-start">
@@ -1773,7 +1777,7 @@ export function TransactionTable() {
                                         </div>
                                       </div>
                                     ))}
-                                    
+
                                     <div className="mt-4 pt-3 border-t border-dashed border-gray-200 dark:border-gray-700">
                                       <h4 className="font-semibold text-xs text-amber-600 dark:text-amber-400 mb-1.5">Catatan Transaksi:</h4>
                                       <div className="bg-amber-50 dark:bg-amber-900/20 rounded p-2.5 text-sm text-gray-800 dark:text-gray-200 border border-amber-100 dark:border-amber-900/50 min-h-[36px]">
@@ -1899,7 +1903,7 @@ export function TransactionTable() {
       />
 
       {/* Delivery Dialog */}
-      {selectedDeliveryTransaction && (
+      {isDeliveryEnabled && selectedDeliveryTransaction && (
         <Dialog open={isDeliveryDialogOpen} onOpenChange={setIsDeliveryDialogOpen}>
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
@@ -1914,7 +1918,7 @@ export function TransactionTable() {
               onSuccess={() => {
                 setSelectedDeliveryTransaction(null)
                 setIsDeliveryDialogOpen(false)
-                // Note: refetch is not available in this context, 
+                // Note: refetch is not available in this context,
                 // the transactions list will auto-refresh from the hook
               }}
               onDeliveryCreated={handleDeliveryCompleted}
@@ -1924,12 +1928,14 @@ export function TransactionTable() {
       )}
 
       {/* Delivery Completion Dialog */}
-      <DeliveryCompletionDialog
-        open={completionDialogOpen}
-        onOpenChange={setCompletionDialogOpen}
-        delivery={completedDelivery}
-        transaction={completedTransaction}
-      />
+      {isDeliveryEnabled && (
+        <DeliveryCompletionDialog
+          open={completionDialogOpen}
+          onOpenChange={setCompletionDialogOpen}
+          delivery={completedDelivery}
+          transaction={completedTransaction}
+        />
+      )}
     </div>
   )
 }

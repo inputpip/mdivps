@@ -6,9 +6,9 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { ArrowLeft, Printer, FileDown, Calendar, User, Package, CreditCard, Truck, MapPin, Phone } from "lucide-react"
-import { useTransactions } from "@/hooks/useTransactions"
+import { useTransactionById } from "@/hooks/useTransactions"
 import { useTransactionDeliveryInfo } from "@/hooks/useDeliveries"
-import { useCustomers } from "@/hooks/useCustomers"
+import { useCustomerById } from "@/hooks/useCustomers"
 import { format } from "date-fns"
 import { id } from "date-fns/locale/id"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -20,14 +20,16 @@ import { useState, useEffect } from "react"
 import { DeliveryManagement } from "@/components/DeliveryManagement"
 import { DeliveryCompletionDialog } from "@/components/DeliveryCompletionDialog"
 import { Delivery } from "@/types/delivery"
+import { isFeatureEnabled } from "@/config/featureSettings"
 
 export default function TransactionDetailPage() {
   const { id: transactionId } = useParams<{ id: string }>()
-  const { transactions, isLoading } = useTransactions()
-  const { data: deliveryInfo, isLoading: isLoadingDelivery, error: deliveryError } = useTransactionDeliveryInfo(transactionId || '')
-  const { customers } = useCustomers()
-  const { toast } = useToast()
   const { settings: companyInfo } = useCompanySettings()
+  const isDeliveryEnabled = isFeatureEnabled(companyInfo?.appFeatureSettings, 'delivery')
+  const { transaction, isLoading } = useTransactionById(transactionId || '')
+  const { data: deliveryInfo } = useTransactionDeliveryInfo(transactionId || '', { enabled: isDeliveryEnabled })
+  const { customer } = useCustomerById(transaction?.customerId || '')
+  const { toast } = useToast()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [showDeliveryForm, setShowDeliveryForm] = useState(false)
@@ -37,10 +39,10 @@ export default function TransactionDetailPage() {
 
   // Use effect to handle auto-opening
   useEffect(() => {
-    if (action === 'delivery') {
+    if (isDeliveryEnabled && action === 'delivery') {
       setShowDeliveryForm(true);
     }
-  }, [action]);
+  }, [action, isDeliveryEnabled]);
   const [completionDialogOpen, setCompletionDialogOpen] = useState(false)
   const [completedDelivery, setCompletedDelivery] = useState<Delivery | null>(null)
   const [completedTransaction, setCompletedTransaction] = useState<any>(null)
@@ -53,8 +55,19 @@ export default function TransactionDetailPage() {
     setShowDeliveryForm(false) // Close the form dialog
   }
 
-  const transaction = transactions?.find(t => t.id === transactionId)
-  const customer = customers?.find(c => c.id === transaction?.customerId)
+  const getTransactionItemMeta = (item: { [key: string]: any }) => {
+    const anyItem = item as Record<string, any>;
+    const productName = anyItem?.product?.name || anyItem['productName'] || anyItem['product_name'];
+    const fallbackName = anyItem['name'] || anyItem['description'];
+    const name = productName || fallbackName || 'Item';
+    const quantity = Number(anyItem['quantity'] ?? anyItem['qty'] ?? anyItem['quantitySold'] ?? 0) || 0;
+    const price = Number(anyItem['price'] ?? anyItem['harga'] ?? 0) || 0;
+    const unit = anyItem['unit'] || anyItem['unitName'] || anyItem['unit_name'] || '';
+    const notes = anyItem['notes'] || anyItem['description'];
+    const productId = anyItem?.product?.id || anyItem['productId'] || anyItem['product_id'];
+
+    return { name, quantity, price, unit, productId, notes };
+  };
 
   if (!transactionId) {
     return (
@@ -184,7 +197,11 @@ export default function TransactionDetailPage() {
     y += 16;
 
     // Items table
-    const tableData = transaction.items.filter(item => item.product?.name).map(item => [item.product.name, item.quantity, formatCurrency(item.price), formatCurrency(item.price * item.quantity)]);
+    const tableData = transaction.items.map((item) => {
+      const itemMeta = getTransactionItemMeta(item);
+
+      return [itemMeta.name, itemMeta.quantity, formatCurrency(itemMeta.price), formatCurrency(itemMeta.price * itemMeta.quantity)];
+    });
     autoTable(doc, {
       startY: y,
       head: [['Deskripsi', 'Jumlah', 'Harga Satuan', 'Total']],
@@ -272,15 +289,17 @@ export default function TransactionDetailPage() {
               </tr>
             </thead>
             <tbody>
-              ${transaction.items.filter(item => item.product?.name).map(item => `
+              ${transaction.items.map((item) => {
+                const itemMeta = getTransactionItemMeta(item);
+                return `
                 <tr>
                   <td class="pt-1 align-top pr-2">
-                    <div class="break-words">${item.product.name}</div>
-                    <div class="whitespace-nowrap">${item.quantity}x @${new Intl.NumberFormat("id-ID", { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(item.price)}</div>
+                    <div class="break-words">${itemMeta.name}</div>
+                    <div class="whitespace-nowrap">${itemMeta.quantity}x @${new Intl.NumberFormat("id-ID", { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(itemMeta.price)}</div>
                   </td>
-                  <td class="pt-1 text-right align-top whitespace-nowrap">${new Intl.NumberFormat("id-ID", { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(item.price * item.quantity)}</td>
+                  <td class="pt-1 text-right align-top whitespace-nowrap">${new Intl.NumberFormat("id-ID", { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(itemMeta.price * itemMeta.quantity)}</td>
                 </tr>
-              `).join('')}
+              `;}).join('')}
             </tbody>
           </table>
         </div>
@@ -577,15 +596,17 @@ export default function TransactionDetailPage() {
         </tr>
 
         <!-- Items -->
-        ${transaction.items.filter(item => item.product?.name).map((item, idx) => `
+        ${transaction.items.map((item, idx) => {
+          const itemMeta = getTransactionItemMeta(item);
+          return `
           <tr>
             <td style="padding: 0.5mm 1mm; font-size: 11pt;">${idx + 1}</td>
-            <td style="padding: 0.5mm 1mm; font-size: 11pt;">${item.product.name}</td>
-            <td style="padding: 0.5mm 1mm; text-align: center; font-size: 11pt;">${formatNumber(item.quantity)} ${shortUnit(item.unit)}</td>
-            <td style="padding: 0.5mm 1mm; text-align: right; font-size: 11pt;">${formatNumber(item.price)}</td>
-            <td style="padding: 0.5mm 1mm; text-align: right; font-size: 11pt;">${formatNumber(item.price * item.quantity)}</td>
+            <td style="padding: 0.5mm 1mm; font-size: 11pt;">${itemMeta.name}</td>
+            <td style="padding: 0.5mm 1mm; text-align: center; font-size: 11pt;">${formatNumber(itemMeta.quantity)} ${shortUnit(itemMeta.unit)}</td>
+            <td style="padding: 0.5mm 1mm; text-align: right; font-size: 11pt;">${formatNumber(itemMeta.price)}</td>
+            <td style="padding: 0.5mm 1mm; text-align: right; font-size: 11pt;">${formatNumber(itemMeta.price * itemMeta.quantity)}</td>
           </tr>
-        `).join('')}
+        `;}).join('')}
 
         <!-- Spacer row to push footer to bottom -->
         <tr style="height: 100%;">
@@ -758,10 +779,16 @@ export default function TransactionDetailPage() {
     }
     receiptText += separator + '\n';
 
-    transaction.items.filter(item => item.product?.name).forEach((item) => {
-      receiptText += item.product.name + '\n';
-      const qtyPrice = `${item.quantity}x @${formatNumber(item.price)}`;
-      const itemTotal = formatNumber(item.price * item.quantity);
+    transaction.items.forEach((item) => {
+      const itemMeta = getTransactionItemMeta(item as any);
+
+      if (!itemMeta.name || itemMeta.quantity <= 0) {
+        return;
+      }
+
+      receiptText += itemMeta.name + '\n';
+      const qtyPrice = `${itemMeta.quantity}x @${formatNumber(itemMeta.price)}`;
+      const itemTotal = formatNumber(itemMeta.price * itemMeta.quantity);
       const spacing = charWidth - qtyPrice.length - itemTotal.length;
       receiptText += qtyPrice + ' '.repeat(Math.max(0, spacing)) + itemTotal + '\n';
     });
@@ -820,13 +847,34 @@ export default function TransactionDetailPage() {
     receiptText += '\n\n\n';
     receiptText += '\x1D\x56\x41';
 
-    const encodedText = encodeURIComponent(receiptText);
+    const printableText = receiptText?.trim() || '';
+
+    if (!printableText) {
+      toast?.({
+        variant: "destructive",
+        title: "Gagal Mencetak",
+        description: "Isi struk kosong. Coba tutup dialog lalu cetak ulang.",
+      });
+      return;
+    }
+
+    const encodedText = encodeURIComponent(printableText);
     const rawbtUrl = `rawbt:${encodedText}`;
+    const isMobileDevice = /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent);
 
     try {
-      window.location.href = rawbtUrl;
+      if (isMobileDevice) {
+        window.location.assign(rawbtUrl);
+      } else {
+        window.open(rawbtUrl, "_blank");
+      }
     } catch (error) {
       console.error('Failed to open RawBT protocol:', error);
+      toast?.({
+        variant: "destructive",
+        title: "Gagal Mencetak",
+        description: "Tidak dapat membuka aplikasi RawBT. Periksa apakah aplikasi printer sudah terpasang.",
+      });
     }
 
     setTimeout(() => {
@@ -857,7 +905,7 @@ export default function TransactionDetailPage() {
         {/* Action Buttons - Hidden on mobile, shown on desktop */}
         <div className="hidden md:flex gap-2">
           {/* Show delivery button if transaction has delivery info and not office sale */}
-          {deliveryInfo && !transaction?.isOfficeSale && (
+          {isDeliveryEnabled && deliveryInfo && !transaction?.isOfficeSale && (
             <Button
               variant="outline"
               className="bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
@@ -890,7 +938,7 @@ export default function TransactionDetailPage() {
       <div className="md:hidden sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border/40 -mx-6 px-6 py-3">
         <div className="flex gap-2 overflow-x-auto">
           {/* Show delivery button if transaction has delivery info and not office sale */}
-          {deliveryInfo && !transaction?.isOfficeSale && (
+          {isDeliveryEnabled && deliveryInfo && !transaction?.isOfficeSale && (
             <Button
               variant="outline"
               size="sm"
@@ -1028,42 +1076,50 @@ export default function TransactionDetailPage() {
             <CardContent>
               {/* Mobile View - Card List */}
               <div className="md:hidden space-y-3">
-                {transaction.items.filter(item => item.product?.id).map((item, index) => (
-                  <Card key={index} className="p-3">
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <Link
-                            to={`/products/${item.product.id}`}
-                            className="font-medium text-sm text-blue-600 hover:text-blue-800 hover:underline"
-                          >
-                            {item.product.name}
-                          </Link>
-                          <p className="text-xs text-muted-foreground italic">
-                            Keterangan: {item.notes?.trim() ? item.notes : "-"}
-                          </p>
+                {transaction.items.map((item, index) => {
+                  const itemMeta = getTransactionItemMeta(item as any);
+
+                  return (
+                    <Card key={index} className="p-3">
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            {itemMeta.productId ? (
+                              <Link
+                                to={`/products/${itemMeta.productId}`}
+                                className="font-medium text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                              >
+                                {itemMeta.name}
+                              </Link>
+                            ) : (
+                              <p className="font-medium text-sm">{itemMeta.name}</p>
+                            )}
+                            <p className="text-xs text-muted-foreground italic">
+                              Keterangan: {itemMeta.notes?.trim() ? itemMeta.notes : "-"}
+                            </p>
+                          </div>
+                          <div className="text-right ml-2">
+                            <p className="font-medium text-sm">
+                              {new Intl.NumberFormat("id-ID", {
+                                style: "currency",
+                                currency: "IDR",
+                                minimumFractionDigits: 0,
+                              }).format(itemMeta.price * itemMeta.quantity)}
+                            </p>
+                          </div>
                         </div>
-                        <div className="text-right ml-2">
-                          <p className="font-medium text-sm">
-                            {new Intl.NumberFormat("id-ID", {
-                              style: "currency",
-                              currency: "IDR",
-                              minimumFractionDigits: 0,
-                            }).format(item.price * item.quantity)}
-                          </p>
+                        <div className="flex justify-between text-xs text-muted-foreground">
+                          <span>{itemMeta.quantity} {itemMeta.unit}</span>
+                          <span>@{new Intl.NumberFormat("id-ID", {
+                            style: "currency",
+                            currency: "IDR",
+                            minimumFractionDigits: 0,
+                          }).format(itemMeta.price)}</span>
                         </div>
                       </div>
-                      <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>{item.quantity} {item.unit}</span>
-                        <span>@{new Intl.NumberFormat("id-ID", {
-                          style: "currency",
-                          currency: "IDR",
-                          minimumFractionDigits: 0,
-                        }).format(item.price)}</span>
-                      </div>
-                    </div>
-                  </Card>
-                ))}
+                    </Card>
+                  );
+                })}
               </div>
 
               {/* Desktop View - Table */}
@@ -1078,40 +1134,48 @@ export default function TransactionDetailPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {transaction.items.filter(item => item.product?.id).map((item, index) => (
-                      <TableRow key={index}>
-                        <TableCell>
-                          <div>
-                            <Link
-                              to={`/products/${item.product.id}`}
-                              className="font-medium text-blue-600 hover:text-blue-800 hover:underline"
-                            >
-                              {item.product.name}
-                            </Link>
-                            <p className="text-sm text-muted-foreground italic mt-1 bg-muted p-1.5 rounded">
-                              Keterangan: {item.notes?.trim() ? item.notes : "-"}
-                            </p>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {item.quantity} {item.unit}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {new Intl.NumberFormat("id-ID", {
-                            style: "currency",
-                            currency: "IDR",
-                            minimumFractionDigits: 0,
-                          }).format(item.price)}
-                        </TableCell>
-                        <TableCell className="text-right font-medium">
-                          {new Intl.NumberFormat("id-ID", {
-                            style: "currency",
-                            currency: "IDR",
-                            minimumFractionDigits: 0,
-                          }).format(item.price * item.quantity)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {transaction.items.map((item, index) => {
+                      const itemMeta = getTransactionItemMeta(item as any);
+
+                      return (
+                        <TableRow key={index}>
+                          <TableCell>
+                            <div>
+                              {itemMeta.productId ? (
+                                <Link
+                                  to={`/products/${itemMeta.productId}`}
+                                  className="font-medium text-blue-600 hover:text-blue-800 hover:underline"
+                                >
+                                  {itemMeta.name}
+                                </Link>
+                              ) : (
+                                <p className="font-medium">{itemMeta.name}</p>
+                              )}
+                              <p className="text-sm text-muted-foreground italic mt-1 bg-muted p-1.5 rounded">
+                                Keterangan: {itemMeta.notes?.trim() ? itemMeta.notes : "-"}
+                              </p>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {itemMeta.quantity} {itemMeta.unit}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {new Intl.NumberFormat("id-ID", {
+                              style: "currency",
+                              currency: "IDR",
+                              minimumFractionDigits: 0,
+                            }).format(itemMeta.price)}
+                          </TableCell>
+                          <TableCell className="text-right font-medium">
+                            {new Intl.NumberFormat("id-ID", {
+                              style: "currency",
+                              currency: "IDR",
+                              minimumFractionDigits: 0,
+                            }).format(itemMeta.price * itemMeta.quantity)}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
@@ -1257,7 +1321,7 @@ export default function TransactionDetailPage() {
       </div>
 
       {/* Delivery Management Section */}
-      {showDeliveryForm && deliveryInfo && (
+      {isDeliveryEnabled && showDeliveryForm && deliveryInfo && (
         <div className="mt-6">
           <Card>
             <CardHeader>
@@ -1275,7 +1339,7 @@ export default function TransactionDetailPage() {
             <CardContent>
               <DeliveryManagement
                 transaction={deliveryInfo}
-                defaultOpen={action === 'delivery'}
+                defaultOpen={isDeliveryEnabled && action === 'delivery'}
                 onClose={() => {
                   setShowDeliveryForm(false)
                   // Refresh data when delivery is updated
@@ -1289,12 +1353,14 @@ export default function TransactionDetailPage() {
       )}
 
       {/* Delivery Completion Dialog */}
-      <DeliveryCompletionDialog
-        open={completionDialogOpen}
-        onOpenChange={setCompletionDialogOpen}
-        delivery={completedDelivery}
-        transaction={completedTransaction}
-      />
+      {isDeliveryEnabled && (
+        <DeliveryCompletionDialog
+          open={completionDialogOpen}
+          onOpenChange={setCompletionDialogOpen}
+          delivery={completedDelivery}
+          transaction={completedTransaction}
+        />
+      )}
 
       {/* Mobile Floating Print Button - Alternative option */}
       <div className="md:hidden fixed bottom-6 right-4 z-20">

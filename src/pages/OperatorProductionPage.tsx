@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useCallback, useMemo, useRef, useState } from "react"
 import { format } from "date-fns"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -14,15 +14,21 @@ import { useAccounts } from "@/hooks/useAccounts"
 import { useAuth } from "@/hooks/useAuth"
 import { useCompanySettings } from "@/hooks/useCompanySettings"
 import { useJournalEntries } from "@/hooks/useJournalEntries"
+import { useProduction } from "@/hooks/useProduction"
+import { useProducts } from "@/hooks/useProducts"
 import { useTransactions } from "@/hooks/useTransactions"
-import { getProductionWorkflowMode, ProductionWorkflowMode } from "@/config/featureSettings"
+import { getProductionWorkflowMode, isFeatureEnabled, ProductionWorkflowMode } from "@/config/featureSettings"
 import { Transaction } from "@/types/transaction"
 import { Account } from "@/types/account"
 import { findAccountByLookup } from "@/services/accountLookupService"
-import { ClipboardList, Factory, FileText, Play, CheckCircle2, WalletCards } from "lucide-react"
+import { PhotoUploadService } from "@/services/photoUploadService"
+import { compressImage, isImageFile } from "@/utils/imageCompression"
+import { validateProductForProduction } from "@/utils/productValidation"
+import { Camera, ClipboardList, Factory, FileText, Play, CheckCircle2, WalletCards, X } from "lucide-react"
 
 const PRODUCTION_STATUSES = ['Pesanan Masuk', 'Antri Produksi', 'Sedang Produksi', 'Selesai Produksi'] as const
 const ACTIVE_STATUSES = ['Antri Produksi', 'Sedang Produksi']
+type ProductionPanelStatus = typeof PRODUCTION_STATUSES[number]
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(value || 0)
@@ -40,25 +46,33 @@ const getOrderTotalQty = (transaction: Transaction) => {
 export default function OperatorProductionPage() {
   const { settings } = useCompanySettings()
   const productionMode = getProductionWorkflowMode(settings?.appFeatureSettings)
+  const isDeliveryEnabled = isFeatureEnabled(settings?.appFeatureSettings, 'delivery')
   const { transactions = [], isLoading, updateTransactionStatus } = useTransactions()
+  const { products = [], isLoading: isLoadingProducts } = useProducts()
+  const { processProduction, isLoading: isProcessingProduction } = useProduction()
   const { accounts = [] } = useAccounts()
   const { createJournalEntry, isCreating } = useJournalEntries()
   const { user } = useAuth()
   const { toast } = useToast()
+  const [localProductionStatuses, setLocalProductionStatuses] = useState<Record<string, ProductionPanelStatus>>({})
+
+  const getPanelStatus = useCallback((trx: Transaction): ProductionPanelStatus => {
+    return localProductionStatuses[trx.id] || (PRODUCTION_STATUSES.includes(trx.status as ProductionPanelStatus) ? trx.status as ProductionPanelStatus : 'Pesanan Masuk')
+  }, [localProductionStatuses])
 
   const productionOrders = useMemo(() => {
     return transactions
       .filter((trx) => PRODUCTION_STATUSES.includes(trx.status as typeof PRODUCTION_STATUSES[number]))
       .sort((a, b) => {
-        const aActive = a.status === 'Sedang Produksi' ? 0 : 1
-        const bActive = b.status === 'Sedang Produksi' ? 0 : 1
+        const aActive = getPanelStatus(a) === 'Sedang Produksi' ? 0 : 1
+        const bActive = getPanelStatus(b) === 'Sedang Produksi' ? 0 : 1
         return aActive - bActive || a.createdAt.getTime() - b.createdAt.getTime()
       })
-  }, [transactions])
+  }, [transactions, getPanelStatus])
 
   const runningOrders = useMemo(
-    () => productionOrders.filter((trx) => ACTIVE_STATUSES.includes(trx.status)),
-    [productionOrders]
+    () => productionOrders.filter((trx) => ACTIVE_STATUSES.includes(getPanelStatus(trx))),
+    [productionOrders, getPanelStatus]
   )
 
   const [selectedTransactionId, setSelectedTransactionId] = useState<string>('')
@@ -86,21 +100,84 @@ export default function OperatorProductionPage() {
   const [expenseNote, setExpenseNote] = useState<string>('')
   const [debitAccountId, setDebitAccountId] = useState<string>('')
   const [creditAccountId, setCreditAccountId] = useState<string>('')
+  const [expensePhoto, setExpensePhoto] = useState<File | null>(null)
+  const [expensePhotoPreview, setExpensePhotoPreview] = useState<string | null>(null)
+  const [isUploadingExpensePhoto, setIsUploadingExpensePhoto] = useState(false)
+  const expensePhotoInputRef = useRef<HTMLInputElement>(null)
 
   const resolvedDebitAccount = accounts.find((account) => account.id === (debitAccountId || defaultExpenseAccount?.id))
   const resolvedCreditAccount = accounts.find((account) => account.id === (creditAccountId || defaultCashAccount?.id))
 
   const statusCounts = useMemo(() => {
     return PRODUCTION_STATUSES.reduce((acc, status) => {
-      acc[status] = productionOrders.filter((trx) => trx.status === status).length
+      acc[status] = productionOrders.filter((trx) => getPanelStatus(trx) === status).length
       return acc
     }, {} as Record<string, number>)
-  }, [productionOrders])
+  }, [productionOrders, getPanelStatus])
 
-  const handleSetStatus = async (transaction: Transaction | undefined, status: string) => {
+  const handleSetStatus = async (transaction: Transaction | undefined, status: ProductionPanelStatus) => {
     if (!transaction) return
-    await updateTransactionStatus.mutateAsync({ transactionId: transaction.id, status })
-    toast({ title: 'Status diperbarui', description: `${transaction.customerName} → ${status}` })
+    if (getPanelStatus(transaction) === status) return
+
+    if (status === 'Antri Produksi' || status === 'Sedang Produksi') {
+      setLocalProductionStatuses((current) => ({ ...current, [transaction.id]: status }))
+      toast({ title: 'Status panel diperbarui', description: `${transaction.customerName} → ${status}` })
+      return
+    }
+
+    if (status === 'Selesai Produksi') {
+      if (!user?.id) {
+        toast({ variant: 'destructive', title: 'User belum valid', description: 'Login ulang sebelum menyelesaikan produksi.' })
+        return
+      }
+      if (isLoadingProducts) {
+        toast({ variant: 'destructive', title: 'Produk masih dimuat', description: 'Tunggu katalog produk selesai dimuat sebelum menyelesaikan produksi.' })
+        return
+      }
+
+      const productionItems = transaction.items
+        .map((item) => {
+          const legacyItem = item as typeof item & { productId?: string; product_id?: string }
+          const productId = item.product?.id || legacyItem.productId || legacyItem.product_id
+          const product = products.find((p) => p.id === productId)
+          return { item, productId, product }
+        })
+        .filter(({ productId, product }) => productId && product?.type === 'Produksi')
+
+      for (const { item, productId, product } of productionItems) {
+        const quantity = Number(item.quantity) || 0
+        if (!productId || !product || quantity <= 0) continue
+
+        const validation = await validateProductForProduction(productId, product.type)
+        if (!validation.valid) {
+          toast({
+            variant: 'destructive',
+            title: 'Produksi belum bisa diselesaikan',
+            description: `${product.name}: ${validation.message || 'Produk belum siap diproduksi.'}`,
+          })
+          return
+        }
+
+        const success = await processProduction({
+          productId,
+          quantity,
+          consumeBOM: true,
+          createdBy: user.id,
+          note: `Produksi dari order ${transaction.customerName} (${format(transaction.orderDate, 'dd/MM/yyyy HH:mm')})`,
+        })
+
+        if (!success) return
+      }
+
+      const finalTransactionStatus = (!isDeliveryEnabled || transaction.isOfficeSale) ? 'Selesai' : 'Siap Antar'
+      await updateTransactionStatus.mutateAsync({ transactionId: transaction.id, status: finalTransactionStatus })
+      setLocalProductionStatuses((current) => ({ ...current, [transaction.id]: 'Selesai Produksi' }))
+      toast({
+        title: 'Produksi selesai',
+        description: `${transaction.customerName} → ${finalTransactionStatus}`,
+      })
+      return
+    }
   }
 
   const handleRecordExpense = async () => {
@@ -117,11 +194,33 @@ export default function OperatorProductionPage() {
       return
     }
 
-    await new Promise<void>((resolve, reject) => {
+    if (!expensePhoto) {
+      toast({ variant: 'destructive', title: 'Foto bukti nota wajib', description: 'Upload atau ambil foto bukti nota sebelum mencatat pengeluaran produksi.' })
+      return
+    }
+
+    setIsUploadingExpensePhoto(true)
+    let expensePhotoUrl = ''
+    try {
+      const uploadResult = await PhotoUploadService.uploadPhoto(
+        expensePhoto,
+        `PROD-EXP-${selectedTransaction.id}-${Date.now()}`,
+        'expenses'
+      )
+      expensePhotoUrl = uploadResult.webViewLink
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Gagal upload foto bukti nota'
+      toast({ variant: 'destructive', title: 'Upload foto gagal', description: message })
+      setIsUploadingExpensePhoto(false)
+      return
+    }
+
+    try {
+      await new Promise<void>((resolve, reject) => {
       createJournalEntry(
         {
       entryDate: new Date(),
-      description: `Pengeluaran produksi order ${selectedTransaction.customerName}${expenseNote ? ` - ${expenseNote}` : ''}`,
+      description: `Pengeluaran produksi order ${selectedTransaction.customerName}${expenseNote ? ` - ${expenseNote}` : ''} | Bukti nota: ${expensePhotoUrl}`,
       referenceType: 'transaction',
       referenceId: selectedTransaction.id,
       lines: [
@@ -129,13 +228,13 @@ export default function OperatorProductionPage() {
           accountId: resolvedDebitAccount.id,
           debitAmount: expenseAmount,
           creditAmount: 0,
-          description: expenseNote || 'Tambahan pengeluaran produksi',
+          description: `${expenseNote || 'Tambahan pengeluaran produksi'} | Bukti nota: ${expensePhotoUrl}`,
         },
         {
           accountId: resolvedCreditAccount.id,
           debitAmount: 0,
           creditAmount: expenseAmount,
-          description: expenseNote || 'Pembayaran pengeluaran produksi',
+          description: `${expenseNote || 'Pembayaran pengeluaran produksi'} | Bukti nota: ${expensePhotoUrl}`,
         },
       ],
         },
@@ -144,10 +243,52 @@ export default function OperatorProductionPage() {
           onError: (error: Error) => reject(error),
         }
       )
-    })
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Gagal mencatat jurnal pengeluaran produksi'
+      toast({ variant: 'destructive', title: 'Gagal mencatat pengeluaran', description: message })
+      setIsUploadingExpensePhoto(false)
+      return
+    }
 
     setExpenseAmount(0)
     setExpenseNote('')
+    setExpensePhoto(null)
+    setExpensePhotoPreview(null)
+    if (expensePhotoInputRef.current) expensePhotoInputRef.current.value = ''
+    setIsUploadingExpensePhoto(false)
+  }
+
+  const handleExpensePhotoCapture = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    if (!isImageFile(file)) {
+      toast({ variant: 'destructive', title: 'File tidak valid', description: 'Bukti nota wajib berupa gambar.' })
+      return
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      toast({ variant: 'destructive', title: 'File terlalu besar', description: 'Ukuran foto maksimal 10MB.' })
+      return
+    }
+
+    try {
+      const compressed = await compressImage(file, 150)
+      setExpensePhoto(compressed)
+      const reader = new FileReader()
+      reader.onload = (e) => setExpensePhotoPreview(e.target?.result as string)
+      reader.readAsDataURL(compressed)
+    } catch (error) {
+      console.error('Gagal memproses foto bukti nota:', error)
+      toast({ variant: 'destructive', title: 'Foto gagal diproses', description: 'Coba ambil ulang atau pilih gambar lain.' })
+    }
+  }
+
+  const removeExpensePhoto = () => {
+    setExpensePhoto(null)
+    setExpensePhotoPreview(null)
+    if (expensePhotoInputRef.current) expensePhotoInputRef.current.value = ''
   }
 
   const renderAccountOption = (account: Account) => (
@@ -200,7 +341,7 @@ export default function OperatorProductionPage() {
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="font-medium line-clamp-1">{trx.customerName}</div>
-                  <Badge variant={trx.status === 'Sedang Produksi' ? 'default' : 'secondary'}>{trx.status}</Badge>
+                  <Badge variant={getPanelStatus(trx) === 'Sedang Produksi' ? 'default' : 'secondary'}>{getPanelStatus(trx)}</Badge>
                 </div>
                 <div className="mt-1 text-xs text-muted-foreground">
                   {format(trx.orderDate, 'dd/MM/yyyy')} • {trx.items.length} item • {formatCurrency(trx.total)}
@@ -228,14 +369,14 @@ export default function OperatorProductionPage() {
             <div className="rounded-lg border p-3 space-y-3">
               <div className="text-sm font-medium">Aksi untuk pesanan terpilih</div>
               <div className="grid gap-2">
-                <Button variant="outline" onClick={() => handleSetStatus(selectedTransaction, 'Antri Produksi')} disabled={!selectedTransaction || updateTransactionStatus.isPending}>
+                <Button variant="outline" onClick={() => handleSetStatus(selectedTransaction, 'Antri Produksi')} disabled={!selectedTransaction || getPanelStatus(selectedTransaction) === 'Antri Produksi' || updateTransactionStatus.isPending || isProcessingProduction}>
                   Masukkan Antrian
                 </Button>
-                <Button onClick={() => handleSetStatus(selectedTransaction, 'Sedang Produksi')} disabled={!selectedTransaction || updateTransactionStatus.isPending}>
+                <Button onClick={() => handleSetStatus(selectedTransaction, 'Sedang Produksi')} disabled={!selectedTransaction || getPanelStatus(selectedTransaction) === 'Sedang Produksi' || updateTransactionStatus.isPending || isProcessingProduction}>
                   <Play className="mr-2 h-4 w-4" /> Mulai Produksi
                 </Button>
-                <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => handleSetStatus(selectedTransaction, 'Selesai Produksi')} disabled={!selectedTransaction || updateTransactionStatus.isPending}>
-                  <CheckCircle2 className="mr-2 h-4 w-4" /> Selesai Produksi
+                <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => handleSetStatus(selectedTransaction, 'Selesai Produksi')} disabled={!selectedTransaction || getPanelStatus(selectedTransaction) === 'Selesai Produksi' || updateTransactionStatus.isPending || isProcessingProduction || isLoadingProducts}>
+                  <CheckCircle2 className="mr-2 h-4 w-4" /> {isProcessingProduction ? 'Memproses Produksi...' : 'Selesai Produksi'}
                 </Button>
               </div>
             </div>
@@ -262,7 +403,7 @@ export default function OperatorProductionPage() {
                       <div className="font-semibold">{selectedTransaction.customerName}</div>
                       <div className="text-xs text-muted-foreground">Order: {format(selectedTransaction.orderDate, 'dd/MM/yyyy HH:mm')}</div>
                     </div>
-                    <Badge>{selectedTransaction.status}</Badge>
+                    <Badge>{getPanelStatus(selectedTransaction)}</Badge>
                   </div>
                   <div className="grid grid-cols-2 gap-2 pt-3 text-sm">
                     <div className="rounded-md bg-muted/40 p-2"><div className="text-xs text-muted-foreground">Total Qty</div>{getOrderTotalQty(selectedTransaction)}</div>
@@ -320,8 +461,48 @@ export default function OperatorProductionPage() {
               <Textarea rows={4} value={expenseNote} onChange={(e) => setExpenseNote(e.target.value)} placeholder="Contoh: tinta tambahan, laminasi, transport bahan..." />
             </div>
 
-            <Button className="w-full" onClick={handleRecordExpense} disabled={isCreating || !selectedTransaction}>
-              {isCreating ? 'Mencatat...' : 'Catat Pengeluaran + Jurnal'}
+            <div className="space-y-2">
+              <Label>Foto bukti nota <span className="text-destructive">*</span></Label>
+              <input
+                ref={expensePhotoInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={handleExpensePhotoCapture}
+              />
+              {!expensePhotoPreview ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-24 w-full border-dashed border-2 flex-col gap-2"
+                  onClick={() => expensePhotoInputRef.current?.click()}
+                >
+                  <Camera className="h-7 w-7 text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground">Ambil Foto / Pilih Gambar Nota</span>
+                </Button>
+              ) : (
+                <div className="relative h-40 overflow-hidden rounded-lg border bg-muted">
+                  <img src={expensePhotoPreview} alt="Bukti nota pengeluaran produksi" className="h-full w-full object-contain" />
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="icon"
+                    className="absolute right-2 top-2 h-8 w-8 rounded-full"
+                    onClick={removeExpensePhoto}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                  <div className="absolute inset-x-0 bottom-0 bg-black/60 px-2 py-1 text-center text-[10px] text-white">
+                    {expensePhoto?.name}
+                  </div>
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">Wajib ada foto nota sebelum jurnal pengeluaran produksi bisa disimpan.</p>
+            </div>
+
+            <Button className="w-full" onClick={handleRecordExpense} disabled={isCreating || isUploadingExpensePhoto || !selectedTransaction}>
+              {isCreating || isUploadingExpensePhoto ? 'Mencatat...' : 'Catat Pengeluaran + Jurnal'}
             </Button>
 
             <div className="rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground">

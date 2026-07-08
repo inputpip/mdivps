@@ -62,7 +62,7 @@ BEGIN
     AND is_voided = FALSE;
 
   IF v_existing_journal_count > 0 THEN
-    RETURN QUERY SELECT FALSE, NULL::UUID[], NULL::TEXT, 
+    RETURN QUERY SELECT FALSE, NULL::UUID[], NULL::TEXT,
       format('Journal sudah ada untuk PO ini (%s entries). Tidak dapat approve lagi.', v_existing_journal_count)::TEXT;
     RETURN;
   END IF;
@@ -72,7 +72,7 @@ BEGIN
   WHERE purchase_order_id = p_po_id;
 
   IF v_existing_ap_count > 0 THEN
-    RETURN QUERY SELECT FALSE, NULL::UUID[], NULL::TEXT, 
+    RETURN QUERY SELECT FALSE, NULL::UUID[], NULL::TEXT,
       'Accounts Payable sudah ada untuk PO ini. Tidak dapat approve lagi.'::TEXT;
     RETURN;
   END IF;
@@ -89,7 +89,7 @@ BEGIN
 
   -- FIX: Validasi akun PPN harus ada jika PPN diaktifkan
   IF v_po.include_ppn AND v_po.ppn_amount > 0 AND v_acc_piutang_pajak IS NULL THEN
-    RETURN QUERY SELECT FALSE, NULL::UUID[], NULL::TEXT, 
+    RETURN QUERY SELECT FALSE, NULL::UUID[], NULL::TEXT,
       'PPN diaktifkan tapi Akun Piutang Pajak / PPN Masukan (1230) tidak ditemukan. Buat akun tersebut terlebih dahulu.'::TEXT;
     RETURN;
   END IF;
@@ -131,7 +131,7 @@ BEGIN
           'credit_amount', 0,
           'description', 'Persediaan: ' || v_material_names
        );
-       
+
        IF v_material_ppn > 0 AND v_acc_piutang_pajak IS NOT NULL THEN
           v_journal_lines := v_journal_lines || jsonb_build_object(
             'account_id', v_acc_piutang_pajak,
@@ -200,7 +200,7 @@ BEGIN
           'credit_amount', v_total_product + v_product_ppn_applied,
           'description', 'Hutang: ' || v_po.supplier_name
        );
-       
+
        SELECT * INTO v_journal_res FROM create_journal_atomic(
          p_branch_id, CURRENT_DATE,
          'Pembelian Produk Jadi: ' || v_po.supplier_name || ' (' || p_po_id || ')',
@@ -232,7 +232,7 @@ BEGIN
     description, status, paid_amount, branch_id, created_at
   ) VALUES (
     v_ap_id, p_po_id, v_po.supplier_name, v_po.total_cost, v_due_date,
-    'Purchase Order ' || p_po_id || ' - ' || COALESCE(v_material_names, '') || COALESCE(v_product_names, ''), 
+    'Purchase Order ' || p_po_id || ' - ' || COALESCE(v_material_names, '') || COALESCE(v_product_names, ''),
     'Outstanding', 0, p_branch_id, NOW()
   );
 
@@ -328,6 +328,9 @@ BEGIN
       quantity,
       unit_price,
       unit,
+      base_unit,
+      conversion_qty,
+      base_quantity,
       subtotal,
       notes
     ) VALUES (
@@ -340,6 +343,9 @@ BEGIN
       (v_item->>'quantity')::NUMERIC,
       (v_item->>'unit_price')::NUMERIC,
       v_item->>'unit',
+      COALESCE(v_item->>'base_unit', v_item->>'unit'),
+      COALESCE((v_item->>'conversion_qty')::NUMERIC, 1),
+      COALESCE((v_item->>'base_quantity')::NUMERIC, (v_item->>'quantity')::NUMERIC * COALESCE((v_item->>'conversion_qty')::NUMERIC, 1)),
       COALESCE((v_item->>'subtotal')::NUMERIC, (v_item->>'quantity')::NUMERIC * (v_item->>'unit_price')::NUMERIC),
       v_item->>'notes'
     );
@@ -465,10 +471,16 @@ BEGIN
   -- Delete inventory batches
   DELETE FROM inventory_batches WHERE purchase_order_id = p_po_id;
 
-  -- Delete material movements
-  DELETE FROM material_stock_movements
+  -- Void material movements so report hides them but audit trail remains
+  UPDATE material_stock_movements
+  SET
+    is_voided = TRUE,
+    voided_at = NOW(),
+    void_reason = format('PO %s dihapus', p_po_id),
+    voided_by_name = COALESCE(voided_by_name, 'System')
   WHERE reference_id = p_po_id
-    AND reference_type = 'purchase_order';
+    AND reference_type = 'purchase_order'
+    AND COALESCE(is_voided, FALSE) = FALSE;
 
   -- Delete accounts payable
   DELETE FROM accounts_payable WHERE purchase_order_id = p_po_id;
@@ -884,7 +896,7 @@ BEGIN
 
   -- ==================== CREATE PAYMENT RECORD ====================
   -- Using transaction_payments table
-  
+
   INSERT INTO transaction_payments (
     transaction_id,
     branch_id,
@@ -1155,19 +1167,18 @@ $function$;
 
 -- =====================================================
 -- Function: receive_po_atomic
--- =====================================================
 CREATE OR REPLACE FUNCTION public.receive_po_atomic(p_po_id text, p_branch_id uuid, p_received_date date DEFAULT CURRENT_DATE, p_user_id uuid DEFAULT NULL::uuid, p_user_name text DEFAULT NULL::text) RETURNS TABLE(success boolean, materials_received integer, products_received integer, batches_created integer, error_message text)
     LANGUAGE plpgsql SECURITY DEFINER
     AS $function$
 DECLARE
   v_po RECORD;
   v_item RECORD;
-  v_material RECORD;
   v_materials_received INTEGER := 0;
   v_products_received INTEGER := 0;
   v_batches_created INTEGER := 0;
   v_previous_stock NUMERIC;
   v_new_stock NUMERIC;
+  v_effective_quantity NUMERIC;
 BEGIN
   -- ==================== VALIDASI ====================
 
@@ -1225,6 +1236,9 @@ BEGIN
       poi.product_id,
       poi.item_type,
       poi.quantity,
+      poi.base_quantity,
+      poi.base_unit,
+      poi.conversion_qty,
       poi.unit_price,
       poi.unit,
       poi.material_name,
@@ -1237,10 +1251,12 @@ BEGIN
     LEFT JOIN products p ON p.id = poi.product_id
     WHERE poi.purchase_order_id = p_po_id
   LOOP
+    v_effective_quantity := COALESCE(v_item.base_quantity, v_item.quantity);
+
     IF v_item.material_id IS NOT NULL THEN
       -- ==================== PROCESS MATERIAL ====================
       v_previous_stock := COALESCE(v_item.material_current_stock, 0);
-      v_new_stock := v_previous_stock + v_item.quantity;
+      v_new_stock := v_previous_stock + v_effective_quantity;
 
       -- Update material stock
       UPDATE materials
@@ -1269,7 +1285,7 @@ BEGIN
         COALESCE(v_item.material_name_from_rel, v_item.material_name, 'Unknown'),
         'IN',
         'PURCHASE',
-        v_item.quantity,
+        v_effective_quantity,
         v_previous_stock,
         v_new_stock,
         p_po_id,
@@ -1298,8 +1314,8 @@ BEGIN
         p_branch_id,
         p_po_id,
         v_po.supplier_id,
-        v_item.quantity,
-        v_item.quantity,
+        v_effective_quantity,
+        v_effective_quantity,
         COALESCE(v_item.unit_price, 0),
         p_received_date,
         format('PO %s - %s', p_po_id, COALESCE(v_item.material_name_from_rel, v_item.material_name, 'Unknown')),
@@ -1331,8 +1347,8 @@ BEGIN
         p_branch_id,
         p_po_id,
         v_po.supplier_id,
-        v_item.quantity,
-        v_item.quantity,
+        v_effective_quantity,
+        v_effective_quantity,
         COALESCE(v_item.unit_price, 0),
         p_received_date,
         format('PO %s - %s', p_po_id, COALESCE(v_item.product_name_from_rel, v_item.product_name, 'Unknown')),
@@ -1462,6 +1478,7 @@ DECLARE
   v_previous_stock NUMERIC;
   v_new_stock NUMERIC;
   v_qty_to_receive NUMERIC;
+  v_effective_quantity NUMERIC;
   v_item_id TEXT;
   v_material_id UUID;
   v_product_id UUID;
@@ -1523,6 +1540,8 @@ BEGIN
 
     IF v_qty_to_receive <= 0 THEN CONTINUE; END IF;
 
+    v_effective_quantity := v_qty_to_receive * COALESCE(v_poi.conversion_qty, 1);
+
     UPDATE purchase_order_items
     SET quantity_received = COALESCE(quantity_received, 0) + v_qty_to_receive, updated_at = NOW()
     WHERE id = v_item_id;
@@ -1530,7 +1549,7 @@ BEGIN
     IF v_material_id IS NOT NULL THEN
       SELECT stock INTO v_previous_stock FROM materials WHERE id = v_material_id;
       v_previous_stock := COALESCE(v_previous_stock, 0);
-      v_new_stock := v_previous_stock + v_qty_to_receive;
+      v_new_stock := v_previous_stock + v_effective_quantity;
 
       UPDATE materials SET stock = v_new_stock, updated_at = NOW() WHERE id = v_material_id;
 
@@ -1540,7 +1559,7 @@ BEGIN
         notes, user_id, user_name, branch_id, created_at
       ) VALUES (
         v_material_id, COALESCE(v_poi.material_name, 'Unknown'),
-        'IN', 'PURCHASE', v_qty_to_receive,
+        'IN', 'PURCHASE', v_effective_quantity,
         v_previous_stock, v_new_stock, p_po_id, 'purchase_order',
         format('PO %s - Receive (%s)', p_po_id, COALESCE(p_notes, '')),
         v_user_id, v_user_name, p_branch_id, NOW()
@@ -1551,7 +1570,7 @@ BEGIN
         initial_quantity, remaining_quantity, unit_cost, batch_date, notes, created_at
       ) VALUES (
         v_material_id, p_branch_id, p_po_id, v_po.supplier_id,
-        v_qty_to_receive, v_qty_to_receive, COALESCE(v_poi.unit_price, 0),
+        v_effective_quantity, v_effective_quantity, COALESCE(v_poi.unit_price, 0),
         p_received_date, format('PO %s - %s', p_po_id, COALESCE(v_poi.material_name, 'Unknown')), NOW()
       );
 
@@ -1564,7 +1583,7 @@ BEGIN
         initial_quantity, remaining_quantity, unit_cost, batch_date, notes, created_at
       ) VALUES (
         v_product_id, p_branch_id, p_po_id, v_po.supplier_id,
-        v_qty_to_receive, v_qty_to_receive, COALESCE(v_poi.unit_price, 0),
+        v_effective_quantity, v_effective_quantity, COALESCE(v_poi.unit_price, 0),
         p_received_date, format('PO %s - %s', p_po_id, COALESCE(v_poi.product_name, 'Unknown')), NOW()
       );
 

@@ -2,7 +2,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 export async function getRolePermissions() {
   try {
-    const { data, error } = await supabase.from('role_permissions').select('*');
+    const { data, error } = await supabase.from('role_permissions').select('role_id, permissions, updated_at');
     if (error) {
       // If table doesn't exist, return default data
       console.warn('role_permissions table not found, using default data');

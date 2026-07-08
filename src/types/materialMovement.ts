@@ -1,5 +1,5 @@
 export type MaterialMovementType = 'IN' | 'OUT' | 'ADJUSTMENT';
-export type MaterialMovementReason = 'PURCHASE' | 'PRODUCTION_CONSUMPTION' | 'PRODUCTION_ACQUISITION' | 'ADJUSTMENT' | 'RETURN';
+export type MaterialMovementReason = 'PURCHASE' | 'PRODUCTION_CONSUMPTION' | 'PRODUCTION_ACQUISITION' | 'ADJUSTMENT' | 'RETURN' | 'PRODUCTION_ERROR' | 'PRODUCTION_DELETE_RESTORE';
 
 export interface MaterialMovement {
   id: string;
@@ -16,6 +16,12 @@ export interface MaterialMovement {
   userId: string;
   userName: string;
   createdAt: string;
+  branchId?: string | null;
+  isVoided?: boolean;
+  voidedAt?: string | null;
+  voidedBy?: string | null;
+  voidedByName?: string | null;
+  voidReason?: string | null;
 }
 
 export interface CreateMaterialMovementData {
