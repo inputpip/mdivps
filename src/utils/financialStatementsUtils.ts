@@ -422,11 +422,14 @@ export async function generateBalanceSheet(asOfDate?: Date, branchId?: string): 
   })));
 
   // Get account receivables from transactions (filtered by branch)
+  // Exclude cancelled/voided rows so deleted test transactions don't leak into Balance Sheet fallback.
   let transactionsQuery = supabase
     .from('transactions')
-    .select('id, total, paid_amount, payment_status, order_date, branch_id')
+    .select('id, total, paid_amount, payment_status, order_date, branch_id, is_cancelled, is_voided')
     .lte('order_date', cutoffDateStr)
-    .in('payment_status', ['Belum Lunas', 'Kredit']);
+    .in('payment_status', ['Belum Lunas', 'Kredit'])
+    .or('is_cancelled.is.false,is_cancelled.is.null')
+    .or('is_voided.is.false,is_voided.is.null');
 
   if (branchId) {
     transactionsQuery = transactionsQuery.eq('branch_id', branchId);
