@@ -327,6 +327,7 @@ function WebApp() {
                       <Route path="/products" element={<MasterDataStockPage />} />
                       <Route path="/products/:id" element={<ProductDetailPage />} />
                       <Route path="/materials" element={<MasterDataStockPage />} />
+                      <Route path="/unit-conversions" element={<MasterDataStockPage />} />
                       <Route path="/production" element={renderFeatureRoute('production_bom', <ProductionPage />)} />
                       <Route path="/production-operator" element={renderFeatureRoute('production_bom', <OperatorProductionPage />)} />
                       <Route path="/materials/:materialId" element={<MaterialDetailPage />} />
