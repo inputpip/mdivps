@@ -67,7 +67,7 @@ export function ReceivablesTable() {
 
   const receivables = React.useMemo(() => {
     let filtered = transactions?.filter(t =>
-      t.paymentStatus === 'Belum Lunas' || t.paymentStatus === 'Partial'
+      (Number(t.total) || 0) > (Number(t.paidAmount) || 0)
     ) || []
 
     // Filter by search query (nomor transaksi atau nama pelanggan)
@@ -381,7 +381,7 @@ export function ReceivablesTable() {
   // Aging counts based on all receivables (not filtered)
   const allReceivables = React.useMemo(() => {
     return transactions?.filter(t =>
-      t.paymentStatus === 'Belum Lunas' || t.paymentStatus === 'Partial'
+      (Number(t.total) || 0) > (Number(t.paidAmount) || 0)
     ) || []
   }, [transactions])
 

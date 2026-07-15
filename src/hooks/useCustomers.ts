@@ -26,17 +26,13 @@ export const useCustomers = () => {
       // Fetch order count, last order date, receivable summary, and last gallon movement for each customer
       const customerIds = (data || []).map(c => c.id);
       if (customerIds.length > 0) {
-        const [ordersResult, receivablesResult, gallonMovementsResult] = await Promise.all([
+        const [transactionsResult, gallonMovementsResult] = await Promise.all([
           supabase
             .from('transactions')
-            .select('customer_id, order_date')
+            .select('customer_id, order_date, due_date, total, paid_amount, is_voided, is_cancelled')
+            .eq('branch_id', currentBranch?.id)
             .in('customer_id', customerIds)
             .order('order_date', { ascending: false }),
-          supabase
-            .from('receivables')
-            .select('customer_id, amount, paid_amount, due_date, status')
-            .in('customer_id', customerIds)
-            .in('status', ['pending', 'partial']),
           supabase
             .from('gallon_movements')
             .select('customer_id, delta, type, created_at')
@@ -44,8 +40,7 @@ export const useCustomers = () => {
             .order('created_at', { ascending: false })
         ]);
 
-        const { data: orders, error: ordersError } = ordersResult;
-        const { data: receivables, error: receivablesError } = receivablesResult;
+        const { data: transactions, error: transactionsError } = transactionsResult;
         const { data: gallonMovements, error: gallonMovementsError } = gallonMovementsResult;
 
         const orderCountMap = new Map<string, number>();
@@ -71,24 +66,20 @@ export const useCustomers = () => {
           }
         }
 
-        if (!ordersError && orders) {
-          for (const order of orders) {
-            orderCountMap.set(order.customer_id, (orderCountMap.get(order.customer_id) || 0) + 1);
+        if (!transactionsError && transactions) {
+          for (const transaction of transactions) {
+            const customerId = transaction.customer_id;
+            orderCountMap.set(customerId, (orderCountMap.get(customerId) || 0) + 1);
 
-            if (!lastOrderMap.has(order.customer_id)) {
-              lastOrderMap.set(order.customer_id, order.order_date);
+            if (!lastOrderMap.has(customerId)) {
+              lastOrderMap.set(customerId, transaction.order_date);
             }
-          }
-        }
 
-        if (!receivablesError && receivables) {
-          for (const receivable of receivables) {
-            const customerId = receivable.customer_id;
-            const totalPiutang = Number(receivable.amount) || 0;
-            const paidAmount = Number(receivable.paid_amount) || 0;
-            const sisaPiutang = Math.max(0, totalPiutang - paidAmount);
+            const totalAmount = Number(transaction.total) || 0;
+            const paidAmount = Number(transaction.paid_amount) || 0;
+            const outstandingAmount = Math.max(0, totalAmount - paidAmount);
 
-            if (sisaPiutang <= 0) continue;
+            if (outstandingAmount <= 0 || transaction.is_voided || transaction.is_cancelled) continue;
 
             const current = receivableSummaryMap.get(customerId) || {
               totalPiutang: 0,
@@ -97,14 +88,14 @@ export const useCustomers = () => {
               jatuhTempoTerdekat: null,
             };
 
-            const dueDate = receivable.due_date || null;
+            const dueDate = transaction.due_date || null;
             const nextDueDate = dueDate && (!current.jatuhTempoTerdekat || dueDate < current.jatuhTempoTerdekat)
               ? dueDate
               : current.jatuhTempoTerdekat;
 
             receivableSummaryMap.set(customerId, {
-              totalPiutang: current.totalPiutang + totalPiutang,
-              sisaPiutang: current.sisaPiutang + sisaPiutang,
+              totalPiutang: current.totalPiutang + totalAmount,
+              sisaPiutang: current.sisaPiutang + outstandingAmount,
               jumlahPiutang: current.jumlahPiutang + 1,
               jatuhTempoTerdekat: nextDueDate,
             });

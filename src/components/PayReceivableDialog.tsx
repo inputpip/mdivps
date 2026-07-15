@@ -164,6 +164,9 @@ export function PayReceivableDialog({ open, onOpenChange, transaction, defaultPa
       // Invalidate all transaction-related queries to ensure fresh data
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['transactions'] }),
+        // POS customer cards and Daftar Piutang both derive outstanding from transactions.
+        // Refresh the customer summary immediately after a payment.
+        queryClient.invalidateQueries({ queryKey: ['customers'] }),
         queryClient.invalidateQueries({ queryKey: ['payments'] }),
         queryClient.invalidateQueries({ queryKey: ['cashier-recap'] }),
         queryClient.invalidateQueries({ queryKey: ['cashFlow'] }),
